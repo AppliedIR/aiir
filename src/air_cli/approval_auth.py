@@ -121,42 +121,42 @@ def reset_pin(config_path: Path, analyst: str) -> None:
 def _getpass_prompt(prompt: str) -> str:
     """Read PIN from /dev/tty with masked input (shows * per keystroke)."""
     try:
-        tty_file = open("/dev/tty", "r+")
+        tty_in = open("/dev/tty", "r")
     except OSError:
         print("No terminal available. Cannot prompt for PIN.", file=sys.stderr)
         sys.exit(1)
     try:
-        fd = tty_file.fileno()
-        tty_file.write(prompt)
-        tty_file.flush()
+        fd = tty_in.fileno()
+        sys.stderr.write(prompt)
+        sys.stderr.flush()
         old_settings = termios.tcgetattr(fd)
         try:
             tty.setraw(fd)
             pin = []
             while True:
-                ch = tty_file.read(1)
+                ch = os.read(fd, 1).decode("utf-8", errors="replace")
                 if ch in ("\r", "\n"):
-                    tty_file.write("\r\n")
-                    tty_file.flush()
                     break
                 elif ch in ("\x7f", "\x08"):  # backspace/delete
                     if pin:
                         pin.pop()
-                        tty_file.write("\b \b")
-                        tty_file.flush()
+                        sys.stderr.write("\b \b")
+                        sys.stderr.flush()
                 elif ch == "\x03":  # Ctrl-C
-                    tty_file.write("\r\n")
-                    tty_file.flush()
+                    sys.stderr.write("\n")
+                    sys.stderr.flush()
                     raise KeyboardInterrupt
                 elif ch >= " ":  # printable
                     pin.append(ch)
-                    tty_file.write("*")
-                    tty_file.flush()
+                    sys.stderr.write("*")
+                    sys.stderr.flush()
             return "".join(pin)
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            sys.stderr.write("\n")
+            sys.stderr.flush()
     finally:
-        tty_file.close()
+        tty_in.close()
 
 
 def _load_config(config_path: Path) -> dict:
