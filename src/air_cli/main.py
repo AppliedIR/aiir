@@ -1,7 +1,7 @@
 """AIR CLI entry point.
 
 Human-only actions that the LLM orchestrator cannot bypass:
-- approve/reject findings and timeline events
+- approve/reject findings and timeline events (/dev/tty + optional PIN)
 - evidence management (lock/unlock)
 - forensic command execution with audit
 - analyst identity configuration
@@ -33,22 +33,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     # approve
     p_approve = sub.add_parser("approve", help="Approve staged findings/timeline events")
-    p_approve.add_argument("ids", nargs="*", help="Finding/event IDs to approve (e.g., F-001 T-002)")
-    p_approve.add_argument("--all", action="store_true", help="Review and approve all staged items")
-    p_approve.add_argument("--review", action="store_true", help="Interactive review of all staged")
+    p_approve.add_argument("ids", nargs="*", help="Finding/event IDs to approve (omit for interactive review)")
     p_approve.add_argument("--analyst", help="Override analyst identity")
 
     # reject
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
     p_reject.add_argument("ids", nargs="+", help="Finding/event IDs to reject")
-    p_reject.add_argument("--reason", required=True, help="Reason for rejection (required)")
+    p_reject.add_argument("--reason", default="", help="Reason for rejection (optional)")
     p_reject.add_argument("--analyst", help="Override analyst identity")
 
     # review
     p_review = sub.add_parser("review", help="Review case status and audit trail")
     p_review.add_argument("--audit", action="store_true", help="Show audit log")
     p_review.add_argument("--evidence", action="store_true", help="Show evidence integrity")
-    p_review.add_argument("--findings", action="store_true", help="Show findings by status")
+    p_review.add_argument("--findings", action="store_true", help="Show findings summary table")
+    p_review.add_argument("--detail", action="store_true", help="Show full detail (with --findings or --timeline)")
+    p_review.add_argument("--verify", action="store_true", help="Cross-check findings against approval records")
+    p_review.add_argument("--iocs", action="store_true", help="Extract IOCs from findings grouped by status")
+    p_review.add_argument("--timeline", action="store_true", help="Show timeline events")
     p_review.add_argument("--limit", type=int, default=50, help="Limit entries shown")
 
     # exec
@@ -69,6 +71,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_config = sub.add_parser("config", help="Configure AIR settings")
     p_config.add_argument("--analyst", help="Set analyst identity")
     p_config.add_argument("--show", action="store_true", help="Show current configuration")
+    p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current analyst")
+    p_config.add_argument("--reset-pin", action="store_true", help="Reset approval PIN (requires current PIN)")
 
     return parser
 

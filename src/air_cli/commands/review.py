@@ -1,32 +1,63 @@
-"""Review case status, audit trail, and evidence integrity."""
+"""Review case status, audit trail, evidence integrity, and findings.
+
+Supports multiple view modes:
+  air review                        — case summary
+  air review --findings             — finding summary table
+  air review --findings --detail    — full findings with all fields
+  air review --findings --verify    — cross-check against approvals.jsonl
+  air review --iocs                 — IOCs grouped by approval status
+  air review --timeline             — timeline summary
+  air review --timeline --detail    — full timeline with evidence refs
+  air review --evidence             — evidence registry
+  air review --audit                — audit trail
+"""
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
 import yaml
 
-from air_cli.case_io import get_case_dir, load_findings, load_timeline
+from air_cli.case_io import (
+    get_case_dir,
+    load_findings,
+    load_timeline,
+    load_approval_log,
+    verify_approval_integrity,
+)
 
 
 def cmd_review(args, identity: dict) -> None:
     """Review case information."""
     case_dir = get_case_dir(getattr(args, "case", None))
 
-    if args.audit:
-        _show_audit(case_dir, args.limit)
-    elif args.evidence:
+    if getattr(args, "iocs", False):
+        _show_iocs(case_dir)
+    elif getattr(args, "timeline", False):
+        detail = getattr(args, "detail", False)
+        _show_timeline(case_dir, detail)
+    elif getattr(args, "audit", False):
+        _show_audit(case_dir, getattr(args, "limit", 50))
+    elif getattr(args, "evidence", False):
         _show_evidence(case_dir)
-    elif args.findings:
-        _show_findings(case_dir)
+    elif getattr(args, "findings", False):
+        detail = getattr(args, "detail", False)
+        verify = getattr(args, "verify", False)
+        if verify:
+            _show_findings_verify(case_dir)
+        elif detail:
+            _show_findings_detail(case_dir)
+        else:
+            _show_findings_table(case_dir)
     else:
         _show_summary(case_dir)
 
 
 def _show_summary(case_dir: Path) -> None:
-    """Show case overview."""
+    """Show case overview with status counts."""
     meta = _load_meta(case_dir)
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)
@@ -50,30 +81,216 @@ def _show_summary(case_dir: Path) -> None:
     print(f"Evidence: {len(evidence)} registered files")
 
 
-def _show_findings(case_dir: Path) -> None:
-    """Show findings grouped by status."""
+def _show_findings_table(case_dir: Path) -> None:
+    """Show findings as a summary table."""
     findings = load_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
 
-    for status in ("DRAFT", "APPROVED", "REJECTED"):
-        group = [f for f in findings if f.get("status") == status]
-        if not group:
-            continue
+    # Header
+    print(f"{'ID':<8} {'Status':<12} {'Confidence':<12} Title")
+    print("-" * 70)
+    for f in findings:
+        fid = f.get("id", "?")
+        status = f.get("status", "?")
+        confidence = f.get("confidence", "?")
+        title = f.get("title", "Untitled")
+        print(f"{fid:<8} {status:<12} {confidence:<12} {title}")
+
+
+def _show_findings_detail(case_dir: Path) -> None:
+    """Show full findings with all fields."""
+    findings = load_findings(case_dir)
+    if not findings:
+        print("No findings recorded.")
+        return
+
+    for f in findings:
         print(f"\n{'=' * 60}")
-        print(f"  {status} ({len(group)})")
+        print(f"  [{f['id']}] {f.get('title', 'Untitled')}")
         print(f"{'=' * 60}")
-        for f in group:
-            print(f"\n  [{f['id']}] {f.get('title', 'Untitled')}")
-            print(f"    Confidence: {f.get('confidence', '?')}")
-            print(f"    Evidence: {', '.join(f.get('evidence_ids', []))}")
-            print(f"    Observation: {f.get('observation', '')[:120]}")
-            if status == "APPROVED":
-                print(f"    Approved: {f.get('approved_at', '?')}")
-            elif status == "REJECTED":
-                print(f"    Rejected: {f.get('rejected_at', '?')}")
-                print(f"    Reason: {f.get('rejection_reason', '?')}")
+        print(f"  Status:       {f.get('status', '?')}")
+        print(f"  Confidence:   {f.get('confidence', '?')}")
+        if f.get("confidence_justification"):
+            print(f"  Justification: {f['confidence_justification']}")
+        print(f"  Evidence:     {', '.join(f.get('evidence_ids', []))}")
+        print(f"  Observation:  {f.get('observation', '')}")
+        print(f"  Interpretation: {f.get('interpretation', '')}")
+        if f.get("iocs"):
+            print(f"  IOCs:         {f['iocs']}")
+        if f.get("mitre_techniques"):
+            print(f"  MITRE:        {f['mitre_techniques']}")
+        if f.get("approved_at"):
+            print(f"  Approved:     {f['approved_at']}")
+        if f.get("rejected_at"):
+            print(f"  Rejected:     {f['rejected_at']}")
+            print(f"  Reason:       {f.get('rejection_reason', '?')}")
+
+
+def _show_findings_verify(case_dir: Path) -> None:
+    """Cross-check findings against approvals.jsonl."""
+    results = verify_approval_integrity(case_dir)
+    if not results:
+        print("No findings recorded.")
+        return
+
+    print(f"{'ID':<8} {'Status':<12} {'Verification':<22} Title")
+    print("-" * 75)
+    for f in results:
+        fid = f.get("id", "?")
+        status = f.get("status", "?")
+        verification = f.get("verification", "?")
+
+        # Format verification with markers
+        if verification == "confirmed":
+            vdisplay = "confirmed"
+        elif verification == "no approval record":
+            vdisplay = "NO APPROVAL RECORD"
+        else:
+            vdisplay = "draft"
+
+        title = f.get("title", "Untitled")
+        print(f"{fid:<8} {status:<12} {vdisplay:<22} {title}")
+
+    # Summary
+    confirmed = sum(1 for f in results if f["verification"] == "confirmed")
+    unverified = sum(1 for f in results if f["verification"] == "no approval record")
+    draft = sum(1 for f in results if f["verification"] == "draft")
+    print(f"\n{confirmed} confirmed, {unverified} unverified, {draft} draft")
+    if unverified:
+        print("WARNING: Some findings have status changes without approval records.")
+
+
+def _show_iocs(case_dir: Path) -> None:
+    """Extract IOCs from findings, grouped by approval status."""
+    findings = load_findings(case_dir)
+    if not findings:
+        print("No findings recorded.")
+        return
+
+    # Group findings by status
+    groups = {"APPROVED": [], "DRAFT": [], "REJECTED": []}
+    for f in findings:
+        status = f.get("status", "DRAFT")
+        if status in groups:
+            groups[status].append(f)
+
+    labels = {
+        "APPROVED": "IOCs from Approved Findings",
+        "DRAFT": "IOCs from Draft Findings (unverified)",
+        "REJECTED": "IOCs from Rejected Findings",
+    }
+
+    any_iocs = False
+    for status in ("APPROVED", "DRAFT", "REJECTED"):
+        iocs = _extract_iocs_from_findings(groups[status])
+        if not iocs:
+            continue
+        any_iocs = True
+        print(f"\n=== {labels[status]} ===")
+        for ioc_type, values in sorted(iocs.items()):
+            print(f"  {ioc_type + ':':<10} {', '.join(sorted(values))}")
+
+    if not any_iocs:
+        print("No IOCs found in findings.")
+
+
+def _extract_iocs_from_findings(findings: list[dict]) -> dict[str, set[str]]:
+    """Extract IOCs from a list of findings.
+
+    Looks in the 'iocs' field (dict or list) and also scans
+    observation/interpretation text for common IOC patterns.
+    """
+    collected: dict[str, set[str]] = {}
+
+    for f in findings:
+        # Structured IOC field
+        iocs_field = f.get("iocs")
+        if isinstance(iocs_field, dict):
+            for ioc_type, values in iocs_field.items():
+                if ioc_type not in collected:
+                    collected[ioc_type] = set()
+                if isinstance(values, list):
+                    collected[ioc_type].update(str(v) for v in values)
+                else:
+                    collected[ioc_type].add(str(values))
+        elif isinstance(iocs_field, list):
+            for ioc in iocs_field:
+                if isinstance(ioc, dict):
+                    ioc_type = ioc.get("type", "Unknown")
+                    ioc_value = ioc.get("value", "")
+                    if ioc_type not in collected:
+                        collected[ioc_type] = set()
+                    collected[ioc_type].add(str(ioc_value))
+
+        # Text-based IOC extraction from observation + interpretation
+        text = f"{f.get('observation', '')} {f.get('interpretation', '')}"
+        _extract_text_iocs(text, collected)
+
+    return collected
+
+
+def _extract_text_iocs(text: str, collected: dict[str, set[str]]) -> None:
+    """Extract common IOC patterns from free text."""
+    # IPv4 addresses (not 0.0.0.0 or 127.x.x.x or 255.x.x.x)
+    ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b'
+    for ip in re.findall(ipv4_pattern, text):
+        if not ip.startswith(("0.", "127.", "255.")):
+            collected.setdefault("IPv4", set()).add(ip)
+
+    # SHA256 hashes (64 hex chars)
+    for h in re.findall(r'\b[a-fA-F0-9]{64}\b', text):
+        collected.setdefault("SHA256", set()).add(h.lower())
+
+    # SHA1 hashes (40 hex chars, but not part of a longer hex string)
+    for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])', text):
+        collected.setdefault("SHA1", set()).add(h.lower())
+
+    # MD5 hashes (32 hex chars)
+    for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])', text):
+        collected.setdefault("MD5", set()).add(h.lower())
+
+    # Windows file paths
+    for fp in re.findall(r'[A-Z]:\\(?:[^\s,;]+)', text):
+        collected.setdefault("File", set()).add(fp)
+
+    # Domain names (basic pattern — must have at least one dot)
+    for d in re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b', text):
+        collected.setdefault("Domain", set()).add(d.lower())
+
+
+def _show_timeline(case_dir: Path, detail: bool) -> None:
+    """Show timeline events."""
+    timeline = load_timeline(case_dir)
+    if not timeline:
+        print("No timeline events recorded.")
+        return
+
+    if detail:
+        for t in timeline:
+            print(f"\n{'=' * 60}")
+            print(f"  [{t['id']}] {t.get('timestamp', '?')}")
+            print(f"{'=' * 60}")
+            print(f"  Status:      {t.get('status', '?')}")
+            print(f"  Description: {t.get('description', '')}")
+            if t.get("evidence_ids"):
+                print(f"  Evidence:    {', '.join(t['evidence_ids'])}")
+            if t.get("source"):
+                print(f"  Source:      {t['source']}")
+            if t.get("approved_at"):
+                print(f"  Approved:    {t['approved_at']}")
+    else:
+        print(f"{'ID':<8} {'Status':<10} {'Timestamp':<22} Description")
+        print("-" * 75)
+        for t in timeline:
+            tid = t.get("id", "?")
+            status = t.get("status", "?")
+            ts = t.get("timestamp", "?")[:19] if t.get("timestamp") else "?"
+            desc = t.get("description", "")
+            if len(desc) > 40:
+                desc = desc[:37] + "..."
+            print(f"{tid:<8} {status:<10} {ts:<22} {desc}")
 
 
 def _show_evidence(case_dir: Path) -> None:

@@ -68,7 +68,14 @@ def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
         json.dump(timeline, f, indent=2, default=str)
 
 
-def write_approval_log(case_dir: Path, item_id: str, action: str, identity: dict, reason: str = "") -> None:
+def write_approval_log(
+    case_dir: Path,
+    item_id: str,
+    action: str,
+    identity: dict,
+    reason: str = "",
+    mode: str = "interactive",
+) -> None:
     """Write approval/rejection record to approvals.jsonl."""
     log_file = case_dir / ".audit" / "approvals.jsonl"
     entry = {
@@ -78,8 +85,55 @@ def write_approval_log(case_dir: Path, item_id: str, action: str, identity: dict
         "os_user": identity["os_user"],
         "analyst": identity["analyst"],
         "analyst_source": identity["analyst_source"],
+        "mode": mode,
     }
     if reason:
         entry["reason"] = reason
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+def load_approval_log(case_dir: Path) -> list[dict]:
+    """Load all approval records from approvals.jsonl."""
+    log_file = case_dir / ".audit" / "approvals.jsonl"
+    if not log_file.exists():
+        return []
+    entries = []
+    for line in log_file.read_text().strip().split("\n"):
+        if line:
+            entries.append(json.loads(line))
+    return entries
+
+
+def verify_approval_integrity(case_dir: Path) -> list[dict]:
+    """Cross-reference findings.json against approvals.jsonl.
+
+    Returns a list of finding dicts with an added 'verification' field:
+    - 'confirmed': status matches an approval record
+    - 'no approval record': APPROVED/REJECTED but no matching record
+    - 'draft': still in DRAFT status (no check needed)
+    """
+    findings = load_findings(case_dir)
+    approvals = load_approval_log(case_dir)
+
+    # Build lookup: item_id -> last approval record
+    last_approval = {}
+    for record in approvals:
+        last_approval[record["item_id"]] = record
+
+    results = []
+    for f in findings:
+        result = dict(f)
+        status = f.get("status", "DRAFT")
+        if status == "DRAFT":
+            result["verification"] = "draft"
+        elif f["id"] in last_approval:
+            record = last_approval[f["id"]]
+            if record["action"] == status:
+                result["verification"] = "confirmed"
+            else:
+                result["verification"] = "no approval record"
+        else:
+            result["verification"] = "no approval record"
+        results.append(result)
+    return results

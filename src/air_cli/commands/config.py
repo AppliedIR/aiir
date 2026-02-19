@@ -6,10 +6,20 @@ from pathlib import Path
 
 import yaml
 
+from air_cli.approval_auth import setup_pin, reset_pin
+
 
 def cmd_config(args, identity: dict) -> None:
     """Configure AIR settings."""
     config_path = Path.home() / ".air" / "config.yaml"
+
+    if getattr(args, "setup_pin", False):
+        setup_pin(config_path, identity["analyst"])
+        return
+
+    if getattr(args, "reset_pin", False):
+        reset_pin(config_path, identity["analyst"])
+        return
 
     if args.show:
         if config_path.exists():
@@ -31,4 +41,4 @@ def cmd_config(args, identity: dict) -> None:
         print(f"Analyst identity set to: {args.analyst}")
         return
 
-    print("Use --analyst <name> to set identity, or --show to view config.")
+    print("Use --analyst <name> to set identity, --show to view config, --setup-pin to configure PIN.")
