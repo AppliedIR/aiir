@@ -79,34 +79,34 @@ def _interactive_review(case_dir: Path, identity: dict, config_path: Path) -> No
         print("No staged items to review.")
         return
 
-    dispositions = {}  # item_id -> "approve" | "reject" | "draft"
+    dispositions = {}  # item_id -> "approve" | "reject" | "skip"
 
     for item in all_items:
         _display_item(item)
         while True:
             try:
-                response = input("  [Enter]=approve  [r]eject  [d]raft(skip): ").strip().lower()
+                response = input("  [Enter] approve  [r]eject  [s]kip: ").strip().lower()
             except EOFError:
-                response = "d"
+                response = "s"
             if response in ("", "a"):
                 dispositions[item["id"]] = "approve"
-                print(f"  -> tagged APPROVE")
+                print(f"  -> APPROVE")
                 break
             elif response == "r":
                 reason = input("  Rejection reason (optional): ").strip()
                 dispositions[item["id"]] = ("reject", reason)
-                print(f"  -> tagged REJECT")
+                print(f"  -> REJECT")
                 break
-            elif response == "d":
-                dispositions[item["id"]] = "draft"
-                print(f"  -> skipped (remains DRAFT)")
+            elif response == "s":
+                dispositions[item["id"]] = "skip"
+                print(f"  -> skip (remains DRAFT)")
                 break
             else:
-                print("  Invalid choice. Enter, r, or d.")
+                print("  Invalid choice. Enter, r, or s.")
 
     approvals = {k: v for k, v in dispositions.items() if v == "approve"}
     rejections = {k: v for k, v in dispositions.items() if isinstance(v, tuple)}
-    skipped = {k: v for k, v in dispositions.items() if v == "draft"}
+    skipped = {k: v for k, v in dispositions.items() if v == "skip"}
 
     # Summary
     print(f"\n{'=' * 60}")
@@ -161,8 +161,10 @@ def _find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -
 
 def _display_item(item: dict) -> None:
     """Display a finding or timeline event."""
+    status = item.get("status", "?")
     print(f"\n{'=' * 60}")
     print(f"  [{item['id']}]  {item.get('title', item.get('description', 'Untitled'))}")
+    print(f"  Status: {status}")
     print(f"{'=' * 60}")
     if "title" in item:
         # It's a finding
