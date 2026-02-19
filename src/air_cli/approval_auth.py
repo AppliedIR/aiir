@@ -121,17 +121,17 @@ def reset_pin(config_path: Path, analyst: str) -> None:
 def _getpass_prompt(prompt: str) -> str:
     """Read PIN from /dev/tty with masked input (shows * per keystroke)."""
     try:
-        tty_fd = os.open("/dev/tty", os.O_RDWR)
-        tty_file = os.fdopen(tty_fd, "r+", buffering=1)
+        tty_file = open("/dev/tty", "r+")
     except OSError:
         print("No terminal available. Cannot prompt for PIN.", file=sys.stderr)
         sys.exit(1)
     try:
+        fd = tty_file.fileno()
         tty_file.write(prompt)
         tty_file.flush()
-        old_settings = termios.tcgetattr(tty_fd)
+        old_settings = termios.tcgetattr(fd)
         try:
-            tty.setraw(tty_fd)
+            tty.setraw(fd)
             pin = []
             while True:
                 ch = tty_file.read(1)
@@ -154,7 +154,7 @@ def _getpass_prompt(prompt: str) -> str:
                     tty_file.flush()
             return "".join(pin)
         finally:
-            termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_settings)
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
     finally:
         tty_file.close()
 
