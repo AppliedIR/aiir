@@ -1,12 +1,36 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
 dist/
 build/
+
+# Virtual environment
+.venv/
+
+# Testing
 .mypy_cache/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Case data (generated at runtime)
 cases/
+
+# Credentials and secrets
 .env
+.env.*
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
