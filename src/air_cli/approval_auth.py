@@ -9,11 +9,12 @@ both AI-via-Bash AND expect-style terminal automation.
 
 from __future__ import annotations
 
-import getpass
 import hashlib
 import os
 import secrets
 import sys
+import termios
+import tty
 from pathlib import Path
 
 import yaml
@@ -118,12 +119,44 @@ def reset_pin(config_path: Path, analyst: str) -> None:
 
 
 def _getpass_prompt(prompt: str) -> str:
-    """Read password from /dev/tty via getpass (no echo)."""
+    """Read PIN from /dev/tty with masked input (shows * per keystroke)."""
     try:
-        return getpass.getpass(prompt)
+        tty_fd = os.open("/dev/tty", os.O_RDWR)
+        tty_file = os.fdopen(tty_fd, "r+", buffering=1)
     except OSError:
         print("No terminal available. Cannot prompt for PIN.", file=sys.stderr)
         sys.exit(1)
+    try:
+        tty_file.write(prompt)
+        tty_file.flush()
+        old_settings = termios.tcgetattr(tty_fd)
+        try:
+            tty.setraw(tty_fd)
+            pin = []
+            while True:
+                ch = tty_file.read(1)
+                if ch in ("\r", "\n"):
+                    tty_file.write("\r\n")
+                    tty_file.flush()
+                    break
+                elif ch in ("\x7f", "\x08"):  # backspace/delete
+                    if pin:
+                        pin.pop()
+                        tty_file.write("\b \b")
+                        tty_file.flush()
+                elif ch == "\x03":  # Ctrl-C
+                    tty_file.write("\r\n")
+                    tty_file.flush()
+                    raise KeyboardInterrupt
+                elif ch >= " ":  # printable
+                    pin.append(ch)
+                    tty_file.write("*")
+                    tty_file.flush()
+            return "".join(pin)
+        finally:
+            termios.tcsetattr(tty_fd, termios.TCSADRAIN, old_settings)
+    finally:
+        tty_file.close()
 
 
 def _load_config(config_path: Path) -> dict:
