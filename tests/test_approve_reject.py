@@ -23,16 +23,16 @@ def case_dir(tmp_path, monkeypatch):
     case_id = "INC-2026-TEST"
     case_path = tmp_path / case_id
     case_path.mkdir()
-    (case_path / ".audit").mkdir()
+    (case_path / ".local").mkdir()
 
     meta = {"case_id": case_id, "name": "Test", "status": "open"}
     with open(case_path / "CASE.yaml", "w") as f:
         yaml.dump(meta, f)
 
-    with open(case_path / ".audit" / "evidence.json", "w") as f:
+    with open(case_path / ".local" / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
-    with open(case_path / ".audit" / "todos.json", "w") as f:
+    with open(case_path / ".local" / "todos.json", "w") as f:
         json.dump([], f)
 
     monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))

@@ -21,8 +21,8 @@ from aiir_cli.case_io import (
 @pytest.fixture
 def case_dir(tmp_path):
     """Create a minimal case directory."""
-    audit_dir = tmp_path / ".audit"
-    audit_dir.mkdir()
+    local_dir = tmp_path / ".local"
+    local_dir.mkdir()
     return tmp_path
 
 
@@ -77,7 +77,8 @@ class TestFindingsRegeneration:
             "observation": "obs", "interpretation": "interp",
             "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
         }]
-        regenerate_findings_md(case_dir, findings)
+        save_findings(case_dir, findings)
+        regenerate_findings_md(case_dir)
         md = (case_dir / "FINDINGS.md").read_text()
         assert "[DRAFT]" in md
         assert "awaiting human approval" in md
@@ -90,7 +91,8 @@ class TestFindingsRegeneration:
             "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
             "approved_by": "analyst1", "approved_at": "2026-02-19T12:00:00Z",
         }]
-        regenerate_findings_md(case_dir, findings)
+        save_findings(case_dir, findings)
+        regenerate_findings_md(case_dir)
         md = (case_dir / "FINDINGS.md").read_text()
         assert "[APPROVED]" in md
         assert "APPROVED by analyst1 at 2026-02-19T12:00:00Z" in md
@@ -104,7 +106,8 @@ class TestFindingsRegeneration:
             "rejected_by": "analyst2", "rejected_at": "2026-02-19T13:00:00Z",
             "rejection_reason": "Insufficient evidence",
         }]
-        regenerate_findings_md(case_dir, findings)
+        save_findings(case_dir, findings)
+        regenerate_findings_md(case_dir)
         md = (case_dir / "FINDINGS.md").read_text()
         assert "[REJECTED]" in md
         assert "reason: Insufficient evidence" in md
@@ -132,7 +135,8 @@ class TestTimelineRegeneration:
             "source": "Event log analysis",
             "staged": "2026-02-19T11:00:00Z",
         }]
-        regenerate_timeline_md(case_dir, timeline)
+        save_timeline(case_dir, timeline)
+        regenerate_timeline_md(case_dir)
         md = (case_dir / "TIMELINE.md").read_text()
         assert "T-001" in md
         assert "[DRAFT]" in md
@@ -145,7 +149,7 @@ class TestApprovalLog:
     def test_write_approval(self, case_dir):
         identity = {"os_user": "testuser", "analyst": "analyst1", "analyst_source": "flag"}
         write_approval_log(case_dir, "F-001", "APPROVED", identity)
-        log_file = case_dir / ".audit" / "approvals.jsonl"
+        log_file = case_dir / ".local" / "approvals.jsonl"
         assert log_file.exists()
         entry = json.loads(log_file.read_text().strip())
         assert entry["item_id"] == "F-001"
@@ -154,6 +158,6 @@ class TestApprovalLog:
     def test_write_rejection_with_reason(self, case_dir):
         identity = {"os_user": "testuser", "analyst": "analyst1", "analyst_source": "flag"}
         write_approval_log(case_dir, "F-002", "REJECTED", identity, reason="Bad evidence")
-        log_file = case_dir / ".audit" / "approvals.jsonl"
+        log_file = case_dir / ".local" / "approvals.jsonl"
         entry = json.loads(log_file.read_text().strip())
         assert entry["reason"] == "Bad evidence"

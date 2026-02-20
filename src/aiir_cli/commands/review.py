@@ -23,10 +23,11 @@ import yaml
 
 from aiir_cli.case_io import (
     get_case_dir,
-    load_findings,
-    load_timeline,
-    load_todos,
-    load_approval_log,
+    load_all_findings,
+    load_all_timeline,
+    load_all_todos,
+    load_all_approvals,
+    load_case_meta,
     verify_approval_integrity,
 )
 
@@ -61,14 +62,16 @@ def cmd_review(args, identity: dict) -> None:
 
 def _show_summary(case_dir: Path) -> None:
     """Show case overview with status counts."""
-    meta = _load_meta(case_dir)
-    findings = load_findings(case_dir)
-    timeline = load_timeline(case_dir)
+    meta = load_case_meta(case_dir)
+    findings = load_all_findings(case_dir)
+    timeline = load_all_timeline(case_dir)
     evidence = _load_evidence(case_dir)
 
     print(f"Case: {meta.get('case_id', '?')}")
     print(f"Name: {meta.get('name', '')}")
     print(f"Status: {meta.get('status', 'unknown')}")
+    print(f"Examiner: {meta.get('examiner', '?')}")
+    print(f"Team: {', '.join(meta.get('team', []))}")
     print(f"Created: {meta.get('created', '?')}")
     print()
 
@@ -83,7 +86,7 @@ def _show_summary(case_dir: Path) -> None:
 
     print(f"Evidence: {len(evidence)} registered files")
 
-    todos = load_todos(case_dir)
+    todos = load_all_todos(case_dir)
     open_t = sum(1 for t in todos if t.get("status") == "open")
     completed_t = sum(1 for t in todos if t.get("status") == "completed")
     print(f"TODOs: {len(todos)} total ({open_t} open, {completed_t} completed)")
@@ -91,7 +94,7 @@ def _show_summary(case_dir: Path) -> None:
 
 def _show_todos(case_dir: Path, open_only: bool = False) -> None:
     """Show TODO items in a table."""
-    todos = load_todos(case_dir)
+    todos = load_all_todos(case_dir)
     if open_only:
         todos = [t for t in todos if t.get("status") == "open"]
 
@@ -119,25 +122,26 @@ def _show_todos(case_dir: Path, open_only: bool = False) -> None:
 
 def _show_findings_table(case_dir: Path) -> None:
     """Show findings as a summary table."""
-    findings = load_findings(case_dir)
+    findings = load_all_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
 
     # Header
-    print(f"{'ID':<8} {'Status':<12} {'Confidence':<12} Title")
-    print("-" * 70)
+    print(f"{'ID':<16} {'Status':<12} {'Confidence':<12} {'Examiner':<10} Title")
+    print("-" * 80)
     for f in findings:
         fid = f.get("id", "?")
         status = f.get("status", "?")
         confidence = f.get("confidence", "?")
+        examiner = f.get("examiner", "?")
         title = f.get("title", "Untitled")
-        print(f"{fid:<8} {status:<12} {confidence:<12} {title}")
+        print(f"{fid:<16} {status:<12} {confidence:<12} {examiner:<10} {title}")
 
 
 def _show_findings_detail(case_dir: Path) -> None:
     """Show full findings with all fields."""
-    findings = load_findings(case_dir)
+    findings = load_all_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
@@ -200,7 +204,7 @@ def _show_findings_verify(case_dir: Path) -> None:
 
 def _show_iocs(case_dir: Path) -> None:
     """Extract IOCs from findings, grouped by approval status."""
-    findings = load_findings(case_dir)
+    findings = load_all_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
@@ -298,7 +302,7 @@ def _extract_text_iocs(text: str, collected: dict[str, set[str]]) -> None:
 
 def _show_timeline(case_dir: Path, detail: bool) -> None:
     """Show timeline events."""
-    timeline = load_timeline(case_dir)
+    timeline = load_all_timeline(case_dir)
     if not timeline:
         print("No timeline events recorded.")
         return
@@ -347,7 +351,7 @@ def _show_evidence(case_dir: Path) -> None:
         print(f"    Registered: {e.get('registered_at', '?')} by {e.get('registered_by', '?')}")
 
     # Show access log if exists
-    access_log = case_dir / ".audit" / "evidence_access.jsonl"
+    access_log = case_dir / ".local" / "evidence_access.jsonl"
     if access_log.exists():
         print(f"\n{'=' * 60}")
         print("  Evidence Access Log")
@@ -360,20 +364,34 @@ def _show_evidence(case_dir: Path) -> None:
 
 
 def _show_audit(case_dir: Path, limit: int) -> None:
-    """Show audit trail entries."""
-    audit_dir = case_dir / ".audit"
+    """Show audit trail entries from .local/audit/ and .team/*/audit/."""
     entries = []
 
-    for jsonl_file in audit_dir.glob("*.jsonl"):
-        if jsonl_file.name in ("evidence_access.jsonl", "approvals.jsonl"):
-            continue
-        for line in jsonl_file.read_text().strip().split("\n"):
-            if not line:
+    # Read from .local/audit/
+    local_audit = case_dir / ".local" / "audit"
+    if local_audit.is_dir():
+        for jsonl_file in local_audit.glob("*.jsonl"):
+            for line in jsonl_file.read_text().strip().split("\n"):
+                if not line:
+                    continue
+                entries.append(json.loads(line))
+
+    # Read from .team/*/audit/
+    team_dir = case_dir / ".team"
+    if team_dir.is_dir():
+        for ex_dir in team_dir.iterdir():
+            if not ex_dir.is_dir():
                 continue
-            entries.append(json.loads(line))
+            team_audit = ex_dir / "audit"
+            if team_audit.is_dir():
+                for jsonl_file in team_audit.glob("*.jsonl"):
+                    for line in jsonl_file.read_text().strip().split("\n"):
+                        if not line:
+                            continue
+                        entries.append(json.loads(line))
 
     # Also include approvals
-    approvals_file = audit_dir / "approvals.jsonl"
+    approvals_file = case_dir / ".local" / "approvals.jsonl"
     if approvals_file.exists():
         for line in approvals_file.read_text().strip().split("\n"):
             if not line:
@@ -399,19 +417,12 @@ def _show_audit(case_dir: Path, limit: int) -> None:
         mcp = e.get("mcp", "?")
         tool = e.get("tool", "?")
         eid = e.get("evidence_id", "")
-        print(f"  {ts} | {mcp:20s} | {tool:25s} | {eid}")
-
-
-def _load_meta(case_dir: Path) -> dict:
-    meta_file = case_dir / "CASE.yaml"
-    if not meta_file.exists():
-        return {}
-    with open(meta_file) as f:
-        return yaml.safe_load(f) or {}
+        examiner = e.get("examiner", "?")
+        print(f"  {ts} | {examiner:10s} | {mcp:20s} | {tool:25s} | {eid}")
 
 
 def _load_evidence(case_dir: Path) -> list[dict]:
-    reg_file = case_dir / ".audit" / "evidence.json"
+    reg_file = case_dir / ".local" / "evidence.json"
     if not reg_file.exists():
         return []
     return json.loads(reg_file.read_text()).get("files", [])

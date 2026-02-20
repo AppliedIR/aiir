@@ -31,6 +31,8 @@ from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     load_timeline,
+    load_all_findings,
+    load_all_timeline,
     load_todos,
     save_findings,
     save_timeline,
@@ -71,8 +73,8 @@ def _approve_specific(
     interpretation: str | None = None,
 ) -> None:
     """Approve specific finding/event IDs with optional modifications."""
-    findings = load_findings(case_dir)
-    timeline = load_timeline(case_dir)
+    findings = load_all_findings(case_dir)
+    timeline = load_all_timeline(case_dir)
     to_approve = []
 
     for item_id in ids:
@@ -106,8 +108,30 @@ def _approve_specific(
         item["approved_by"] = identity["analyst"]
         write_approval_log(case_dir, item["id"], "APPROVED", identity, mode=mode)
 
-    save_findings(case_dir, findings)
-    save_timeline(case_dir, timeline)
+    # Save back to local store (approvals apply to local data)
+    # For cross-examiner items, the approval record in approvals.jsonl tracks it
+    local_findings = load_findings(case_dir)
+    local_timeline = load_timeline(case_dir)
+    # Update any local items that were approved
+    _SYNC_KEYS = (
+        "status", "approved_at", "approved_by",
+        "examiner_notes", "examiner_modifications",
+        "interpretation", "title", "confidence", "confidence_justification",
+        "observation", "description", "source", "timestamp",
+    )
+    local_ids = {f["id"] for f in local_findings} | {t["id"] for t in local_timeline}
+    for item in to_approve:
+        # Strip examiner prefix to match local ID
+        bare_id = item["id"].split("/")[-1] if "/" in item["id"] else item["id"]
+        if bare_id in local_ids or item["id"] in local_ids:
+            for f in local_findings:
+                if f["id"] == bare_id:
+                    f.update({k: item[k] for k in _SYNC_KEYS if k in item})
+            for t in local_timeline:
+                if t["id"] == bare_id:
+                    t.update({k: item[k] for k in _SYNC_KEYS if k in item})
+    save_findings(case_dir, local_findings)
+    save_timeline(case_dir, local_timeline)
     approved_ids = [item["id"] for item in to_approve]
     print(f"Approved: {', '.join(approved_ids)}")
 
@@ -121,11 +145,11 @@ def _interactive_review(
     timeline_only: bool = False,
 ) -> None:
     """Review each DRAFT item with full per-item options."""
-    findings = load_findings(case_dir)
-    timeline = load_timeline(case_dir)
+    findings = load_all_findings(case_dir)
+    timeline = load_all_timeline(case_dir)
 
-    drafts = [] if timeline_only else [f for f in findings if f["status"] == "DRAFT"]
-    draft_events = [] if findings_only else [t for t in timeline if t["status"] == "DRAFT"]
+    drafts = [] if timeline_only else [f for f in findings if f.get("status") == "DRAFT"]
+    draft_events = [] if findings_only else [t for t in timeline if t.get("status") == "DRAFT"]
     all_items = drafts + draft_events
 
     # Filter by creator
@@ -243,8 +267,27 @@ def _interactive_review(
                 case_dir, item["id"], "REJECTED", identity, reason=reason, mode=mode
             )
 
-    save_findings(case_dir, findings)
-    save_timeline(case_dir, timeline)
+    # Save back to local store — update local items that were changed
+    local_findings = load_findings(case_dir)
+    local_timeline = load_timeline(case_dir)
+    _SYNC_KEYS_INTERACTIVE = (
+        "status", "approved_at", "approved_by",
+        "rejected_at", "rejected_by", "rejection_reason",
+        "examiner_notes", "examiner_modifications",
+        "interpretation", "title", "confidence", "confidence_justification",
+        "observation", "description", "source", "timestamp",
+    )
+    changed_items = {item["id"]: item for item in all_items if item["id"] in approvals | rejections}
+    for item_id, item in changed_items.items():
+        bare_id = item_id.split("/")[-1] if "/" in item_id else item_id
+        for f in local_findings:
+            if f["id"] == bare_id:
+                f.update({k: item[k] for k in _SYNC_KEYS_INTERACTIVE if k in item})
+        for t in local_timeline:
+            if t["id"] == bare_id:
+                t.update({k: item[k] for k in _SYNC_KEYS_INTERACTIVE if k in item})
+    save_findings(case_dir, local_findings)
+    save_timeline(case_dir, local_timeline)
 
     # Create TODOs
     if todos_to_create:
@@ -380,10 +423,13 @@ def _display_item(item: dict) -> None:
     """Display a finding or timeline event."""
     status = item.get("status", "?")
     created_by = item.get("created_by", "")
+    examiner = item.get("examiner", "")
     print(f"\n{'─' * 60}")
     print(f"  [{item['id']}]  {item.get('title', item.get('description', 'Untitled'))}")
+    if examiner:
+        print(f"  Examiner: {examiner}", end="")
     if created_by:
-        print(f"  By: {created_by}", end="")
+        print(f"  | By: {created_by}", end="")
     if item.get("confidence"):
         print(f"  | Confidence: {item['confidence']}", end="")
     if item.get("evidence_ids"):

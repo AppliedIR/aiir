@@ -22,6 +22,7 @@ from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, c
 from aiir_cli.commands.config import cmd_config
 from aiir_cli.commands.todo import cmd_todo
 from aiir_cli.commands.setup import cmd_setup
+from aiir_cli.commands.sync import cmd_sync
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -107,6 +108,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_setup.add_argument("--force-reprompt", action="store_true", help="Force re-prompting for all values")
     p_setup.add_argument("--non-interactive", action="store_true", help="Skip interactive prompts")
 
+    # sync
+    p_sync = sub.add_parser("sync", help="Multi-examiner sync: export/import contribution bundles")
+    sync_sub = p_sync.add_subparsers(dest="sync_action", help="Sync actions")
+    p_sync_export = sync_sub.add_parser("export", help="Export contributions to bundle file")
+    p_sync_export.add_argument("--file", required=True, help="Output file path")
+    p_sync_import = sync_sub.add_parser("import", help="Import contributions from bundle file")
+    p_sync_import.add_argument("--file", required=True, help="Input file path")
+
     # config
     p_config = sub.add_parser("config", help="Configure AIIR settings")
     p_config.add_argument("--analyst", help="Set analyst identity")
@@ -140,6 +149,7 @@ def main() -> None:
         "config": cmd_config,
         "todo": cmd_todo,
         "setup": cmd_setup,
+        "sync": cmd_sync,
     }
 
     handler = dispatch.get(args.command)
