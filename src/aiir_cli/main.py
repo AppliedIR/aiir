@@ -13,7 +13,7 @@ import argparse
 import sys
 
 from aiir_cli import __version__
-from aiir_cli.identity import get_analyst_identity, warn_if_unconfigured
+from aiir_cli.identity import get_examiner_identity, warn_if_unconfigured
 from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.reject import cmd_reject
 from aiir_cli.commands.review import cmd_review
@@ -38,11 +38,12 @@ def build_parser() -> argparse.ArgumentParser:
     # approve
     p_approve = sub.add_parser("approve", help="Approve staged findings/timeline events")
     p_approve.add_argument("ids", nargs="*", help="Finding/event IDs to approve (omit for interactive review)")
-    p_approve.add_argument("--analyst", help="Override analyst identity")
+    p_approve.add_argument("--examiner", dest="examiner_override", help="Override examiner identity")
+    p_approve.add_argument("--analyst", dest="examiner_override", help="(deprecated, use --examiner)")
     p_approve.add_argument("--note", help="Add examiner note when approving specific IDs")
     p_approve.add_argument("--edit", action="store_true", help="Open in $EDITOR before approving")
     p_approve.add_argument("--interpretation", help="Override interpretation field")
-    p_approve.add_argument("--by", help="Filter items by creator analyst (interactive mode)")
+    p_approve.add_argument("--by", help="Filter items by creator examiner (interactive mode)")
     p_approve.add_argument("--findings-only", action="store_true", help="Review only findings")
     p_approve.add_argument("--timeline-only", action="store_true", help="Review only timeline events")
 
@@ -50,7 +51,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
     p_reject.add_argument("ids", nargs="+", help="Finding/event IDs to reject")
     p_reject.add_argument("--reason", default="", help="Reason for rejection (optional)")
-    p_reject.add_argument("--analyst", help="Override analyst identity")
+    p_reject.add_argument("--examiner", dest="examiner_override", help="Override examiner identity")
+    p_reject.add_argument("--analyst", dest="examiner_override", help="(deprecated, use --examiner)")
+
+    # case (init + join)
+    p_case = sub.add_parser("case", help="Case management: init, join")
+    case_sub = p_case.add_subparsers(dest="case_action", help="Case actions")
+    p_case_init = case_sub.add_parser("init", help="Initialize a new case")
+    p_case_init.add_argument("name", help="Case name")
+    p_case_init.add_argument("--description", default="", help="Case description")
+    p_case_init.add_argument("--collaborative", "-c", action="store_true", help="Create in collaborative mode")
+    p_case_join = case_sub.add_parser("join", help="Join an existing case as a new examiner")
+    p_case_join.add_argument("--case-id", required=True, help="Case ID to join")
+    p_case_join.add_argument("--examiner", help="Examiner slug (defaults to current identity)")
 
     # review
     p_review = sub.add_parser("review", help="Review case status and audit trail")
@@ -118,9 +131,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     # config
     p_config = sub.add_parser("config", help="Configure AIIR settings")
-    p_config.add_argument("--analyst", help="Set analyst identity")
+    p_config.add_argument("--examiner", help="Set examiner identity")
+    p_config.add_argument("--analyst", dest="examiner", help="(deprecated, use --examiner)")
     p_config.add_argument("--show", action="store_true", help="Show current configuration")
-    p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current analyst")
+    p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current examiner")
     p_config.add_argument("--reset-pin", action="store_true", help="Reset approval PIN (requires current PIN)")
 
     return parser
@@ -135,7 +149,9 @@ def main() -> None:
         sys.exit(0)
 
     # Identity check on every command
-    identity = get_analyst_identity(getattr(args, "analyst", None))
+    # Support both --examiner and --analyst (deprecated) overrides
+    flag_override = getattr(args, "examiner_override", None) or getattr(args, "analyst", None)
+    identity = get_examiner_identity(flag_override)
     warn_if_unconfigured(identity)
 
     dispatch = {
@@ -150,6 +166,7 @@ def main() -> None:
         "todo": cmd_todo,
         "setup": cmd_setup,
         "sync": cmd_sync,
+        "case": _cmd_case,
     }
 
     handler = dispatch.get(args.command)
@@ -158,6 +175,132 @@ def main() -> None:
     else:
         parser.print_help()
         sys.exit(1)
+
+
+def _cmd_case(args, identity: dict) -> None:
+    """Handle case subcommands: init, join."""
+    action = getattr(args, "case_action", None)
+    if action == "init":
+        _case_init(args, identity)
+    elif action == "join":
+        _case_join(args, identity)
+    else:
+        print("Usage: aiir case {init|join}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _case_init(args, identity: dict) -> None:
+    """Initialize a new case from CLI."""
+    import json
+    import os
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    import yaml
+
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    ts = datetime.now(timezone.utc)
+    case_id = f"INC-{ts.strftime('%Y')}-{ts.strftime('%m%d%H%M%S')}"
+    case_dir = cases_dir / case_id
+
+    if case_dir.exists():
+        print(f"Case directory already exists: {case_dir}", file=sys.stderr)
+        sys.exit(1)
+
+    examiner = identity["examiner"]
+    collaborative = getattr(args, "collaborative", False)
+    mode = "collaborative" if collaborative else "solo"
+
+    case_dir.mkdir(parents=True)
+    (case_dir / "evidence").mkdir()
+    (case_dir / "extracted").mkdir()
+    (case_dir / "reports").mkdir()
+
+    exam_dir = case_dir / "examiners" / examiner
+    exam_dir.mkdir(parents=True)
+    (exam_dir / "audit").mkdir()
+
+    case_meta = {
+        "case_id": case_id,
+        "name": args.name,
+        "description": getattr(args, "description", ""),
+        "mode": mode,
+        "status": "open",
+        "examiner": examiner,
+        "team": [examiner],
+        "created": ts.isoformat(),
+        "created_by": examiner,
+    }
+
+    with open(case_dir / "CASE.yaml", "w") as f:
+        yaml.dump(case_meta, f, default_flow_style=False)
+
+    for fname in ("findings.json", "timeline.json", "todos.json"):
+        with open(exam_dir / fname, "w") as f:
+            f.write("[]")
+    with open(exam_dir / "evidence.json", "w") as f:
+        json.dump({"files": []}, f)
+
+    # Set active case pointer
+    aiir_dir = Path(".aiir")
+    aiir_dir.mkdir(exist_ok=True)
+    with open(aiir_dir / "active_case", "w") as f:
+        f.write(case_id)
+
+    print(f"Case initialized: {case_id}")
+    print(f"  Name: {args.name}")
+    print(f"  Mode: {mode}")
+    print(f"  Examiner: {examiner}")
+    print(f"  Path: {case_dir}")
+
+
+def _case_join(args, identity: dict) -> None:
+    """Join an existing case as a new examiner."""
+    import json
+    import os
+    from pathlib import Path
+
+    import yaml
+
+    case_id = args.case_id
+    examiner = getattr(args, "examiner", None) or identity["examiner"]
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    case_dir = cases_dir / case_id
+
+    if not case_dir.exists():
+        print(f"Case not found: {case_id}", file=sys.stderr)
+        sys.exit(1)
+
+    meta_file = case_dir / "CASE.yaml"
+    with open(meta_file) as f:
+        meta = yaml.safe_load(f) or {}
+
+    exam_dir = case_dir / "examiners" / examiner
+    if exam_dir.exists():
+        print(f"Examiner '{examiner}' already has a directory in case {case_id}")
+    else:
+        exam_dir.mkdir(parents=True)
+        (exam_dir / "audit").mkdir()
+        for fname in ("findings.json", "timeline.json", "todos.json"):
+            with open(exam_dir / fname, "w") as f:
+                f.write("[]")
+        with open(exam_dir / "evidence.json", "w") as f:
+            json.dump({"files": []}, f)
+
+    # Add to team list
+    if examiner not in meta.get("team", []):
+        meta.setdefault("team", []).append(examiner)
+        with open(meta_file, "w") as f:
+            yaml.dump(meta, f, default_flow_style=False)
+
+    # Set active case pointer
+    aiir_dir = Path(".aiir")
+    aiir_dir.mkdir(exist_ok=True)
+    with open(aiir_dir / "active_case", "w") as f:
+        f.write(case_id)
+
+    print(f"Joined case {case_id} as examiner '{examiner}'")
+    print(f"  Team: {', '.join(meta.get('team', []))}")
 
 
 if __name__ == "__main__":

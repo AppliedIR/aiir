@@ -1,7 +1,7 @@
 """Shared case file I/O for CLI commands.
 
-Multi-examiner aware: local data in .local/, team data in .team/{examiner}/.
-Read operations can merge from all sources for unified views.
+Multi-examiner aware: each examiner's data in examiners/{slug}/.
+Read operations merge from all examiners/*/ for unified views.
 """
 
 from __future__ import annotations
@@ -57,10 +57,24 @@ def get_case_dir(case_id: str | None = None) -> Path:
     sys.exit(1)
 
 
-def get_examiner(case_dir: Path) -> str:
-    """Get the examiner identity from CASE.yaml."""
-    meta = load_case_meta(case_dir)
-    return meta.get("examiner", os.environ.get("AIIR_EXAMINER", ""))
+def get_examiner(case_dir: Path | None = None) -> str:
+    """Get the current examiner identity.
+
+    Resolution: AIIR_EXAMINER > AIIR_ANALYST (deprecated) > CASE.yaml > OS user.
+    """
+    env_exam = os.environ.get("AIIR_EXAMINER", "").strip().lower()
+    if env_exam:
+        return env_exam
+    env_analyst = os.environ.get("AIIR_ANALYST", "").strip().lower()
+    if env_analyst:
+        return env_analyst
+    if case_dir:
+        meta = load_case_meta(case_dir)
+        exam = meta.get("examiner", "")
+        if exam:
+            return exam
+    import getpass
+    return getpass.getuser().lower()
 
 
 def load_case_meta(case_dir: Path) -> dict:
@@ -74,226 +88,148 @@ def load_case_meta(case_dir: Path) -> dict:
 
 # --- Local store I/O (this examiner only) ---
 
+def _examiner_dir(case_dir: Path) -> Path:
+    """Return examiners/{slug}/ for the current examiner."""
+    examiner = get_examiner(case_dir)
+    return case_dir / "examiners" / examiner
+
+
 def load_findings(case_dir: Path) -> list[dict]:
-    """Load findings from local .local/findings.json."""
-    findings_file = case_dir / ".local" / "findings.json"
+    """Load findings from examiners/{slug}/findings.json."""
+    findings_file = _examiner_dir(case_dir) / "findings.json"
     if not findings_file.exists():
         return []
     return json.loads(findings_file.read_text())
 
 
 def save_findings(case_dir: Path, findings: list[dict]) -> None:
-    """Save findings to local store and regenerate merged FINDINGS.md."""
-    local = case_dir / ".local"
-    local.mkdir(parents=True, exist_ok=True)
+    """Save findings to this examiner's store."""
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
     _atomic_write(
-        local / "findings.json",
+        exam_dir / "findings.json",
         json.dumps(findings, indent=2, default=str),
     )
-    regenerate_findings_md(case_dir)
 
 
 def load_timeline(case_dir: Path) -> list[dict]:
-    """Load timeline events from local .local/timeline.json."""
-    timeline_file = case_dir / ".local" / "timeline.json"
+    """Load timeline events from examiners/{slug}/timeline.json."""
+    timeline_file = _examiner_dir(case_dir) / "timeline.json"
     if not timeline_file.exists():
         return []
     return json.loads(timeline_file.read_text())
 
 
 def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
-    """Save timeline to local store and regenerate merged TIMELINE.md."""
-    local = case_dir / ".local"
-    local.mkdir(parents=True, exist_ok=True)
+    """Save timeline to this examiner's store."""
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
     _atomic_write(
-        local / "timeline.json",
+        exam_dir / "timeline.json",
         json.dumps(timeline, indent=2, default=str),
     )
-    regenerate_timeline_md(case_dir)
 
 
 def load_todos(case_dir: Path) -> list[dict]:
-    """Load TODO items from local .local/todos.json."""
-    todos_file = case_dir / ".local" / "todos.json"
+    """Load TODO items from examiners/{slug}/todos.json."""
+    todos_file = _examiner_dir(case_dir) / "todos.json"
     if not todos_file.exists():
         return []
     return json.loads(todos_file.read_text())
 
 
 def save_todos(case_dir: Path, todos: list[dict]) -> None:
-    """Save TODO items to local store."""
-    local = case_dir / ".local"
-    local.mkdir(parents=True, exist_ok=True)
+    """Save TODO items to this examiner's store."""
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
     _atomic_write(
-        local / "todos.json",
+        exam_dir / "todos.json",
         json.dumps(todos, indent=2, default=str),
     )
 
 
-# --- Merged reads (local + team) ---
+# --- Merged reads (all examiners) ---
 
 def load_all_findings(case_dir: Path) -> list[dict]:
-    """Load findings from .local/ and all .team/*/, with scoped IDs."""
-    examiner = get_examiner(case_dir)
-
-    findings = load_findings(case_dir)
-    for f in findings:
-        f.setdefault("examiner", examiner)
-        if examiner and "/" not in f.get("id", ""):
-            f["id"] = f"{examiner}/{f['id']}"
-
-    team_dir = case_dir / ".team"
-    if team_dir.is_dir():
-        for ex_dir in sorted(team_dir.iterdir()):
-            if not ex_dir.is_dir():
-                continue
-            team_exam = ex_dir.name
-            team_file = ex_dir / "findings.json"
-            if team_file.exists():
-                team_findings = json.loads(team_file.read_text())
-                for f in team_findings:
-                    f.setdefault("examiner", team_exam)
-                    if "/" not in f.get("id", ""):
-                        f["id"] = f"{team_exam}/{f['id']}"
-                findings.extend(team_findings)
-
+    """Load findings from all examiners/*/, with scoped IDs."""
+    findings = []
+    examiners_root = case_dir / "examiners"
+    if not examiners_root.is_dir():
+        return findings
+    for ex_dir in sorted(examiners_root.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+            continue
+        exam = ex_dir.name
+        f_file = ex_dir / "findings.json"
+        if f_file.exists():
+            ex_findings = json.loads(f_file.read_text())
+            for f in ex_findings:
+                f.setdefault("examiner", exam)
+                if "/" not in f.get("id", ""):
+                    f["id"] = f"{exam}/{f['id']}"
+            findings.extend(ex_findings)
     return findings
 
 
 def load_all_timeline(case_dir: Path) -> list[dict]:
-    """Load timeline from .local/ and all .team/*/, sorted chronologically."""
-    examiner = get_examiner(case_dir)
-
-    timeline = load_timeline(case_dir)
-    for t in timeline:
-        t.setdefault("examiner", examiner)
-        if examiner and "/" not in t.get("id", ""):
-            t["id"] = f"{examiner}/{t['id']}"
-
-    team_dir = case_dir / ".team"
-    if team_dir.is_dir():
-        for ex_dir in sorted(team_dir.iterdir()):
-            if not ex_dir.is_dir():
-                continue
-            team_exam = ex_dir.name
-            team_file = ex_dir / "timeline.json"
-            if team_file.exists():
-                team_timeline = json.loads(team_file.read_text())
-                for t in team_timeline:
-                    t.setdefault("examiner", team_exam)
-                    if "/" not in t.get("id", ""):
-                        t["id"] = f"{team_exam}/{t['id']}"
-                timeline.extend(team_timeline)
-
+    """Load timeline from all examiners/*/, sorted chronologically."""
+    timeline = []
+    examiners_root = case_dir / "examiners"
+    if not examiners_root.is_dir():
+        return timeline
+    for ex_dir in sorted(examiners_root.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+            continue
+        exam = ex_dir.name
+        t_file = ex_dir / "timeline.json"
+        if t_file.exists():
+            ex_timeline = json.loads(t_file.read_text())
+            for t in ex_timeline:
+                t.setdefault("examiner", exam)
+                if "/" not in t.get("id", ""):
+                    t["id"] = f"{exam}/{t['id']}"
+            timeline.extend(ex_timeline)
     timeline.sort(key=lambda t: t.get("timestamp", ""))
     return timeline
 
 
 def load_all_todos(case_dir: Path) -> list[dict]:
-    """Load TODOs from .local/ and all .team/*/."""
-    examiner = get_examiner(case_dir)
-
-    todos = load_todos(case_dir)
-    for t in todos:
-        t.setdefault("examiner", examiner)
-        if examiner and "/" not in t.get("todo_id", ""):
-            t["todo_id"] = f"{examiner}/{t['todo_id']}"
-
-    team_dir = case_dir / ".team"
-    if team_dir.is_dir():
-        for ex_dir in sorted(team_dir.iterdir()):
-            if not ex_dir.is_dir():
-                continue
-            team_exam = ex_dir.name
-            team_file = ex_dir / "todos.json"
-            if team_file.exists():
-                team_todos = json.loads(team_file.read_text())
-                for t in team_todos:
-                    t.setdefault("examiner", team_exam)
-                    if "/" not in t.get("todo_id", ""):
-                        t["todo_id"] = f"{team_exam}/{t['todo_id']}"
-                todos.extend(team_todos)
-
+    """Load TODOs from all examiners/*/."""
+    todos = []
+    examiners_root = case_dir / "examiners"
+    if not examiners_root.is_dir():
+        return todos
+    for ex_dir in sorted(examiners_root.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+            continue
+        exam = ex_dir.name
+        t_file = ex_dir / "todos.json"
+        if t_file.exists():
+            ex_todos = json.loads(t_file.read_text())
+            for t in ex_todos:
+                t.setdefault("examiner", exam)
+                if "/" not in t.get("todo_id", ""):
+                    t["todo_id"] = f"{exam}/{t['todo_id']}"
+            todos.extend(ex_todos)
     return todos
 
 
 def load_all_approvals(case_dir: Path) -> list[dict]:
-    """Load approvals from .local/ and all .team/*/."""
-    approvals = load_approval_log(case_dir)
-
-    team_dir = case_dir / ".team"
-    if team_dir.is_dir():
-        for ex_dir in sorted(team_dir.iterdir()):
-            if not ex_dir.is_dir():
-                continue
-            approvals_file = ex_dir / "approvals.jsonl"
-            if approvals_file.exists():
-                for line in approvals_file.read_text().strip().split("\n"):
-                    if line:
-                        approvals.append(json.loads(line))
-
+    """Load approvals from all examiners/*/."""
+    approvals = []
+    examiners_root = case_dir / "examiners"
+    if not examiners_root.is_dir():
+        return approvals
+    for ex_dir in sorted(examiners_root.iterdir()):
+        if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+            continue
+        approvals_file = ex_dir / "approvals.jsonl"
+        if approvals_file.exists():
+            for line in approvals_file.read_text().strip().split("\n"):
+                if line:
+                    approvals.append(json.loads(line))
     approvals.sort(key=lambda a: a.get("ts", ""))
     return approvals
-
-
-# --- Markdown generation (merged views) ---
-
-def regenerate_findings_md(case_dir: Path) -> None:
-    """Rewrite FINDINGS.md from all examiners' findings data."""
-    findings = load_all_findings(case_dir)
-    meta = load_case_meta(case_dir)
-    case_id = meta.get("case_id", case_dir.name)
-
-    lines = [f"# Findings — {case_id}\n\n"]
-    for f in findings:
-        status = f.get("status", "DRAFT")
-        title = f.get("title", "Untitled")
-        examiner = f.get("examiner", "")
-        lines.append(f"## {f['id']}: {title} [{status}]\n\n")
-        if status == "DRAFT":
-            lines.append("**Status:** DRAFT — awaiting human approval\n")
-        elif status == "APPROVED":
-            approved_at = f.get("approved_at", "")
-            approved_by = f.get("approved_by", "")
-            lines.append(f"**Status:** APPROVED by {approved_by} at {approved_at}\n")
-        elif status == "REJECTED":
-            rejected_at = f.get("rejected_at", "")
-            rejected_by = f.get("rejected_by", "")
-            reason = f.get("rejection_reason", "")
-            lines.append(f"**Status:** REJECTED by {rejected_by} at {rejected_at}")
-            if reason:
-                lines.append(f", reason: {reason}")
-            lines.append("\n")
-        lines.append(f"**Examiner:** {examiner}\n")
-        lines.append(f"**Confidence:** {f.get('confidence', 'UNSPECIFIED')}\n")
-        lines.append(f"**Evidence:** {', '.join(f.get('evidence_ids', []))}\n\n")
-        lines.append(f"### Observation\n{f.get('observation', '')}\n\n")
-        lines.append(f"### Interpretation\n{f.get('interpretation', '')}\n\n")
-        lines.append(f"### Confidence Justification\n{f.get('confidence_justification', '')}\n\n")
-        lines.append(f"---\n*Staged: {f.get('staged', '')}*\n\n")
-    _atomic_write(case_dir / "FINDINGS.md", "".join(lines))
-
-
-def regenerate_timeline_md(case_dir: Path) -> None:
-    """Rewrite TIMELINE.md from all examiners' timeline data."""
-    timeline = load_all_timeline(case_dir)
-    meta = load_case_meta(case_dir)
-    case_id = meta.get("case_id", case_dir.name)
-
-    lines = [f"# Timeline — {case_id}\n\n"]
-    for ev in timeline:
-        status = ev.get("status", "DRAFT")
-        examiner = ev.get("examiner", "")
-        lines.append(f"## {ev['id']}: {ev['timestamp']} [{status}]\n\n")
-        lines.append(f"{ev.get('description', '')}\n\n")
-        lines.append(f"**Examiner:** {examiner}\n")
-        evidence = ", ".join(ev.get("evidence_ids", []))
-        if evidence:
-            lines.append(f"**Evidence:** {evidence}\n\n")
-        if ev.get("source"):
-            lines.append(f"**Source:** {ev['source']}\n\n")
-        lines.append(f"---\n*Staged: {ev.get('staged', '')}*\n\n")
-    _atomic_write(case_dir / "TIMELINE.md", "".join(lines))
 
 
 # --- Approval I/O ---
@@ -306,17 +242,17 @@ def write_approval_log(
     reason: str = "",
     mode: str = "interactive",
 ) -> None:
-    """Write approval/rejection record to .local/approvals.jsonl."""
-    local = case_dir / ".local"
-    local.mkdir(parents=True, exist_ok=True)
-    log_file = local / "approvals.jsonl"
+    """Write approval/rejection record to examiners/{slug}/approvals.jsonl."""
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
+    log_file = exam_dir / "approvals.jsonl"
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "item_id": item_id,
         "action": action,
         "os_user": identity["os_user"],
-        "analyst": identity["analyst"],
-        "analyst_source": identity["analyst_source"],
+        "examiner": identity.get("examiner", identity.get("analyst", "")),
+        "examiner_source": identity.get("examiner_source", identity.get("analyst_source", "")),
         "mode": mode,
     }
     if reason:
@@ -326,8 +262,8 @@ def write_approval_log(
 
 
 def load_approval_log(case_dir: Path) -> list[dict]:
-    """Load approval records from .local/approvals.jsonl."""
-    log_file = case_dir / ".local" / "approvals.jsonl"
+    """Load approval records from examiners/{slug}/approvals.jsonl."""
+    log_file = _examiner_dir(case_dir) / "approvals.jsonl"
     if not log_file.exists():
         return []
     entries = []
@@ -379,10 +315,12 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
         result = dict(f)
         status = f.get("status", "DRAFT")
         fid = f["id"]
+        # Match scoped (tester/F-001) or bare (F-001) IDs
+        bare_id = fid.split("/")[-1] if "/" in fid else fid
+        record = last_approval.get(fid) or last_approval.get(bare_id)
         if status == "DRAFT":
             result["verification"] = "draft"
-        elif fid in last_approval:
-            record = last_approval[fid]
+        elif record:
             if record["action"] == status:
                 result["verification"] = "confirmed"
             else:
@@ -398,8 +336,8 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
 def export_bundle(case_dir: Path) -> dict:
     """Export this examiner's contributions as a bundle dict."""
     meta = load_case_meta(case_dir)
-    examiner = meta.get("examiner", "")
-    local = case_dir / ".local"
+    examiner = get_examiner(case_dir)
+    exam_dir = _examiner_dir(case_dir)
 
     bundle = {
         "schema_version": 1,
@@ -419,14 +357,16 @@ def export_bundle(case_dir: Path) -> dict:
 
     bundle["todos"] = load_todos(case_dir)
 
-    actions_file = local / "actions.md"
-    bundle["actions_md"] = actions_file.read_text() if actions_file.exists() else ""
+    actions_jsonl = exam_dir / "actions.jsonl"
+    bundle["actions_jsonl"] = actions_jsonl.read_text() if actions_jsonl.exists() else ""
+    legacy_actions = exam_dir / "actions.md"
+    bundle["actions_md"] = legacy_actions.read_text() if legacy_actions.exists() else ""
 
     bundle["approvals"] = load_approval_log(case_dir)
 
     # Audit entries
     audit: dict[str, list] = {}
-    audit_dir = local / "audit"
+    audit_dir = exam_dir / "audit"
     if audit_dir.is_dir():
         for jsonl_file in audit_dir.glob("*.jsonl"):
             mcp_name = jsonl_file.stem
@@ -438,7 +378,7 @@ def export_bundle(case_dir: Path) -> dict:
     bundle["audit"] = audit
 
     # Evidence manifest
-    evidence_file = local / "evidence.json"
+    evidence_file = exam_dir / "evidence.json"
     manifest = []
     if evidence_file.exists():
         registry = json.loads(evidence_file.read_text())
@@ -454,49 +394,47 @@ def export_bundle(case_dir: Path) -> dict:
 
 
 def import_bundle(case_dir: Path, bundle: dict) -> dict:
-    """Import a contribution bundle from another examiner into .team/{examiner}/."""
+    """Import a contribution bundle from another examiner into examiners/{examiner}/."""
     meta = load_case_meta(case_dir)
     bundle_examiner = bundle.get("examiner", "")
 
     if not bundle_examiner:
         return {"status": "error", "message": "Bundle missing examiner field"}
-    if bundle_examiner == meta.get("examiner"):
+    if bundle_examiner == get_examiner(case_dir):
         return {"status": "error", "message": "Cannot import your own contributions"}
     if bundle.get("case_id") != meta.get("case_id"):
         return {"status": "error", "message": "Case ID mismatch"}
 
-    team_dir = case_dir / ".team" / bundle_examiner
-    team_dir.mkdir(parents=True, exist_ok=True)
-    (team_dir / "audit").mkdir(exist_ok=True)
+    import_dir = case_dir / "examiners" / bundle_examiner
+    import_dir.mkdir(parents=True, exist_ok=True)
+    (import_dir / "audit").mkdir(exist_ok=True)
 
     if "findings" in bundle:
-        _atomic_write(team_dir / "findings.json", json.dumps(bundle["findings"], indent=2, default=str))
+        _atomic_write(import_dir / "findings.json", json.dumps(bundle["findings"], indent=2, default=str))
     if "timeline" in bundle:
-        _atomic_write(team_dir / "timeline.json", json.dumps(bundle["timeline"], indent=2, default=str))
+        _atomic_write(import_dir / "timeline.json", json.dumps(bundle["timeline"], indent=2, default=str))
     if "todos" in bundle:
-        _atomic_write(team_dir / "todos.json", json.dumps(bundle["todos"], indent=2, default=str))
-    if bundle.get("actions_md"):
-        (team_dir / "actions.md").write_text(bundle["actions_md"])
+        _atomic_write(import_dir / "todos.json", json.dumps(bundle["todos"], indent=2, default=str))
+    if bundle.get("actions_jsonl"):
+        _atomic_write(import_dir / "actions.jsonl", bundle["actions_jsonl"])
+    elif bundle.get("actions_md"):
+        _atomic_write(import_dir / "actions.md", bundle["actions_md"])
     if "approvals" in bundle:
-        with open(team_dir / "approvals.jsonl", "w") as f:
+        with open(import_dir / "approvals.jsonl", "w") as f:
             for entry in bundle["approvals"]:
                 f.write(json.dumps(entry, default=str) + "\n")
     if "audit" in bundle:
         for mcp_name, entries in bundle["audit"].items():
-            with open(team_dir / "audit" / f"{mcp_name}.jsonl", "w") as f:
+            with open(import_dir / "audit" / f"{mcp_name}.jsonl", "w") as f:
                 for entry in entries:
                     f.write(json.dumps(entry, default=str) + "\n")
     if "evidence_manifest" in bundle:
-        _atomic_write(team_dir / "evidence_manifest.json", json.dumps(bundle["evidence_manifest"], indent=2, default=str))
+        _atomic_write(import_dir / "evidence_manifest.json", json.dumps(bundle["evidence_manifest"], indent=2, default=str))
 
     # Update team list
     if bundle_examiner not in meta.get("team", []):
         meta.setdefault("team", []).append(bundle_examiner)
         _atomic_write(case_dir / "CASE.yaml", yaml.dump(meta, default_flow_style=False))
-
-    # Regenerate merged views
-    regenerate_findings_md(case_dir)
-    regenerate_timeline_md(case_dir)
 
     return {
         "status": "imported",

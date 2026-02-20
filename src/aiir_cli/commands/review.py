@@ -351,7 +351,8 @@ def _show_evidence(case_dir: Path) -> None:
         print(f"    Registered: {e.get('registered_at', '?')} by {e.get('registered_by', '?')}")
 
     # Show access log if exists
-    access_log = case_dir / ".local" / "evidence_access.jsonl"
+    from aiir_cli.case_io import get_examiner, _examiner_dir
+    access_log = _examiner_dir(case_dir) / "evidence_access.jsonl"
     if access_log.exists():
         print(f"\n{'=' * 60}")
         print("  Evidence Access Log")
@@ -360,46 +361,37 @@ def _show_evidence(case_dir: Path) -> None:
             if not line:
                 continue
             entry = json.loads(line)
-            print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('user', '?')}")
+            print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}")
 
 
 def _show_audit(case_dir: Path, limit: int) -> None:
-    """Show audit trail entries from .local/audit/ and .team/*/audit/."""
+    """Show audit trail entries from all examiners/*/audit/."""
     entries = []
 
-    # Read from .local/audit/
-    local_audit = case_dir / ".local" / "audit"
-    if local_audit.is_dir():
-        for jsonl_file in local_audit.glob("*.jsonl"):
-            for line in jsonl_file.read_text().strip().split("\n"):
-                if not line:
-                    continue
-                entries.append(json.loads(line))
-
-    # Read from .team/*/audit/
-    team_dir = case_dir / ".team"
-    if team_dir.is_dir():
-        for ex_dir in team_dir.iterdir():
-            if not ex_dir.is_dir():
+    # Read from all examiners/*/audit/
+    examiners_root = case_dir / "examiners"
+    if examiners_root.is_dir():
+        for ex_dir in sorted(examiners_root.iterdir()):
+            if not ex_dir.is_dir() or ex_dir.name.startswith("."):
                 continue
-            team_audit = ex_dir / "audit"
-            if team_audit.is_dir():
-                for jsonl_file in team_audit.glob("*.jsonl"):
+            # Audit entries
+            audit_dir = ex_dir / "audit"
+            if audit_dir.is_dir():
+                for jsonl_file in audit_dir.glob("*.jsonl"):
                     for line in jsonl_file.read_text().strip().split("\n"):
                         if not line:
                             continue
                         entries.append(json.loads(line))
-
-    # Also include approvals
-    approvals_file = case_dir / ".local" / "approvals.jsonl"
-    if approvals_file.exists():
-        for line in approvals_file.read_text().strip().split("\n"):
-            if not line:
-                continue
-            entry = json.loads(line)
-            entry["tool"] = "approval"
-            entry["mcp"] = "aiir-cli"
-            entries.append(entry)
+            # Approvals
+            approvals_file = ex_dir / "approvals.jsonl"
+            if approvals_file.exists():
+                for line in approvals_file.read_text().strip().split("\n"):
+                    if not line:
+                        continue
+                    entry = json.loads(line)
+                    entry["tool"] = "approval"
+                    entry["mcp"] = "aiir-cli"
+                    entries.append(entry)
 
     entries.sort(key=lambda e: e.get("ts", ""))
     entries = entries[-limit:]
@@ -422,7 +414,8 @@ def _show_audit(case_dir: Path, limit: int) -> None:
 
 
 def _load_evidence(case_dir: Path) -> list[dict]:
-    reg_file = case_dir / ".local" / "evidence.json"
+    from aiir_cli.case_io import _examiner_dir
+    reg_file = _examiner_dir(case_dir) / "evidence.json"
     if not reg_file.exists():
         return []
     return json.loads(reg_file.read_text()).get("files", [])

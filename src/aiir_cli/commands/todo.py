@@ -65,7 +65,7 @@ def _todo_add(case_dir, args, identity: dict) -> None:
         "priority": getattr(args, "priority", "medium") or "medium",
         "assignee": getattr(args, "assignee", "") or "",
         "related_findings": [],
-        "created_by": identity["analyst"],
+        "created_by": identity["examiner"],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "notes": [],
         "completed_at": None,
@@ -107,7 +107,7 @@ def _todo_update(case_dir, args, identity: dict) -> None:
             if getattr(args, "note", None):
                 t.setdefault("notes", []).append({
                     "note": args.note,
-                    "by": identity["analyst"],
+                    "by": identity["examiner"],
                     "at": datetime.now(timezone.utc).isoformat(),
                 })
                 changed.append("note added")

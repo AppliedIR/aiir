@@ -26,19 +26,22 @@ def cmd_config(args, identity: dict) -> None:
             print(config_path.read_text())
         else:
             print("No configuration file found.")
-            print(f"Current identity: {identity['analyst']} (source: {identity['analyst_source']})")
+            print(f"Current identity: {identity['examiner']} (source: {identity['examiner_source']})")
         return
 
-    if args.analyst:
+    examiner_val = getattr(args, "examiner", None)
+    if examiner_val:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config = {}
         if config_path.exists():
             with open(config_path) as f:
                 config = yaml.safe_load(f) or {}
-        config["analyst"] = args.analyst
+        config["examiner"] = examiner_val
+        # Remove deprecated 'analyst' key if present
+        config.pop("analyst", None)
         with open(config_path, "w") as f:
             yaml.dump(config, f, default_flow_style=False)
-        print(f"Analyst identity set to: {args.analyst}")
+        print(f"Examiner identity set to: {examiner_val}")
         return
 
-    print("Use --analyst <name> to set identity, --show to view config, --setup-pin to configure PIN.")
+    print("Use --examiner <name> to set identity, --show to view config, --setup-pin to configure PIN.")

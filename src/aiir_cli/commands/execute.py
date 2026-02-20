@@ -77,7 +77,10 @@ def cmd_exec(args, identity: dict) -> None:
 def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
               stdout: str, stderr: str, identity: dict) -> None:
     """Write execution record to audit trail."""
-    log_file = case_dir / ".audit" / "exec.jsonl"
+    from aiir_cli.case_io import _examiner_dir
+    audit_dir = _examiner_dir(case_dir) / "audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    log_file = audit_dir / "exec.jsonl"
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "command": command,
@@ -85,15 +88,8 @@ def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
         "exit_code": exit_code,
         "stdout_lines": len(stdout.splitlines()),
         "stderr_lines": len(stderr.splitlines()),
-        "analyst": identity["analyst"],
+        "examiner": identity.get("examiner", identity.get("analyst", "")),
         "os_user": identity["os_user"],
     }
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
-
-    # Also append to ACTIONS.md
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    md_entry = f"### {ts}\n\n**Executed by:** {identity['analyst']} (via `aiir exec`)\n"
-    md_entry += f"**Purpose:** {purpose}\n**Command:** `{command}`\n**Exit code:** {exit_code}\n\n---\n\n"
-    with open(case_dir / "ACTIONS.md", "a") as f:
-        f.write(md_entry)

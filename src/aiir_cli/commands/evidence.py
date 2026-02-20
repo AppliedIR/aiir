@@ -81,7 +81,10 @@ def cmd_register_evidence(args, identity: dict) -> None:
     evidence_path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 444
 
     # Record in evidence registry
-    reg_file = case_dir / ".audit" / "evidence.json"
+    from aiir_cli.case_io import _examiner_dir
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
+    reg_file = exam_dir / "evidence.json"
     if reg_file.exists():
         registry = json.loads(reg_file.read_text())
     else:
@@ -92,7 +95,7 @@ def cmd_register_evidence(args, identity: dict) -> None:
         "sha256": file_hash,
         "description": args.description,
         "registered_at": datetime.now(timezone.utc).isoformat(),
-        "registered_by": identity["analyst"],
+        "registered_by": identity.get("examiner", identity.get("analyst", "")),
     }
     registry["files"].append(entry)
 
@@ -110,12 +113,15 @@ def cmd_register_evidence(args, identity: dict) -> None:
 def _log_evidence_action(case_dir: Path, action: str, detail: str,
                          identity: dict, **extra) -> None:
     """Write evidence action to access log."""
-    log_file = case_dir / ".audit" / "evidence_access.jsonl"
+    from aiir_cli.case_io import _examiner_dir
+    exam_dir = _examiner_dir(case_dir)
+    exam_dir.mkdir(parents=True, exist_ok=True)
+    log_file = exam_dir / "evidence_access.jsonl"
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "action": action,
         "detail": detail,
-        "analyst": identity["analyst"],
+        "examiner": identity.get("examiner", identity.get("analyst", "")),
         "os_user": identity["os_user"],
     }
     entry.update(extra)

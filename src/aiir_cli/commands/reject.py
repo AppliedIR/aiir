@@ -46,24 +46,33 @@ def cmd_reject(args, identity: dict) -> None:
     if reason:
         print(f"  Reason: {reason}")
 
-    mode = require_confirmation(config_path, identity["analyst"])
+    mode = require_confirmation(config_path, identity["examiner"])
+
+    # Reload from disk to preserve any concurrent MCP writes
+    reject_ids = [item["id"] for item in to_reject]
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
 
     now = datetime.now(timezone.utc).isoformat()
-    for item in to_reject:
+    rejected = []
+    for item_id in reject_ids:
+        item = find_draft_item(item_id, findings, timeline)
+        if item is None:
+            continue
         item["status"] = "REJECTED"
         item["rejected_at"] = now
-        item["rejected_by"] = identity["analyst"]
+        item["rejected_by"] = identity["examiner"]
         if reason:
             item["rejection_reason"] = reason
         write_approval_log(
-            case_dir, item["id"], "REJECTED", identity, reason=reason, mode=mode
+            case_dir, item_id, "REJECTED", identity, reason=reason, mode=mode
         )
+        rejected.append(item_id)
 
     save_findings(case_dir, findings)
     save_timeline(case_dir, timeline)
 
-    rejected_ids = [item["id"] for item in to_reject]
-    msg = f"Rejected: {', '.join(rejected_ids)}"
+    msg = f"Rejected: {', '.join(rejected)}"
     if reason:
         msg += f" — reason: {reason}"
     print(msg)

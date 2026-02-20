@@ -17,16 +17,16 @@ def _mock_tty(response="y\n"):
 
 
 @pytest.fixture
-def case_dir(tmp_path):
+def case_dir(tmp_path, monkeypatch):
     """Create a case directory with required structure."""
-    (tmp_path / ".audit").mkdir()
-    (tmp_path / "ACTIONS.md").write_text("# Actions Log\n\n")
+    monkeypatch.setenv("AIIR_EXAMINER", "tester")
+    (tmp_path / "examiners" / "tester" / "audit").mkdir(parents=True)
     return tmp_path
 
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "analyst": "analyst1", "analyst_source": "flag"}
+    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
 
 
 class FakeArgs:
@@ -42,27 +42,17 @@ class TestExec:
         args = FakeArgs(cmd=["echo", "hello"], purpose="test command")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
             cmd_exec(args, identity)
-        log_file = case_dir / ".audit" / "exec.jsonl"
+        log_file = case_dir / "examiners" / "tester" / "audit" / "exec.jsonl"
         assert log_file.exists()
         entry = json.loads(log_file.read_text().strip())
         assert entry["command"] == "echo hello"
         assert entry["purpose"] == "test command"
-        assert entry["analyst"] == "analyst1"
+        assert entry["examiner"] == "analyst1"
 
     def test_cancelled_exec_writes_nothing(self, case_dir, identity, monkeypatch):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["echo", "hello"], purpose="test")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty("n\n")):
             cmd_exec(args, identity)
-        log_file = case_dir / ".audit" / "exec.jsonl"
+        log_file = case_dir / "examiners" / "tester" / "audit" / "exec.jsonl"
         assert not log_file.exists()
-
-    def test_actions_md_appended(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
-        args = FakeArgs(cmd=["echo", "hello"], purpose="test output")
-        with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
-            cmd_exec(args, identity)
-        md = (case_dir / "ACTIONS.md").read_text()
-        assert "test output" in md
-        assert "analyst1" in md
-        assert "`echo hello`" in md

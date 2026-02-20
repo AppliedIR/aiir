@@ -99,13 +99,13 @@ def _approve_specific(
             _apply_note(item, note, identity)
 
     print(f"\n{len(to_approve)} item(s) to approve.")
-    mode = require_confirmation(config_path, identity["analyst"])
+    mode = require_confirmation(config_path, identity["examiner"])
 
     now = datetime.now(timezone.utc).isoformat()
     for item in to_approve:
         item["status"] = "APPROVED"
         item["approved_at"] = now
-        item["approved_by"] = identity["analyst"]
+        item["approved_by"] = identity["examiner"]
         write_approval_log(case_dir, item["id"], "APPROVED", identity, mode=mode)
 
     # Save back to local store (approvals apply to local data)
@@ -241,7 +241,7 @@ def _interactive_review(
         print("Nothing to commit.")
         return
 
-    mode = require_confirmation(config_path, identity["analyst"])
+    mode = require_confirmation(config_path, identity["examiner"])
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -250,7 +250,7 @@ def _interactive_review(
         if item["id"] in approvals:
             item["status"] = "APPROVED"
             item["approved_at"] = now
-            item["approved_by"] = identity["analyst"]
+            item["approved_by"] = identity["examiner"]
             write_approval_log(case_dir, item["id"], "APPROVED", identity, mode=mode)
 
     # Apply rejections
@@ -260,7 +260,7 @@ def _interactive_review(
             reason = disp[1] or ""
             item["status"] = "REJECTED"
             item["rejected_at"] = now
-            item["rejected_by"] = identity["analyst"]
+            item["rejected_by"] = identity["examiner"]
             if reason:
                 item["rejection_reason"] = reason
             write_approval_log(
@@ -363,7 +363,7 @@ def _apply_edit(item: dict, identity: dict) -> None:
             modifications[key] = {
                 "original": old_val,
                 "modified": new_val,
-                "modified_by": identity["analyst"],
+                "modified_by": identity["examiner"],
                 "modified_at": now,
             }
             item[key] = new_val
@@ -392,7 +392,7 @@ def _apply_note(item: dict, note: str, identity: dict) -> None:
     now = datetime.now(timezone.utc).isoformat()
     item.setdefault("examiner_notes", []).append({
         "note": note,
-        "by": identity["analyst"],
+        "by": identity["examiner"],
         "at": now,
     })
 
@@ -409,7 +409,7 @@ def _create_todos(case_dir: Path, todos_to_create: list[dict], identity: dict) -
             "priority": td.get("priority", "medium"),
             "assignee": td.get("assignee", ""),
             "related_findings": td.get("related_findings", []),
-            "created_by": identity["analyst"],
+            "created_by": identity["examiner"],
             "created_at": datetime.now(timezone.utc).isoformat(),
             "notes": [],
             "completed_at": None,

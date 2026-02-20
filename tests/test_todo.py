@@ -17,13 +17,17 @@ def case_dir(tmp_path, monkeypatch):
     case_id = "INC-2026-TEST"
     case_path = tmp_path / case_id
     case_path.mkdir()
-    (case_path / ".audit").mkdir()
 
-    meta = {"case_id": case_id, "name": "Test", "status": "open"}
+    monkeypatch.setenv("AIIR_EXAMINER", "tester")
+
+    meta = {"case_id": case_id, "name": "Test", "status": "open",
+            "examiner": "tester", "team": ["tester"]}
     with open(case_path / "CASE.yaml", "w") as f:
         yaml.dump(meta, f)
 
-    with open(case_path / ".audit" / "todos.json", "w") as f:
+    exam_dir = case_path / "examiners" / "tester"
+    exam_dir.mkdir(parents=True)
+    with open(exam_dir / "todos.json", "w") as f:
         json.dump([], f)
 
     monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
@@ -32,7 +36,8 @@ def case_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "analyst": "analyst1", "analyst_source": "flag"}
+    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag",
+            "analyst": "analyst1", "analyst_source": "flag"}
 
 
 class TestTodoAdd:

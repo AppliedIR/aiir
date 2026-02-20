@@ -23,25 +23,26 @@ def case_dir(tmp_path, monkeypatch):
     case_id = "INC-2026-TEST"
     case_path = tmp_path / case_id
     case_path.mkdir()
-    (case_path / ".local").mkdir()
+    (case_path / "examiners" / "tester").mkdir(parents=True)
 
     meta = {"case_id": case_id, "name": "Test", "status": "open"}
     with open(case_path / "CASE.yaml", "w") as f:
         yaml.dump(meta, f)
 
-    with open(case_path / ".local" / "evidence.json", "w") as f:
+    with open(case_path / "examiners" / "tester" / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
-    with open(case_path / ".local" / "todos.json", "w") as f:
+    with open(case_path / "examiners" / "tester" / "todos.json", "w") as f:
         json.dump([], f)
 
+    monkeypatch.setenv("AIIR_EXAMINER", "tester")
     monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
     return case_path
 
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "analyst": "analyst1", "analyst_source": "flag"}
+    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
 
 
 @pytest.fixture
@@ -130,9 +131,9 @@ class TestApproveSpecific:
             _approve_specific(case_dir, ["F-001"], identity, config_path)
         log = load_approval_log(case_dir)
         assert len(log) == 1
-        assert log[0]["item_id"] == "F-001"
+        assert log[0]["item_id"] == "tester/F-001"
         assert log[0]["action"] == "APPROVED"
-        assert log[0]["analyst"] == "analyst1"
+        assert log[0]["examiner"] == "analyst1"
         assert log[0]["mode"] == "interactive"
 
     def test_approval_cancelled(self, case_dir, identity, staged_finding, config_path):
@@ -234,7 +235,7 @@ class TestApproveInteractive:
         assert len(todos) == 1
         assert todos[0]["description"] == "Verify with net logs"
         assert todos[0]["assignee"] == "jane"
-        assert todos[0]["related_findings"] == ["F-001"]
+        assert todos[0]["related_findings"] == ["tester/F-001"]
 
     def test_by_filter(self, case_dir, identity, staged_finding, staged_timeline, capsys):
         """Filter by creator — only jane's items shown."""
@@ -306,3 +307,34 @@ class TestReject:
         assert findings[0]["status"] == "REJECTED"
         log = load_approval_log(case_dir)
         assert "reason" not in log[0]
+
+    def test_reject_preserves_concurrent_finding(self, case_dir, identity, staged_finding):
+        """A finding added between display and confirmation survives rejection."""
+        mock_tty = _mock_tty_confirm()
+        original_confirm = __import__("aiir_cli.approval_auth", fromlist=["require_confirmation"]).require_confirmation
+
+        def confirm_and_add_finding(config_path, analyst):
+            # Simulate an MCP write happening during the confirmation prompt
+            findings = load_findings(case_dir)
+            findings.append({
+                "id": "F-002",
+                "status": "DRAFT",
+                "title": "Concurrent finding",
+                "staged": "2026-02-19T13:00:00Z",
+                "created_by": "mcp",
+            })
+            save_findings(case_dir, findings)
+            return original_confirm(config_path, analyst)
+
+        args = Namespace(ids=["F-001"], reason="bad", case=None, analyst=None)
+        with patch("aiir_cli.commands.reject.require_confirmation", side_effect=confirm_and_add_finding):
+            with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+                cmd_reject(args, identity)
+
+        # F-001 should be REJECTED, F-002 should survive as DRAFT
+        findings = load_findings(case_dir)
+        assert len(findings) == 2
+        f001 = next(f for f in findings if f["id"] == "F-001")
+        f002 = next(f for f in findings if f["id"] == "F-002")
+        assert f001["status"] == "REJECTED"
+        assert f002["status"] == "DRAFT"
