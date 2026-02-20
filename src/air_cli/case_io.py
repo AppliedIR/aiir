@@ -48,10 +48,42 @@ def load_findings(case_dir: Path) -> list[dict]:
 
 
 def save_findings(case_dir: Path, findings: list[dict]) -> None:
-    """Save findings to JSON store and update FINDINGS.md."""
+    """Save findings to JSON store and regenerate FINDINGS.md."""
     with open(case_dir / ".audit" / "findings.json", "w") as f:
         json.dump(findings, f, indent=2, default=str)
-    # TODO: regenerate FINDINGS.md from findings data
+    regenerate_findings_md(case_dir, findings)
+
+
+def regenerate_findings_md(case_dir: Path, findings: list[dict]) -> None:
+    """Rewrite FINDINGS.md from findings data with current statuses."""
+    case_id = case_dir.name
+    lines = [f"# Findings — {case_id}\n\n"]
+    for f in findings:
+        status = f.get("status", "DRAFT")
+        title = f.get("title", "Untitled")
+        lines.append(f"## {f['id']}: {title} [{status}]\n\n")
+        if status == "DRAFT":
+            lines.append("**Status:** DRAFT — awaiting human approval\n")
+        elif status == "APPROVED":
+            approved_at = f.get("approved_at", "")
+            approved_by = f.get("approved_by", "")
+            lines.append(f"**Status:** APPROVED by {approved_by} at {approved_at}\n")
+        elif status == "REJECTED":
+            rejected_at = f.get("rejected_at", "")
+            rejected_by = f.get("rejected_by", "")
+            reason = f.get("rejection_reason", "")
+            lines.append(f"**Status:** REJECTED by {rejected_by} at {rejected_at}")
+            if reason:
+                lines.append(f", reason: {reason}")
+            lines.append("\n")
+        lines.append(f"**Confidence:** {f.get('confidence', 'UNSPECIFIED')}\n")
+        lines.append(f"**Evidence:** {', '.join(f.get('evidence_ids', []))}\n\n")
+        lines.append(f"### Observation\n{f.get('observation', '')}\n\n")
+        lines.append(f"### Interpretation\n{f.get('interpretation', '')}\n\n")
+        lines.append(f"### Confidence Justification\n{f.get('confidence_justification', '')}\n\n")
+        lines.append(f"---\n*Staged: {f.get('staged', '')}*\n\n")
+    with open(case_dir / "FINDINGS.md", "w") as fp:
+        fp.write("".join(lines))
 
 
 def load_timeline(case_dir: Path) -> list[dict]:
@@ -63,9 +95,28 @@ def load_timeline(case_dir: Path) -> list[dict]:
 
 
 def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
-    """Save timeline to JSON store."""
+    """Save timeline to JSON store and regenerate TIMELINE.md."""
     with open(case_dir / ".audit" / "timeline.json", "w") as f:
         json.dump(timeline, f, indent=2, default=str)
+    regenerate_timeline_md(case_dir, timeline)
+
+
+def regenerate_timeline_md(case_dir: Path, timeline: list[dict]) -> None:
+    """Rewrite TIMELINE.md from timeline data with current statuses."""
+    case_id = case_dir.name
+    lines = [f"# Timeline — {case_id}\n\n"]
+    for ev in timeline:
+        status = ev.get("status", "DRAFT")
+        lines.append(f"## {ev['id']}: {ev['timestamp']} [{status}]\n\n")
+        lines.append(f"{ev.get('description', '')}\n\n")
+        evidence = ", ".join(ev.get("evidence_ids", []))
+        if evidence:
+            lines.append(f"**Evidence:** {evidence}\n\n")
+        if ev.get("source"):
+            lines.append(f"**Source:** {ev['source']}\n\n")
+        lines.append(f"---\n*Staged: {ev.get('staged', '')}*\n\n")
+    with open(case_dir / "TIMELINE.md", "w") as fp:
+        fp.write("".join(lines))
 
 
 def write_approval_log(

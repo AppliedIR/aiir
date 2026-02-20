@@ -13,6 +13,8 @@ from air_cli.case_io import (
     load_timeline,
     save_timeline,
     write_approval_log,
+    regenerate_findings_md,
+    regenerate_timeline_md,
 )
 
 
@@ -65,6 +67,78 @@ class TestTimelineIO:
         loaded = load_timeline(case_dir)
         assert len(loaded) == 1
         assert loaded[0]["id"] == "T-001"
+
+
+class TestFindingsRegeneration:
+    def test_draft_regen(self, case_dir):
+        findings = [{
+            "id": "F-001", "status": "DRAFT", "title": "Suspicious process",
+            "confidence": "MEDIUM", "evidence_ids": ["wt-20260219-001"],
+            "observation": "obs", "interpretation": "interp",
+            "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
+        }]
+        regenerate_findings_md(case_dir, findings)
+        md = (case_dir / "FINDINGS.md").read_text()
+        assert "[DRAFT]" in md
+        assert "awaiting human approval" in md
+
+    def test_approved_regen(self, case_dir):
+        findings = [{
+            "id": "F-001", "status": "APPROVED", "title": "Confirmed finding",
+            "confidence": "HIGH", "evidence_ids": ["wt-20260219-001"],
+            "observation": "obs", "interpretation": "interp",
+            "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
+            "approved_by": "analyst1", "approved_at": "2026-02-19T12:00:00Z",
+        }]
+        regenerate_findings_md(case_dir, findings)
+        md = (case_dir / "FINDINGS.md").read_text()
+        assert "[APPROVED]" in md
+        assert "APPROVED by analyst1 at 2026-02-19T12:00:00Z" in md
+
+    def test_rejected_with_reason(self, case_dir):
+        findings = [{
+            "id": "F-001", "status": "REJECTED", "title": "Bad finding",
+            "confidence": "LOW", "evidence_ids": [],
+            "observation": "obs", "interpretation": "interp",
+            "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
+            "rejected_by": "analyst2", "rejected_at": "2026-02-19T13:00:00Z",
+            "rejection_reason": "Insufficient evidence",
+        }]
+        regenerate_findings_md(case_dir, findings)
+        md = (case_dir / "FINDINGS.md").read_text()
+        assert "[REJECTED]" in md
+        assert "reason: Insufficient evidence" in md
+
+    def test_save_findings_triggers_regen(self, case_dir):
+        findings = [{
+            "id": "F-001", "status": "APPROVED", "title": "Test",
+            "confidence": "HIGH", "evidence_ids": ["ev-001"],
+            "observation": "obs", "interpretation": "interp",
+            "confidence_justification": "justified", "staged": "2026-02-19T10:00:00Z",
+            "approved_by": "analyst1", "approved_at": "2026-02-19T12:00:00Z",
+        }]
+        save_findings(case_dir, findings)
+        md = (case_dir / "FINDINGS.md").read_text()
+        assert "[APPROVED]" in md
+
+
+class TestTimelineRegeneration:
+    def test_regen_produces_correct_md(self, case_dir):
+        timeline = [{
+            "id": "T-001", "status": "DRAFT",
+            "timestamp": "2026-02-19T10:30:00Z",
+            "description": "First lateral movement detected",
+            "evidence_ids": ["wt-20260219-001"],
+            "source": "Event log analysis",
+            "staged": "2026-02-19T11:00:00Z",
+        }]
+        regenerate_timeline_md(case_dir, timeline)
+        md = (case_dir / "TIMELINE.md").read_text()
+        assert "T-001" in md
+        assert "[DRAFT]" in md
+        assert "First lateral movement detected" in md
+        assert "wt-20260219-001" in md
+        assert "Event log analysis" in md
 
 
 class TestApprovalLog:
