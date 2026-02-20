@@ -12,6 +12,14 @@
 #
 set -euo pipefail
 
+# --- Parse arguments ---
+AUTO_YES=false
+for arg in "$@"; do
+    case "$arg" in
+        -y|--yes) AUTO_YES=true ;;
+    esac
+done
+
 # --- Colors and helpers ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,6 +47,10 @@ prompt() {
 
 prompt_yn() {
     local msg="$1" default="${2:-y}"
+    if $AUTO_YES; then
+        [[ "$default" == "y" ]]
+        return
+    fi
     local suffix
     if [[ "$default" == "y" ]]; then suffix="[Y/n]"; else suffix="[y/N]"; fi
     read -rp "$(echo -e "${BOLD}$msg${NC} $suffix: ")" answer
@@ -82,6 +94,15 @@ if $PYTHON -m pip --version &>/dev/null; then
 else
     err "pip not found"
     echo "  Install: sudo apt install python3-pip"
+    exit 1
+fi
+
+# venv
+if $PYTHON -m venv --help &>/dev/null 2>&1; then
+    ok "venv available"
+else
+    err "python3-venv not found"
+    echo "  Install: sudo apt install python3-venv"
     exit 1
 fi
 
@@ -163,7 +184,7 @@ install_mcp() {
 
     if [[ -d "$dir" ]]; then
         info "  Directory exists, pulling latest..."
-        (cd "$dir" && git pull --quiet)
+        (cd "$dir" && git pull --quiet) || warn "Could not update $name (network issue?)"
     else
         git clone --quiet "$GITHUB_ORG/$repo.git" "$dir"
     fi
@@ -187,6 +208,7 @@ install_mcp() {
         forensic-rag-mcp) module="rag_mcp" ;;
         windows-triage-mcp) module="windows_triage" ;;
         forensic-mcp) module="forensic_mcp" ;;
+        forensic-knowledge) module="forensic_knowledge" ;;
         sift-mcp) module="sift_mcp" ;;
         opencti-mcp) module="opencti_mcp" ;;
         aiir-gateway) module="aiir_gateway" ;;
@@ -199,6 +221,9 @@ install_mcp() {
         warn "$name installed but import failed — check dependencies"
     fi
 }
+
+# forensic-knowledge is a dependency for forensic-mcp and sift-mcp
+install_mcp "forensic-knowledge" "forensic-knowledge"
 
 # Always install forensic-mcp and aiir CLI
 install_mcp "forensic-mcp" "forensic-mcp" "dev"

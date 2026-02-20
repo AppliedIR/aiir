@@ -33,6 +33,7 @@ def get_examiner_identity(flag_override: str | None = None) -> dict:
     os_user = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
 
     def _result(examiner: str, source: str) -> dict:
+        examiner = examiner.lower().strip()
         return {
             "os_user": os_user,
             "examiner": examiner,

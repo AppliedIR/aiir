@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import tempfile
 from pathlib import Path
 
 import yaml
@@ -45,11 +46,7 @@ def generate_mcp_json(
 
     config = {"mcpServers": servers}
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        json.dump(config, f, indent=2)
-
-    # Secure permissions (may contain tokens)
-    _chmod_600(output_path)
+    _write_600(output_path, json.dumps(config, indent=2))
     return output_path
 
 
@@ -113,16 +110,21 @@ def generate_gateway_yaml(
             }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False, sort_keys=False)
-
-    _chmod_600(output_path)
+    _write_600(output_path, yaml.dump(config, default_flow_style=False, sort_keys=False))
     return output_path
 
 
-def _chmod_600(path: Path) -> None:
-    """Set file permissions to 600 (owner read/write only)."""
+def _write_600(path: Path, content: str) -> None:
+    """Write file with 0o600 permissions from creation — no world-readable window."""
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
     try:
-        path.chmod(stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
+        os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise

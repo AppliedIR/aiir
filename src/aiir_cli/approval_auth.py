@@ -13,6 +13,7 @@ import hashlib
 import os
 import secrets
 import sys
+import tempfile
 import termios
 import tty
 from pathlib import Path
@@ -204,11 +205,17 @@ def _load_config(config_path: Path) -> dict:
 
 
 def _save_config(config_path: Path, config: dict) -> None:
-    """Save YAML config file with restricted permissions."""
-    fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    """Save YAML config file atomically with restricted permissions."""
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(config_path.parent), suffix=".tmp")
     try:
+        os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w") as f:
             yaml.dump(config, f, default_flow_style=False)
+        os.replace(tmp_path, str(config_path))
     except BaseException:
-        os.close(fd)
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
         raise

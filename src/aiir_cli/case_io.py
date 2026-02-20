@@ -8,12 +8,32 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
+
+_EXAMINER_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,19}$')
+
+
+def _validate_case_id(case_id: str) -> None:
+    """Validate case_id to prevent path traversal."""
+    if not case_id:
+        print("Case ID cannot be empty", file=sys.stderr)
+        sys.exit(1)
+    if ".." in case_id or "/" in case_id or "\\" in case_id:
+        print(f"Invalid case ID (path traversal characters): {case_id}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _validate_examiner(examiner: str) -> None:
+    """Validate examiner slug: lowercase alphanumeric + hyphens, max 20 chars."""
+    if not examiner or not _EXAMINER_RE.match(examiner):
+        print(f"Invalid examiner slug: {examiner!r}", file=sys.stderr)
+        sys.exit(1)
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -34,6 +54,7 @@ def _atomic_write(path: Path, content: str) -> None:
 def get_case_dir(case_id: str | None = None) -> Path:
     """Resolve the active case directory."""
     if case_id:
+        _validate_case_id(case_id)
         cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
         case_dir = cases_dir / case_id
         if not case_dir.exists():
@@ -50,6 +71,7 @@ def get_case_dir(case_id: str | None = None) -> Path:
     active_file = Path(".aiir") / "active_case"
     if active_file.exists():
         case_id = active_file.read_text().strip()
+        _validate_case_id(case_id)
         cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
         return cases_dir / case_id
 
@@ -400,6 +422,8 @@ def import_bundle(case_dir: Path, bundle: dict) -> dict:
 
     if not bundle_examiner:
         return {"status": "error", "message": "Bundle missing examiner field"}
+    if not _EXAMINER_RE.match(bundle_examiner):
+        return {"status": "error", "message": f"Invalid examiner slug in bundle: {bundle_examiner!r}"}
     if bundle_examiner == get_examiner(case_dir):
         return {"status": "error", "message": "Cannot import your own contributions"}
     if bundle.get("case_id") != meta.get("case_id"):

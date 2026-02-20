@@ -8,6 +8,7 @@ import pytest
 
 from aiir_cli.case_io import (
     get_case_dir,
+    import_bundle,
     load_findings,
     save_findings,
     load_timeline,
@@ -96,3 +97,69 @@ class TestApprovalLog:
         log_file = case_dir / "examiners" / "tester" / "approvals.jsonl"
         entry = json.loads(log_file.read_text().strip())
         assert entry["reason"] == "Bad evidence"
+
+
+class TestPathTraversal:
+    """Verify path traversal is rejected in case_id and bundle examiner."""
+
+    def test_case_id_dotdot_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
+        with pytest.raises(SystemExit):
+            get_case_dir("../../etc")
+
+    def test_case_id_slash_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
+        with pytest.raises(SystemExit):
+            get_case_dir("foo/bar")
+
+    def test_case_id_backslash_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
+        with pytest.raises(SystemExit):
+            get_case_dir("foo\\bar")
+
+    def test_bundle_examiner_traversal_rejected(self, case_dir, monkeypatch):
+        import yaml
+        monkeypatch.setenv("AIIR_EXAMINER", "tester")
+        meta_file = case_dir / "CASE.yaml"
+        meta_file.write_text(yaml.dump({"case_id": "INC-001"}))
+        bundle = {
+            "schema_version": 1,
+            "case_id": "INC-001",
+            "examiner": "../../etc",
+            "findings": [],
+        }
+        result = import_bundle(case_dir, bundle)
+        assert result["status"] == "error"
+        assert "Invalid" in result["message"]
+
+    def test_bundle_valid_examiner_accepted(self, case_dir, monkeypatch):
+        import yaml
+        monkeypatch.setenv("AIIR_EXAMINER", "tester")
+        meta_file = case_dir / "CASE.yaml"
+        meta_file.write_text(yaml.dump({"case_id": "INC-001"}))
+        bundle = {
+            "schema_version": 1,
+            "case_id": "INC-001",
+            "examiner": "alice",
+            "findings": [{"id": "F-001", "status": "DRAFT"}],
+            "timeline": [],
+        }
+        result = import_bundle(case_dir, bundle)
+        assert result["status"] == "imported"
+
+
+class TestIdentityLowercase:
+    """Verify identity module lowercases examiner names."""
+
+    def test_uppercase_examiner_lowercased(self, monkeypatch):
+        monkeypatch.setenv("AIIR_EXAMINER", "Jane.Doe")
+        from aiir_cli.identity import get_examiner_identity
+        identity = get_examiner_identity()
+        assert identity["examiner"] == "jane.doe"
+
+    def test_flag_override_lowercased(self, monkeypatch):
+        monkeypatch.delenv("AIIR_EXAMINER", raising=False)
+        monkeypatch.delenv("AIIR_ANALYST", raising=False)
+        from aiir_cli.identity import get_examiner_identity
+        identity = get_examiner_identity(flag_override="ALICE")
+        assert identity["examiner"] == "alice"
