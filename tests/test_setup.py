@@ -147,14 +147,19 @@ class TestConfigGen:
 
 class TestWizard:
     def test_wizard_clients_all(self):
-        with patch("aiir_cli.setup.wizard._prompt", return_value="4"):
+        with patch("aiir_cli.setup.wizard._prompt", return_value="5"):
             result = wizard_clients()
-        assert result == ["claude_code", "claude_desktop", "openwebui"]
+        assert result == ["claude_code", "claude_desktop", "cursor", "openwebui"]
 
     def test_wizard_clients_single(self):
         with patch("aiir_cli.setup.wizard._prompt", return_value="2"):
             result = wizard_clients()
         assert result == ["claude_desktop"]
+
+    def test_wizard_clients_cursor(self):
+        with patch("aiir_cli.setup.wizard._prompt", return_value="3"):
+            result = wizard_clients()
+        assert result == ["cursor"]
 
     def test_wizard_clients_default(self):
         with patch("aiir_cli.setup.wizard._prompt", return_value=""):
@@ -169,6 +174,7 @@ class TestCmdSetup:
         args = MagicMock()
         args.force_reprompt = False
         args.non_interactive = True
+        args.setup_action = None
 
         fake_mcps = [
             {"name": "forensic-mcp", "module": "forensic_mcp", "python_path": "/usr/bin/python3", "available": True},
@@ -187,8 +193,30 @@ class TestCmdSetup:
         args = MagicMock()
         args.force_reprompt = False
         args.non_interactive = True
+        args.setup_action = None
 
         with patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]), \
              patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]):
             with pytest.raises(SystemExit):
                 cmd_setup(args, identity)
+
+    def test_cursor_config_generation(self, tmp_path, sample_mcps):
+        """Cursor uses same mcpServers format in .cursor/mcp.json."""
+        output = tmp_path / ".cursor" / "mcp.json"
+        generate_mcp_json(sample_mcps, output)
+        assert output.exists()
+        config = json.loads(output.read_text())
+        assert "mcpServers" in config
+        assert "forensic-mcp" in config["mcpServers"]
+
+    def test_setup_test_runs(self, identity, capsys):
+        args = MagicMock()
+        args.setup_action = "test"
+
+        with patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]), \
+             patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]):
+            cmd_setup(args, identity)
+
+        output = capsys.readouterr().out
+        assert "Connectivity Test" in output
+        assert "No MCP servers detected" in output

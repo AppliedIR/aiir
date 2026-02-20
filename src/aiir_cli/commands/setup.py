@@ -25,7 +25,11 @@ from aiir_cli.setup.config_gen import (
 
 
 def cmd_setup(args, identity: dict) -> None:
-    """Run interactive setup."""
+    """Run interactive setup or connectivity test."""
+    if getattr(args, "setup_action", None) == "test":
+        _run_connectivity_test()
+        return
+
     force = getattr(args, "force_reprompt", False)
     non_interactive = getattr(args, "non_interactive", False)
 
@@ -98,6 +102,11 @@ def cmd_setup(args, identity: dict) -> None:
             generate_mcp_json(available, output, opencti_config)
             print(f"  Generated: {output}")
 
+        elif client_type == "cursor":
+            output = Path.cwd() / ".cursor" / "mcp.json"
+            generate_mcp_json(available, output, opencti_config)
+            print(f"  Generated: {output}")
+
         elif client_type == "openwebui":
             output = Path.cwd() / "gateway.yaml"
             generate_gateway_yaml(
@@ -106,3 +115,69 @@ def cmd_setup(args, identity: dict) -> None:
             print(f"  Generated: {output}")
 
     print("\nSetup complete.")
+
+
+def _run_connectivity_test() -> None:
+    """Test connectivity to all detected MCP servers."""
+    import subprocess
+    import time
+
+    print("=" * 60)
+    print("  AIIR Connectivity Test")
+    print("=" * 60)
+
+    mcps = detect_installed_mcps()
+    venv_mcps = detect_venv_mcps()
+
+    # Merge
+    mcp_map: dict[str, dict] = {}
+    for mcp in mcps:
+        mcp_map[mcp["name"]] = mcp
+    for mcp in venv_mcps:
+        if mcp["available"]:
+            mcp_map[mcp["name"]] = mcp
+
+    if not mcp_map:
+        print("\nNo MCP servers detected.")
+        return
+
+    ok_count = 0
+    fail_count = 0
+
+    for name, info in sorted(mcp_map.items()):
+        python_path = info.get("python_path", "python")
+        module = info.get("module", "")
+        available = info.get("available", False)
+
+        if not available:
+            print(f"  {name:25s} NOT INSTALLED")
+            fail_count += 1
+            continue
+
+        # Try importing and creating server
+        start = time.time()
+        try:
+            result = subprocess.run(
+                [python_path, "-c", f"import {module}; print('ok')"],
+                capture_output=True, timeout=15, text=True,
+            )
+            elapsed = (time.time() - start) * 1000
+            if result.returncode == 0:
+                print(f"  {name:25s} OK ({elapsed:.0f}ms)")
+                ok_count += 1
+            else:
+                err = result.stderr.strip().split("\n")[-1] if result.stderr else "unknown error"
+                print(f"  {name:25s} FAIL ({err})")
+                fail_count += 1
+        except subprocess.TimeoutExpired:
+            print(f"  {name:25s} TIMEOUT")
+            fail_count += 1
+        except Exception as e:
+            print(f"  {name:25s} ERROR ({e})")
+            fail_count += 1
+
+    print(f"\n{ok_count} of {ok_count + fail_count} MCPs operational.", end="")
+    if fail_count:
+        print(f" {fail_count} failed.")
+    else:
+        print()

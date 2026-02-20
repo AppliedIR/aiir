@@ -44,19 +44,22 @@ def wizard_clients() -> list[str]:
     print("Which AI clients should be configured?")
     print("  1. Claude Code (.mcp.json)")
     print("  2. Claude Desktop (claude_desktop_config.json)")
-    print("  3. OpenWebUI (gateway.yaml)")
-    print("  4. All of the above")
+    print("  3. Cursor (.cursor/mcp.json)")
+    print("  4. OpenWebUI / gateway (gateway.yaml)")
+    print("  5. All of the above")
 
-    choice = _prompt("Choose [1/2/3/4]: ").strip()
+    choice = _prompt("Choose [1-5]: ").strip()
 
-    if choice == "4":
-        return ["claude_code", "claude_desktop", "openwebui"]
+    if choice == "5":
+        return ["claude_code", "claude_desktop", "cursor", "openwebui"]
     clients = []
     if "1" in choice:
         clients.append("claude_code")
     if "2" in choice:
         clients.append("claude_desktop")
     if "3" in choice:
+        clients.append("cursor")
+    if "4" in choice:
         clients.append("openwebui")
     return clients or ["claude_code"]
 

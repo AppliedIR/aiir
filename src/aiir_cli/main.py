@@ -120,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_setup = sub.add_parser("setup", help="Interactive setup for all MCP servers")
     p_setup.add_argument("--force-reprompt", action="store_true", help="Force re-prompting for all values")
     p_setup.add_argument("--non-interactive", action="store_true", help="Skip interactive prompts")
+    setup_sub = p_setup.add_subparsers(dest="setup_action")
+    setup_sub.add_parser("test", help="Test connectivity to all detected MCP servers")
 
     # sync
     p_sync = sub.add_parser("sync", help="Multi-examiner sync: export/import contribution bundles")
