@@ -37,7 +37,7 @@ The AI assistant (via forensic-mcp) stages findings and timeline events as DRAFT
 - **Investigation TODOs** - Create and manage action items with assignee, priority, and finding links
 - **Evidence Management** - Register evidence files (SHA256 + read-only), lock/unlock evidence directories
 - **Forensic Execution** - Run commands with interactive confirmation, audit trail, and case context
-- **Platform Setup** - Interactive `aiir setup` to detect MCPs and generate config for Claude Code, Claude Desktop, and OpenWebUI
+- **Platform Setup** - Interactive `aiir setup` to detect MCPs and generate config for Claude Code, Cursor, Claude Desktop, and OpenWebUI
 - **Analyst Identity** - Configurable identity resolution for audit accountability
 
 ## Commands
@@ -175,14 +175,42 @@ aiir setup --force-reprompt
 Setup phases:
 1. **Detect** - Finds installed MCP servers (system Python and venvs)
 2. **Credentials** - Configures OpenCTI URL/token, REMnux host (if applicable)
-3. **Client Selection** - Choose Claude Code, Claude Desktop, and/or OpenWebUI
+3. **Client Selection** - Choose Claude Code, Cursor, Claude Desktop, and/or OpenWebUI
 4. **Generate** - Writes `.mcp.json`, `claude_desktop_config.json`, and/or `gateway.yaml`
+
+```bash
+# Test MCP server connectivity
+aiir setup test
+```
+
+### case
+
+```bash
+# Initialize a new case (solo mode)
+aiir case init --name "Ransomware Investigation"
+
+# Initialize a collaborative case
+aiir case init --name "Team Investigation" --collaborative
+
+# Join an existing case
+aiir case join --case-id INC-2026-02191200
+```
+
+### sync
+
+```bash
+# Export your contributions as a JSON bundle
+aiir sync export
+
+# Import another examiner's contribution bundle
+aiir sync import /path/to/bundle.json
+```
 
 ### config
 
 ```bash
-# Set analyst identity
-aiir config --analyst "jane.doe"
+# Set examiner identity
+aiir config --examiner "jane.doe"
 
 # Show current configuration
 aiir config --show
@@ -194,24 +222,26 @@ aiir config --setup-pin
 aiir config --reset-pin
 ```
 
-## Analyst Identity
+## Examiner Identity
 
-Every approval, rejection, and execution is logged with analyst identity. Resolution order:
+Every approval, rejection, and execution is logged with examiner identity. Resolution order:
 
 | Priority | Source | Example |
 |----------|--------|---------|
-| 1 | `--analyst` flag | `aiir approve --analyst jane.doe F-001` |
-| 2 | `AIIR_ANALYST` env var | `export AIIR_ANALYST=jane.doe` |
-| 3 | `~/.aiir/config.yaml` | `analyst: jane.doe` |
-| 4 | OS username (fallback) | Warns if unconfigured |
+| 1 | `--examiner` flag | `aiir approve --examiner jane.doe F-001` |
+| 2 | `AIIR_EXAMINER` env var | `export AIIR_EXAMINER=jane.doe` |
+| 3 | `~/.aiir/config.yaml` | `examiner: jane.doe` |
+| 4 | `AIIR_ANALYST` env var | Deprecated, falls back to `AIIR_EXAMINER` |
+| 5 | OS username (fallback) | Warns if unconfigured |
 
-The OS username is always captured alongside the explicit analyst identity for accountability.
+The OS username is always captured alongside the explicit examiner identity for accountability.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AIIR_ANALYST` | (none) | Analyst identity for audit trail |
+| `AIIR_EXAMINER` | (none) | Examiner identity for audit trail |
+| `AIIR_ANALYST` | (none) | Deprecated alias for `AIIR_EXAMINER` |
 | `AIIR_CASE_DIR` | (none) | Active case directory |
 | `AIIR_CASES_DIR` | `cases` | Root directory for case storage |
 
@@ -224,7 +254,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
 # Set your identity
-aiir config --analyst "your.name"
+aiir config --examiner "your.name"
 
 # Review a case
 aiir review --case INC-2026-0219120000
@@ -275,6 +305,14 @@ aiir/
 
 # Run with coverage
 .venv/bin/pytest tests/ --cov=aiir_cli --cov-report=term-missing
+```
+
+## Architecture
+
+```
+forensic-mcp ──► Case Directory ◄── aiir CLI
+ (DRAFT findings)  examiners/     (APPROVED / REJECTED)
+                   {slug}/         human-only actions
 ```
 
 ## Responsible Use
