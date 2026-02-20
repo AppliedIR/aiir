@@ -75,7 +75,7 @@ def generate_gateway_yaml(
     config: dict = {
         "gateway": {
             "host": "127.0.0.1",
-            "port": 8400,
+            "port": 4508,
             "log_level": "INFO",
         },
         "backends": {},

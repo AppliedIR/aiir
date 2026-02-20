@@ -122,7 +122,7 @@ class TestConfigGen:
         output = tmp_path / "gateway.yaml"
         generate_gateway_yaml(sample_mcps, output)
         config = yaml.safe_load(output.read_text())
-        assert config["gateway"]["port"] == 8400
+        assert config["gateway"]["port"] == 4508
         assert "forensic-mcp" in config["backends"]
         assert config["backends"]["forensic-mcp"]["type"] == "stdio"
 

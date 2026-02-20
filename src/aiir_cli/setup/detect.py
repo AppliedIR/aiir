@@ -11,8 +11,8 @@ from pathlib import Path
 MCP_SERVERS = {
     "forensic-mcp": {"module": "forensic_mcp", "type": "stdio"},
     "sift-mcp": {"module": "sift_mcp", "type": "stdio"},
-    "forensic-rag-mcp": {"module": "forensic_rag_mcp", "type": "stdio"},
-    "windows-triage-mcp": {"module": "windows_triage_mcp", "type": "stdio"},
+    "forensic-rag-mcp": {"module": "rag_mcp", "type": "stdio"},
+    "windows-triage-mcp": {"module": "windows_triage", "type": "stdio"},
     "opencti-mcp": {"module": "opencti_mcp", "type": "stdio"},
 }
 
