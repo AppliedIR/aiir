@@ -15,6 +15,7 @@ def generate_mcp_json(
     mcps: list[dict],
     output_path: Path,
     opencti_config: dict | None = None,
+    remote_mcps: list[dict] | None = None,
 ) -> Path:
     """Generate .mcp.json for Claude Code.
 
@@ -22,6 +23,9 @@ def generate_mcp_json(
         mcps: List of detected MCP server dicts with name, python_path, module.
         output_path: Where to write the file.
         opencti_config: Optional OpenCTI credentials.
+        remote_mcps: Optional remote MCP servers. Each dict has:
+            name, url, type (http or streamable-http),
+            optional headers dict (e.g., for bearer tokens).
 
     Returns:
         Path to the generated file.
@@ -43,6 +47,16 @@ def generate_mcp_json(
                 entry["env"]["OPENCTI_SSL_VERIFY"] = "false"
 
         servers[name] = entry
+
+    # Remote MCP servers (HTTP-based, no local install)
+    for remote in remote_mcps or []:
+        entry = {
+            "type": remote.get("type", "http"),
+            "url": remote["url"],
+        }
+        if remote.get("headers"):
+            entry["headers"] = remote["headers"]
+        servers[remote["name"]] = entry
 
     config = {"mcpServers": servers}
     output_path.parent.mkdir(parents=True, exist_ok=True)

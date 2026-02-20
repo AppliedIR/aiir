@@ -4,8 +4,8 @@
     AIIR Platform Installer for Windows Forensic Workstation
 
 .DESCRIPTION
-    Installs wintools-mcp and optionally the aiir CLI, scans for forensic
-    tools, configures your LLM client, and sets up examiner identity.
+    Installs wintools-mcp, scans for forensic tools, generates a tool
+    inventory report, starts the MCP server, and configures auto-start.
 
     Run this on a Windows forensic workstation where Zimmerman tools,
     Hayabusa, Sysinternals, etc. are installed.
@@ -16,17 +16,25 @@
 
     # Non-interactive with defaults
     .\setup-windows.ps1 -NonInteractive
+
+    # Custom install directory and port
+    .\setup-windows.ps1 -InstallDir "D:\AIIR" -Port 4624
 #>
 [CmdletBinding()]
 param(
     [switch]$NonInteractive,
     [string]$InstallDir = "",
-    [string]$Examiner = ""
+    [string]$Examiner = "",
+    [int]$Port = 4624,
+    [string]$Host = "0.0.0.0"
 )
 
 $ErrorActionPreference = "Stop"
 
-# --- Colors and helpers ---
+# =============================================================================
+# Helpers
+# =============================================================================
+
 function Write-Info   { param($msg) Write-Host "[INFO] " -ForegroundColor Blue -NoNewline; Write-Host $msg }
 function Write-Ok     { param($msg) Write-Host "[OK] " -ForegroundColor Green -NoNewline; Write-Host $msg }
 function Write-Warn   { param($msg) Write-Host "[WARN] " -ForegroundColor Yellow -NoNewline; Write-Host $msg }
@@ -53,7 +61,10 @@ function Read-YesNo {
     return $answer.ToLower().StartsWith("y")
 }
 
-# --- Banner ---
+# =============================================================================
+# Banner
+# =============================================================================
+
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor White
 Write-Host "  AIIR - Applied Incident Response Platform" -ForegroundColor White
@@ -61,8 +72,11 @@ Write-Host "  Windows Workstation Installer" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor White
 Write-Host ""
 
-# --- Phase 1: Prerequisites ---
-Write-Header "Phase 1: Checking Prerequisites"
+# =============================================================================
+# Prerequisites
+# =============================================================================
+
+Write-Header "Checking Prerequisites"
 
 # Python 3.10+
 $pythonCmd = $null
@@ -86,7 +100,6 @@ if (-not $pythonCmd) {
     Write-Err "Python 3.10+ not found"
     Write-Host "  Install from: https://www.python.org/downloads/"
     Write-Host "  Or via winget: winget install Python.Python.3.12"
-    Write-Host "  Or via choco:  choco install python312"
     exit 1
 }
 
@@ -130,33 +143,16 @@ if (-not $hasDotnet) {
 try {
     git ls-remote https://github.com/AppliedIR/aiir.git HEAD 2>$null | Out-Null
     Write-Ok "Network access to GitHub"
-    $offline = $false
 } catch {
-    Write-Warn "Cannot reach GitHub - some features may not work"
-    $offline = $true
+    Write-Warn "Cannot reach GitHub - installation requires network access"
+    exit 1
 }
 
-# --- Phase 2: Select Components ---
-Write-Header "Phase 2: Select Components"
+# =============================================================================
+# Install
+# =============================================================================
 
-Write-Host "Which components would you like to install?"
-Write-Host ""
-Write-Host "  Required:" -ForegroundColor White
-Write-Host "    wintools-mcp      - Windows forensic tool execution"
-Write-Host ""
-Write-Host "  Recommended:" -ForegroundColor White
-Write-Host "    aiir CLI          - Human review, approval, configuration"
-Write-Host "    forensic-knowledge - Artifact/tool metadata (auto-installed)"
-Write-Host ""
-Write-Host "  Optional:" -ForegroundColor White
-Write-Host "    forensic-mcp      - Case management (usually on SIFT side)"
-Write-Host ""
-
-$installAiir = Read-YesNo "Install aiir CLI (for local review/approval)?" $true
-$installForensic = Read-YesNo "Install forensic-mcp (usually only needed on SIFT)?" $false
-
-# --- Phase 3: Install ---
-Write-Header "Phase 3: Installing"
+Write-Header "Installing wintools-mcp"
 
 if ([string]::IsNullOrWhiteSpace($InstallDir)) {
     $defaultDir = "C:\Tools\aiir"
@@ -172,162 +168,48 @@ if (-not (Test-Path $InstallDir)) {
 Write-Info "Installing to $InstallDir"
 
 $githubOrg = "https://github.com/AppliedIR"
+$wintoolsDir = Join-Path $InstallDir "wintools-mcp"
 
-function Install-MCP {
-    param(
-        [string]$Name,
-        [string]$Repo,
-        [string]$Extras = "",
-        [string]$Module = ""
-    )
-
-    Write-Host ""
-    Write-Info "Installing $Name..."
-
-    $dir = Join-Path $InstallDir $Name
-
-    if (Test-Path $dir) {
-        Write-Info "  Directory exists, pulling latest..."
-        Push-Location $dir
-        git pull --quiet 2>$null
-        Pop-Location
-    } else {
-        git clone --quiet "$githubOrg/$Repo.git" $dir
-    }
-
-    $venvDir = Join-Path $dir ".venv"
-    $venvPython = Join-Path $venvDir "Scripts\python.exe"
-
-    if (-not (Test-Path $venvDir)) {
-        & ($pythonCmd.Split(" ")[0]) @($pythonCmd.Split(" ") | Select-Object -Skip 1) -m venv $venvDir
-    }
-
-    & $venvPython -m pip install --quiet --upgrade pip 2>$null
-
-    if ($Extras) {
-        & $venvPython -m pip install --quiet -e "$dir[$Extras]"
-    } else {
-        & $venvPython -m pip install --quiet -e $dir
-    }
-
-    # Determine module name
-    if (-not $Module) {
-        $Module = switch ($Name) {
-            "wintools-mcp"  { "wintools_mcp" }
-            "forensic-mcp"  { "forensic_mcp" }
-            "aiir"          { "aiir_cli" }
-            default         { $Repo -replace "-mcp$","" -replace "-","_" }
-        }
-    }
-
-    # Smoke test
-    try {
-        $result = & $venvPython -c "import $Module; print('ok')" 2>$null
-        if ($result -eq "ok") {
-            Write-Ok "$Name installed and importable"
-        } else {
-            Write-Warn "$Name installed but import failed - check dependencies"
-        }
-    } catch {
-        Write-Warn "$Name installed but import failed - check dependencies"
-    }
-
-    return @{ Name = $Name; Dir = $dir; Python = $venvPython; Module = $Module }
-}
-
-# Always install wintools-mcp
-$wintoolsInfo = Install-MCP -Name "wintools-mcp" -Repo "wintools-mcp" -Extras "fk,dev"
-
-# Optional components
-if ($installAiir) {
-    $aiirInfo = Install-MCP -Name "aiir" -Repo "aiir" -Extras "dev"
-}
-if ($installForensic) {
-    Install-MCP -Name "forensic-mcp" -Repo "forensic-mcp" -Extras "dev"
-}
-
-# Add aiir to PATH if installed
-if ($installAiir) {
-    $aiirBin = Join-Path $InstallDir "aiir\.venv\Scripts"
-    $currentPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    if ($currentPath -notlike "*$aiirBin*") {
-        Write-Info "Adding aiir to user PATH..."
-        [Environment]::SetEnvironmentVariable("Path", "$aiirBin;$currentPath", "User")
-        $env:Path = "$aiirBin;$env:Path"
-        Write-Ok "Added to PATH (restart terminal to take effect)"
-    }
-}
-
-# --- Phase 4: Tool Scan ---
-Write-Header "Phase 4: Scanning for Forensic Tools"
-
-Write-Host "Checking which forensic tools are installed on this system..."
-Write-Host ""
-
-$wintoolsPython = $wintoolsInfo.Python
-$scanResult = & $wintoolsPython -m wintools_mcp --scan 2>$null
-
-if ($scanResult) {
-    Write-Host $($scanResult -join "`n")
+# Clone or update
+if (Test-Path $wintoolsDir) {
+    Write-Info "Directory exists, pulling latest..."
+    Push-Location $wintoolsDir
+    try { git pull --quiet 2>$null } catch { Write-Warn "Could not update (network issue?)" }
+    Pop-Location
 } else {
-    Write-Warn "Tool scan could not run. You can try manually:"
-    Write-Host "  $wintoolsPython -m wintools_mcp --scan"
+    git clone --quiet "$githubOrg/wintools-mcp.git" $wintoolsDir
 }
 
-Write-Host ""
+# Create venv and install
+$venvDir = Join-Path $wintoolsDir ".venv"
+$venvPython = Join-Path $venvDir "Scripts\python.exe"
 
-# Offer to generate install helper for missing tools
-$missingJson = & $wintoolsPython -c @"
-import json
-from wintools_mcp.inventory import scan_tools
-result = scan_tools()
-missing = result['missing_tools']
-print(json.dumps(missing))
-"@ 2>$null
-
-if ($missingJson) {
-    try {
-        $missing = $missingJson | ConvertFrom-Json
-        if ($missing.Count -gt 0) {
-            Write-Host ""
-            if (Read-YesNo "Generate install-missing-tools.ps1 helper script?" $true) {
-                $helperPath = Join-Path $InstallDir "install-missing-tools.ps1"
-                $helperLines = @(
-                    "# Auto-generated helper to install missing forensic tools"
-                    "# Review each command before running — some require manual download."
-                    ""
-                )
-
-                foreach ($tool in $missing) {
-                    $helperLines += "# --- $($tool.name) ---"
-                    $helperLines += "# $($tool.description)"
-                    if ($tool.install_methods) {
-                        foreach ($im in $tool.install_methods) {
-                            if ($im.command) {
-                                $helperLines += "# $($im.method):"
-                                $helperLines += "$($im.command)"
-                            }
-                            if ($im.url) {
-                                $helperLines += "# Download: $($im.url)"
-                            }
-                        }
-                    }
-                    $helperLines += ""
-                }
-
-                $helperLines -join "`n" | Set-Content -Path $helperPath -Encoding UTF8
-                Write-Ok "Generated: $helperPath"
-                Write-Host "  Review and run to install missing tools."
-            }
-        }
-    } catch { }
+if (-not (Test-Path $venvDir)) {
+    & ($pythonCmd.Split(" ")[0]) @($pythonCmd.Split(" ") | Select-Object -Skip 1) -m venv $venvDir
 }
 
-# --- Phase 5: Configure ---
-Write-Header "Phase 5: Configuration"
+& $venvPython -m pip install --quiet --upgrade pip 2>$null
+& $venvPython -m pip install --quiet -e "$wintoolsDir[fk,dev]"
 
-# Examiner identity
-Write-Host "Your examiner name identifies your work in case files and audit trails."
+# Smoke test
+try {
+    $result = & $venvPython -c "import wintools_mcp; print('ok')" 2>$null
+    if ($result -eq "ok") {
+        Write-Ok "wintools-mcp installed and importable"
+    } else {
+        Write-Warn "wintools-mcp installed but import failed - check dependencies"
+    }
+} catch {
+    Write-Warn "wintools-mcp installed but import failed - check dependencies"
+}
+
+# =============================================================================
+# Examiner Identity
+# =============================================================================
+
+Write-Header "Examiner Identity"
+
+Write-Host "Your examiner name identifies your work in audit trails."
 Write-Host "Use a short slug (e.g., steve, jane, analyst1)."
 Write-Host ""
 
@@ -351,224 +233,230 @@ Write-Ok "Saved examiner identity: $Examiner"
 # Set env var persistently
 [Environment]::SetEnvironmentVariable("AIIR_EXAMINER", $Examiner, "User")
 $env:AIIR_EXAMINER = $Examiner
-Write-Ok "Set AIIR_EXAMINER=$Examiner (user environment variable)"
+Write-Ok "Set AIIR_EXAMINER=$Examiner"
 
-# --- Phase 6: LLM Client Configuration ---
-Write-Header "Phase 6: Configure LLM Client"
+# =============================================================================
+# Tool Inventory
+# =============================================================================
 
-Write-Host "How will you use wintools-mcp?"
-Write-Host ""
-Write-Host "  Mode A: Standalone" -ForegroundColor White
-Write-Host "    LLM client runs on THIS Windows machine."
-Write-Host "    wintools-mcp runs as a local stdio MCP server."
-Write-Host ""
-Write-Host "  Mode B: Remote (serve to SIFT gateway)" -ForegroundColor White
-Write-Host "    LLM client runs on a SIFT workstation."
-Write-Host "    wintools-mcp serves over HTTP for the gateway to call."
-Write-Host ""
-Write-Host "  1. Standalone - Claude Code"
-Write-Host "  2. Standalone - Claude Desktop"
-Write-Host "  3. Standalone - Cursor"
-Write-Host "  4. Standalone - print config (other client)"
-Write-Host "  5. Remote - serve to SIFT gateway"
-Write-Host "  6. Skip (configure later)"
-Write-Host ""
+Write-Header "Scanning for Forensic Tools"
 
-$modeChoice = Read-Prompt "Choose" "1"
+# Run scan and capture output
+$scanOutput = & $venvPython -m wintools_mcp --scan 2>$null
 
-function Build-McpJson {
-    param([string]$PythonPath, [string]$Module)
-
-    $serverEntry = @{
-        command = $PythonPath
-        args = @("-m", $Module)
-        env = @{ AIIR_EXAMINER = $Examiner }
-    }
-    $config = @{ mcpServers = @{ "wintools-mcp" = $serverEntry } }
-    return $config | ConvertTo-Json -Depth 4
+if ($scanOutput) {
+    Write-Host $($scanOutput -join "`n")
+} else {
+    Write-Warn "Tool scan could not run"
 }
 
-$mcpJson = Build-McpJson -PythonPath $wintoolsPython -Module "wintools_mcp"
+# Generate TOOLS_OVERVIEW.md
+Write-Host ""
+Write-Info "Generating tool inventory report..."
 
-switch ($modeChoice) {
-    "1" {
-        # Claude Code - .mcp.json
-        $projectDir = Read-Prompt "Project directory for .mcp.json" (Get-Location)
-        $outputPath = Join-Path $projectDir ".mcp.json"
-        $mcpJson | Set-Content -Path $outputPath -Encoding UTF8
-        Write-Ok "Generated: $outputPath"
-    }
-    "2" {
-        # Claude Desktop
-        $outputPath = Join-Path $env:APPDATA "Claude\claude_desktop_config.json"
-        $outputDir = Split-Path $outputPath
-        if (-not (Test-Path $outputDir)) {
-            New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-        }
-        # Merge with existing if present
-        if (Test-Path $outputPath) {
-            try {
-                $existing = Get-Content $outputPath -Raw | ConvertFrom-Json
-                $new = $mcpJson | ConvertFrom-Json
-                foreach ($key in $new.mcpServers.PSObject.Properties.Name) {
-                    if (-not $existing.mcpServers) {
-                        $existing | Add-Member -Type NoteProperty -Name mcpServers -Value @{}
-                    }
-                    $existing.mcpServers | Add-Member -Type NoteProperty -Name $key -Value $new.mcpServers.$key -Force
-                }
-                $existing | ConvertTo-Json -Depth 4 | Set-Content -Path $outputPath -Encoding UTF8
-                Write-Ok "Merged into existing: $outputPath"
-            } catch {
-                $mcpJson | Set-Content -Path $outputPath -Encoding UTF8
-                Write-Ok "Generated: $outputPath"
-            }
-        } else {
-            $mcpJson | Set-Content -Path $outputPath -Encoding UTF8
-            Write-Ok "Generated: $outputPath"
-        }
-    }
-    "3" {
-        # Cursor
-        $projectDir = Read-Prompt "Project directory for .cursor/mcp.json" (Get-Location)
-        $outputDir = Join-Path $projectDir ".cursor"
-        if (-not (Test-Path $outputDir)) {
-            New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-        }
-        $outputPath = Join-Path $outputDir "mcp.json"
-        $mcpJson | Set-Content -Path $outputPath -Encoding UTF8
-        Write-Ok "Generated: $outputPath"
-    }
-    "4" {
-        # Print config
-        Write-Host ""
-        Write-Host "Add this to your MCP client configuration:" -ForegroundColor White
-        Write-Host ""
-        Write-Host $mcpJson
-        Write-Host ""
-    }
-    "5" {
-        # Remote mode
-        $httpHost = Read-Prompt "HTTP bind address" "0.0.0.0"
-        $httpPort = Read-Prompt "HTTP port" "4624"
-        $apiKey = -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+$overviewPath = Join-Path $InstallDir "TOOLS_OVERVIEW.md"
+$overviewContent = & $venvPython -c @"
+import json
+from datetime import datetime
+from wintools_mcp.catalog import load_catalog
+from wintools_mcp.environment import find_binary
 
-        Write-Host ""
-        Write-Host "Remote mode configuration:" -ForegroundColor White
-        Write-Host ""
-        Write-Host "  Start wintools-mcp:"
-        Write-Host "    $wintoolsPython -m wintools_mcp --http --host $httpHost --port $httpPort"
-        Write-Host ""
-        Write-Host "  Tell your SIFT administrator:" -ForegroundColor White
-        $localIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "Loopback*" -and $_.PrefixOrigin -ne "WellKnown" } | Select-Object -First 1).IPAddress
-        if (-not $localIp) { $localIp = "THIS_MACHINE_IP" }
-        Write-Host "    URL:      http://${localIp}:${httpPort}"
-        Write-Host "    Examiner: $Examiner"
-        Write-Host ""
-        Write-Host "  SIFT gateway.yaml entry:" -ForegroundColor White
-        Write-Host "    wintools-mcp:"
-        Write-Host "      type: http"
-        Write-Host "      url: `"http://${localIp}:${httpPort}/mcp`""
-        Write-Host "      enabled: true"
-        Write-Host ""
+catalog = load_catalog()
+found = []
+missing = []
+for name, td in sorted(catalog.items()):
+    path = find_binary(td.binary)
+    if path:
+        found.append((td.name, td.category, td.binary, path))
+    else:
+        missing.append((td.name, td.category, td.description or ''))
 
-        # Save a startup script
-        $startupPath = Join-Path $InstallDir "start-wintools.ps1"
-        @"
-# Start wintools-mcp in HTTP mode for remote access
+lines = []
+lines.append(f'# AIIR Tool Inventory - {datetime.now().strftime("%Y-%m-%d %H:%M")}')
+lines.append('')
+lines.append(f'Generated by setup-windows.ps1 on {datetime.now().strftime("%Y-%m-%d")}.')
+lines.append(f'wintools-mcp rescans automatically on each discovery call.')
+lines.append('')
+lines.append(f'## Installed ({len(found)}/{len(found)+len(missing)})')
+lines.append('')
+if found:
+    lines.append('| Tool | Category | Path |')
+    lines.append('|------|----------|------|')
+    for name, cat, binary, path in found:
+        lines.append(f'| {name} | {cat} | {path} |')
+else:
+    lines.append('No tools found.')
+lines.append('')
+lines.append(f'## Missing ({len(missing)}/{len(found)+len(missing)})')
+lines.append('')
+if missing:
+    lines.append('| Tool | Category | Description |')
+    lines.append('|------|----------|-------------|')
+    for name, cat, desc in missing:
+        lines.append(f'| {name} | {cat} | {desc} |')
+else:
+    lines.append('All catalog tools are installed.')
+lines.append('')
+lines.append('## Notes')
+lines.append('')
+lines.append('- Install missing tools and restart wintools-mcp (or call scan_tools via MCP)')
+lines.append('- wintools-mcp checks tool availability dynamically on each discovery call')
+lines.append('- Common tool sources:')
+lines.append('  - Zimmerman Suite: https://ericzimmerman.github.io/')
+lines.append('  - Hayabusa: https://github.com/Yamato-Security/hayabusa/releases')
+lines.append('  - Sysinternals: winget install Microsoft.Sysinternals')
+lines.append('')
+print('\n'.join(lines))
+"@ 2>$null
+
+if ($overviewContent) {
+    $overviewContent -join "`n" | Set-Content -Path $overviewPath -Encoding UTF8
+    Write-Ok "Generated: $overviewPath"
+} else {
+    Write-Warn "Could not generate TOOLS_OVERVIEW.md"
+}
+
+# =============================================================================
+# Start MCP Server
+# =============================================================================
+
+Write-Header "Starting wintools-mcp"
+
+Write-Info "Starting wintools-mcp on port $Port..."
+
+# Start in background to validate it works
+$startArgs = @("-m", "wintools_mcp", "--http", "--host", $Host, "--port", "$Port")
+$process = Start-Process -FilePath $venvPython -ArgumentList $startArgs -PassThru -WindowStyle Hidden -Environment @{ AIIR_EXAMINER = $Examiner }
+
+Start-Sleep -Seconds 3
+
+# Check if it's running
+if (-not $process.HasExited) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:$Port/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        Write-Ok "wintools-mcp running on port $Port"
+    } catch {
+        Write-Warn "wintools-mcp started but health check failed"
+    }
+} else {
+    Write-Warn "wintools-mcp exited immediately - check configuration"
+}
+
+# =============================================================================
+# Auto-Start Configuration
+# =============================================================================
+
+Write-Header "Startup Configuration"
+
+Write-Host "wintools-mcp is running now. How should it start in the future?"
+Write-Host ""
+Write-Host "  1. Auto-start at boot (scheduled task)"
+Write-Host "  2. Manual start (generates start-wintools.ps1)"
+Write-Host ""
+
+$startChoice = Read-Prompt "Choose" "1"
+
+# Always generate the startup script (useful either way)
+$startupPath = Join-Path $InstallDir "start-wintools.ps1"
+@"
+# Start wintools-mcp in HTTP mode
 `$env:AIIR_EXAMINER = "$Examiner"
-& "$wintoolsPython" -m wintools_mcp --http --host $httpHost --port $httpPort
+& "$venvPython" -m wintools_mcp --http --host $Host --port $Port
 "@ | Set-Content -Path $startupPath -Encoding UTF8
-        Write-Ok "Generated startup script: $startupPath"
 
-        # Firewall rule
-        Write-Host ""
-        if (Read-YesNo "Add Windows Firewall rule for port $httpPort?" $true) {
-            try {
-                $ruleName = "AIIR wintools-mcp"
-                $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
-                if ($existing) {
-                    Write-Info "Firewall rule already exists"
-                } else {
-                    New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort ([int]$httpPort) -Action Allow | Out-Null
-                    Write-Ok "Firewall rule added for TCP port $httpPort"
-                }
-            } catch {
-                Write-Warn "Could not add firewall rule (run as Administrator)"
-                Write-Host "  Manual: netsh advfirewall firewall add rule name=`"AIIR wintools-mcp`" dir=in action=allow protocol=TCP localport=$httpPort"
-            }
+if ($startChoice -eq "1") {
+    # Register scheduled task for auto-start
+    $taskName = "AIIR wintools-mcp"
+
+    try {
+        # Remove existing task if present
+        $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($existing) {
+            Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+            Write-Info "Removed existing scheduled task"
         }
+
+        $action = New-ScheduledTaskAction `
+            -Execute $venvPython `
+            -Argument "-m wintools_mcp --http --host $Host --port $Port"
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        $settings = New-ScheduledTaskSettingsSet `
+            -AllowStartIfOnBatteries `
+            -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable `
+            -RestartCount 3 `
+            -RestartInterval (New-TimeSpan -Minutes 1)
+
+        Register-ScheduledTask `
+            -TaskName $taskName `
+            -Action $action `
+            -Trigger $trigger `
+            -Settings $settings `
+            -RunLevel Highest `
+            -User "SYSTEM" `
+            -Description "AIIR wintools-mcp forensic tool server" | Out-Null
+
+        Write-Ok "Scheduled task registered: $taskName"
+        Write-Ok "Will auto-start at boot"
+    } catch {
+        Write-Warn "Could not register scheduled task (run as Administrator)"
+        Write-Host "  To register manually (as Administrator):"
+        Write-Host "  schtasks /create /tn `"$taskName`" /tr `"$venvPython -m wintools_mcp --http --host $Host --port $Port`" /sc onstart /ru SYSTEM"
+        Write-Host ""
+        Write-Host "  Or use the startup script: $startupPath"
     }
-    "6" {
-        Write-Info "Skipping client configuration."
+
+    # Add firewall rule
+    try {
+        $ruleName = "AIIR wintools-mcp"
+        $existingRule = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+        if (-not $existingRule) {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Protocol TCP -LocalPort $Port -Action Allow | Out-Null
+            Write-Ok "Firewall rule added for TCP port $Port"
+        } else {
+            Write-Ok "Firewall rule already exists"
+        }
+    } catch {
+        Write-Warn "Could not add firewall rule (run as Administrator)"
+        Write-Host "  Manual: netsh advfirewall firewall add rule name=`"AIIR wintools-mcp`" dir=in action=allow protocol=TCP localport=$Port"
     }
+} else {
+    Write-Ok "Generated startup script: $startupPath"
+    Write-Host "  Run it to start wintools-mcp: $startupPath"
 }
 
-# --- Phase 7: Team Deployment (optional) ---
-Write-Host ""
-if (Read-YesNo "Connect to a SIFT case share?" $false) {
-    Write-Header "Phase 7: Team Deployment"
+# =============================================================================
+# Summary
+# =============================================================================
 
-    $sharePath = Read-Prompt "SIFT share path (e.g., \\sift-workstation\cases)" ""
-
-    if ($sharePath) {
-        $driveLetter = Read-Prompt "Map to drive letter" "Z"
-        $driveLetter = $driveLetter.TrimEnd(":")
-
-        Write-Host ""
-        Write-Host "Mapping $sharePath to ${driveLetter}:..."
-        try {
-            net use "${driveLetter}:" $sharePath /persistent:yes 2>$null
-            Write-Ok "Mapped $sharePath to ${driveLetter}:"
-        } catch {
-            Write-Warn "Could not map drive. Try manually:"
-            Write-Host "  net use ${driveLetter}: $sharePath /persistent:yes"
-        }
-
-        Write-Host ""
-        Write-Host "To use a case on the share:" -ForegroundColor White
-        Write-Host "  `$env:AIIR_CASE_DIR = `"${driveLetter}:\INC-2026-0001`""
-        Write-Host ""
-        Write-Host "Each examiner writes to: examiners\$Examiner\ within the case."
-    }
-
-    # Connectivity test
-    Write-Host ""
-    if (Read-YesNo "Test connectivity to SIFT gateway?" $false) {
-        $siftHost = Read-Prompt "SIFT gateway host" ""
-        if ($siftHost) {
-            $siftPort = Read-Prompt "Gateway port" "4508"
-            try {
-                $response = Invoke-WebRequest -Uri "http://${siftHost}:${siftPort}/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
-                Write-Ok "Connected to SIFT gateway at ${siftHost}:${siftPort}"
-            } catch {
-                Write-Warn "Cannot reach ${siftHost}:${siftPort} - ensure aiir-gateway is running"
-            }
-        }
-    }
-}
-
-# --- Summary ---
 Write-Header "Installation Complete"
 
-Write-Host "Installed components:"
-Write-Ok "wintools-mcp"
-if ($installAiir) { Write-Ok "aiir CLI" }
-if ($installForensic) { Write-Ok "forensic-mcp" }
+Write-Ok "wintools-mcp installed and running"
 Write-Host ""
-Write-Host "Examiner:    $Examiner"
-Write-Host "Install dir: $InstallDir"
+Write-Host "Examiner:       $Examiner"
+Write-Host "Install dir:    $InstallDir"
+Write-Host "HTTP server:    http://localhost:$Port"
+Write-Host "Tool inventory: $overviewPath"
 Write-Host ""
-Write-Host "Next steps:" -ForegroundColor White
-Write-Host "  1. Install any missing forensic tools reported above"
-Write-Host "  2. Restart your terminal for PATH changes to take effect"
-if ($modeChoice -eq "5") {
-    Write-Host "  3. Start wintools-mcp: $InstallDir\start-wintools.ps1"
-    Write-Host "  4. Configure SIFT gateway to connect to this machine"
+
+# Detect local IP for gateway config
+$localIp = $null
+try {
+    $localIp = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "Loopback*" -and $_.PrefixOrigin -ne "WellKnown" } | Select-Object -First 1).IPAddress
+} catch { }
+if (-not $localIp) { $localIp = "THIS_MACHINE_IP" }
+
+Write-Host "Add to your SIFT gateway.yaml:" -ForegroundColor White
+Write-Host "  backends:"
+Write-Host "    wintools-mcp:"
+Write-Host "      type: http"
+Write-Host "      url: `"http://${localIp}:${Port}/mcp`""
+Write-Host "      enabled: true"
+Write-Host ""
+
+if ($startChoice -eq "1") {
+    Write-Host "Auto-start: enabled (scheduled task)" -ForegroundColor Green
 } else {
-    Write-Host "  3. Start your LLM client and begin an investigation"
-    Write-Host "  4. Run: $wintoolsPython -m wintools_mcp --scan  (to re-check tools)"
-}
-if ($installAiir) {
-    Write-Host "  5. Run: aiir setup test  (to verify connectivity)"
+    Write-Host "Manual start: $startupPath" -ForegroundColor Yellow
 }
 Write-Host ""
