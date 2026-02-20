@@ -19,6 +19,8 @@ from aiir_cli.commands.review import cmd_review
 from aiir_cli.commands.execute import cmd_exec
 from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
 from aiir_cli.commands.config import cmd_config
+from aiir_cli.commands.todo import cmd_todo
+from aiir_cli.commands.setup import cmd_setup
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,6 +37,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve = sub.add_parser("approve", help="Approve staged findings/timeline events")
     p_approve.add_argument("ids", nargs="*", help="Finding/event IDs to approve (omit for interactive review)")
     p_approve.add_argument("--analyst", help="Override analyst identity")
+    p_approve.add_argument("--note", help="Add examiner note when approving specific IDs")
+    p_approve.add_argument("--edit", action="store_true", help="Open in $EDITOR before approving")
+    p_approve.add_argument("--interpretation", help="Override interpretation field")
+    p_approve.add_argument("--by", help="Filter items by creator analyst (interactive mode)")
+    p_approve.add_argument("--findings-only", action="store_true", help="Review only findings")
+    p_approve.add_argument("--timeline-only", action="store_true", help="Review only timeline events")
 
     # reject
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
@@ -51,6 +59,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_review.add_argument("--verify", action="store_true", help="Cross-check findings against approval records")
     p_review.add_argument("--iocs", action="store_true", help="Extract IOCs from findings grouped by status")
     p_review.add_argument("--timeline", action="store_true", help="Show timeline events")
+    p_review.add_argument("--todos", action="store_true", help="Show TODO items")
+    p_review.add_argument("--open", action="store_true", help="Show only open TODOs (with --todos)")
     p_review.add_argument("--limit", type=int, default=50, help="Limit entries shown")
 
     # exec
@@ -66,6 +76,35 @@ def build_parser() -> argparse.ArgumentParser:
     p_reg = sub.add_parser("register-evidence", help="Register evidence file (hash + chmod 444)")
     p_reg.add_argument("path", help="Path to evidence file")
     p_reg.add_argument("--description", default="", help="Description of evidence")
+
+    # todo
+    p_todo = sub.add_parser("todo", help="Manage investigation TODOs")
+    todo_sub = p_todo.add_subparsers(dest="todo_action", help="TODO actions")
+
+    # todo (no action = list)
+    # Default (no subcommand) shows open list — handled by argparse dest=None
+    p_todo.add_argument("--all", action="store_true", help="Show all TODOs including completed")
+    p_todo.add_argument("--assignee", default="", help="Filter by assignee")
+
+    p_todo_add = todo_sub.add_parser("add", help="Add a new TODO")
+    p_todo_add.add_argument("description", help="TODO description")
+    p_todo_add.add_argument("--assignee", default="", help="Assign to analyst")
+    p_todo_add.add_argument("--priority", choices=["high", "medium", "low"], default="medium")
+    p_todo_add.add_argument("--finding", action="append", help="Related finding ID (repeatable)")
+
+    p_todo_complete = todo_sub.add_parser("complete", help="Mark TODO as completed")
+    p_todo_complete.add_argument("todo_id", help="TODO ID (e.g., TODO-001)")
+
+    p_todo_update = todo_sub.add_parser("update", help="Update a TODO")
+    p_todo_update.add_argument("todo_id", help="TODO ID (e.g., TODO-001)")
+    p_todo_update.add_argument("--note", help="Add a note")
+    p_todo_update.add_argument("--assignee", help="Reassign")
+    p_todo_update.add_argument("--priority", choices=["high", "medium", "low"], help="Change priority")
+
+    # setup
+    p_setup = sub.add_parser("setup", help="Interactive setup for all MCP servers")
+    p_setup.add_argument("--force-reprompt", action="store_true", help="Force re-prompting for all values")
+    p_setup.add_argument("--non-interactive", action="store_true", help="Skip interactive prompts")
 
     # config
     p_config = sub.add_parser("config", help="Configure AIIR settings")
@@ -98,6 +137,8 @@ def main() -> None:
         "unlock-evidence": cmd_unlock_evidence,
         "register-evidence": cmd_register_evidence,
         "config": cmd_config,
+        "todo": cmd_todo,
+        "setup": cmd_setup,
     }
 
     handler = dispatch.get(args.command)

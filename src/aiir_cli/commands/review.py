@@ -25,6 +25,7 @@ from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     load_timeline,
+    load_todos,
     load_approval_log,
     verify_approval_integrity,
 )
@@ -34,7 +35,9 @@ def cmd_review(args, identity: dict) -> None:
     """Review case information."""
     case_dir = get_case_dir(getattr(args, "case", None))
 
-    if getattr(args, "iocs", False):
+    if getattr(args, "todos", False):
+        _show_todos(case_dir, open_only=getattr(args, "open", False))
+    elif getattr(args, "iocs", False):
         _show_iocs(case_dir)
     elif getattr(args, "timeline", False):
         detail = getattr(args, "detail", False)
@@ -79,6 +82,39 @@ def _show_summary(case_dir: Path) -> None:
     print(f"Timeline: {len(timeline)} events ({draft_t} draft, {approved_t} approved)")
 
     print(f"Evidence: {len(evidence)} registered files")
+
+    todos = load_todos(case_dir)
+    open_t = sum(1 for t in todos if t.get("status") == "open")
+    completed_t = sum(1 for t in todos if t.get("status") == "completed")
+    print(f"TODOs: {len(todos)} total ({open_t} open, {completed_t} completed)")
+
+
+def _show_todos(case_dir: Path, open_only: bool = False) -> None:
+    """Show TODO items in a table."""
+    todos = load_todos(case_dir)
+    if open_only:
+        todos = [t for t in todos if t.get("status") == "open"]
+
+    if not todos:
+        print("No TODOs found.")
+        return
+
+    print(f"{'ID':<12} {'Status':<11} {'Priority':<9} {'Assignee':<12} {'Findings':<12} Description")
+    print("-" * 90)
+    for t in todos:
+        todo_id = t["todo_id"]
+        status = t.get("status", "open")
+        priority = t.get("priority", "medium")
+        assignee = t.get("assignee", "") or "-"
+        findings = ",".join(t.get("related_findings", []))[:11] or "-"
+        desc = t.get("description", "")[:35]
+        print(f"{todo_id:<12} {status:<11} {priority:<9} {assignee:<12} {findings:<12} {desc}")
+
+    if any(t.get("notes") for t in todos):
+        print()
+        for t in todos:
+            for note in t.get("notes", []):
+                print(f"  {t['todo_id']}: [{note.get('by', '?')}] {note['note']}")
 
 
 def _show_findings_table(case_dir: Path) -> None:

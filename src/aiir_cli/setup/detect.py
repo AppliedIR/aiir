@@ -1,0 +1,88 @@
+"""Detect installed MCP servers."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+from pathlib import Path
+
+
+# Known MCP server modules and their pip package names
+MCP_SERVERS = {
+    "forensic-mcp": {"module": "forensic_mcp", "type": "stdio"},
+    "sift-mcp": {"module": "sift_mcp", "type": "stdio"},
+    "forensic-rag-mcp": {"module": "forensic_rag_mcp", "type": "stdio"},
+    "windows-triage-mcp": {"module": "windows_triage_mcp", "type": "stdio"},
+    "opencti-mcp": {"module": "opencti_mcp", "type": "stdio"},
+}
+
+REMOTE_SERVERS = {
+    "remnux-mcp": {"type": "http", "default_port": 8080},
+    "microsoft-learn": {"type": "http", "default_url": "https://learn.microsoft.com/mcp"},
+    "zeltser-ir-writing": {"type": "http", "default_url": "https://zeltser.com/mcp"},
+}
+
+
+def detect_installed_mcps() -> list[dict]:
+    """Detect locally installed MCP servers by checking if their modules are importable.
+
+    Returns a list of dicts with name, module, type, python_path, available.
+    """
+    results = []
+    python_path = shutil.which("python3") or shutil.which("python") or "python"
+
+    for name, info in MCP_SERVERS.items():
+        module = info["module"]
+        available = _check_module(python_path, module)
+        results.append({
+            "name": name,
+            "module": module,
+            "type": info["type"],
+            "python_path": python_path,
+            "available": available,
+        })
+
+    return results
+
+
+def _check_module(python_path: str, module: str) -> bool:
+    """Check if a Python module is importable."""
+    try:
+        result = subprocess.run(
+            [python_path, "-c", f"import {module}"],
+            capture_output=True,
+            timeout=10,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
+    """Search for MCP servers installed in venvs under common directories.
+
+    Returns list of dicts with name, venv_path, python_path, available.
+    """
+    if search_dirs is None:
+        search_dirs = [
+            Path("/opt/aiir"),
+            Path.home() / "air-design",
+            Path.home() / "aiir",
+        ]
+
+    results = []
+    for base_dir in search_dirs:
+        if not base_dir.exists():
+            continue
+        for name, info in MCP_SERVERS.items():
+            venv_python = base_dir / name / ".venv" / "bin" / "python"
+            if venv_python.exists():
+                available = _check_module(str(venv_python), info["module"])
+                results.append({
+                    "name": name,
+                    "venv_path": str(base_dir / name),
+                    "python_path": str(venv_python),
+                    "available": available,
+                })
+
+    return results

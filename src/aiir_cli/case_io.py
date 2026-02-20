@@ -156,6 +156,20 @@ def load_approval_log(case_dir: Path) -> list[dict]:
     return entries
 
 
+def load_todos(case_dir: Path) -> list[dict]:
+    """Load TODO items from JSON store."""
+    todos_file = case_dir / ".audit" / "todos.json"
+    if not todos_file.exists():
+        return []
+    return json.loads(todos_file.read_text())
+
+
+def save_todos(case_dir: Path, todos: list[dict]) -> None:
+    """Save TODO items to JSON store."""
+    with open(case_dir / ".audit" / "todos.json", "w") as f:
+        json.dump(todos, f, indent=2, default=str)
+
+
 def verify_approval_integrity(case_dir: Path) -> list[dict]:
     """Cross-reference findings.json against approvals.jsonl.
 

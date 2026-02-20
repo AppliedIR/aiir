@@ -11,7 +11,10 @@ import yaml
 
 from aiir_cli.commands.approve import cmd_approve, _approve_specific
 from aiir_cli.commands.reject import cmd_reject
-from aiir_cli.case_io import load_findings, save_findings, load_timeline, save_timeline, load_approval_log
+from aiir_cli.case_io import (
+    load_findings, save_findings, load_timeline, save_timeline,
+    load_approval_log, load_todos, save_todos,
+)
 
 
 @pytest.fixture
@@ -28,6 +31,9 @@ def case_dir(tmp_path, monkeypatch):
 
     with open(case_path / ".audit" / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
+
+    with open(case_path / ".audit" / "todos.json", "w") as f:
+        json.dump([], f)
 
     monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
     return case_path
@@ -58,6 +64,7 @@ def staged_finding(case_dir):
             "confidence_justification": "single source",
             "type": "finding",
             "staged": "2026-02-19T12:00:00Z",
+            "created_by": "steve",
         }
     ]
     save_findings(case_dir, findings)
@@ -74,6 +81,7 @@ def staged_timeline(case_dir):
             "timestamp": "2026-02-19T10:00:00Z",
             "description": "First lateral movement",
             "staged": "2026-02-19T12:00:00Z",
+            "created_by": "jane",
         }
     ]
     save_timeline(case_dir, events)
@@ -94,7 +102,7 @@ class TestApproveSpecific:
             _approve_specific(case_dir, ["F-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
-        assert findings[0]["approved_by"] == identity
+        assert findings[0]["approved_by"] == "analyst1"
 
     def test_approve_timeline_event(self, case_dir, identity, staged_timeline, config_path):
         mock_tty = _mock_tty_confirm()
@@ -104,7 +112,6 @@ class TestApproveSpecific:
         assert timeline[0]["status"] == "APPROVED"
 
     def test_approve_nonexistent_id(self, case_dir, identity, staged_finding, capsys, config_path):
-        # No confirmation needed — exits before reaching confirm
         _approve_specific(case_dir, ["F-999"], identity, config_path)
         captured = capsys.readouterr()
         assert "not found or not DRAFT" in captured.err
@@ -113,7 +120,6 @@ class TestApproveSpecific:
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             _approve_specific(case_dir, ["F-001"], identity, config_path)
-        # Try approving again — should say "not found or not DRAFT"
         _approve_specific(case_dir, ["F-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
@@ -138,13 +144,33 @@ class TestApproveSpecific:
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "DRAFT"
 
+    def test_approve_with_note(self, case_dir, identity, staged_finding, config_path):
+        mock_tty = _mock_tty_confirm()
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+            _approve_specific(case_dir, ["F-001"], identity, config_path,
+                              note="Correct finding, classify as generic.")
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "APPROVED"
+        assert len(findings[0]["examiner_notes"]) == 1
+        assert findings[0]["examiner_notes"][0]["note"] == "Correct finding, classify as generic."
+
+    def test_approve_with_interpretation_override(self, case_dir, identity, staged_finding, config_path):
+        mock_tty = _mock_tty_confirm()
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+            _approve_specific(case_dir, ["F-001"], identity, config_path,
+                              interpretation="Process masquerading confirmed")
+        findings = load_findings(case_dir)
+        assert findings[0]["interpretation"] == "Process masquerading confirmed"
+        assert "interpretation" in findings[0]["examiner_modifications"]
+        assert findings[0]["examiner_modifications"]["interpretation"]["original"] == "unusual"
+
 
 class TestApproveInteractive:
     def test_no_drafts(self, case_dir, identity, capsys, monkeypatch):
         save_findings(case_dir, [])
         save_timeline(case_dir, [])
-        args = Namespace(ids=[], case=None, analyst=None)
-        # Mock Path.home() to point to temp dir to avoid picking up real PIN
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
         with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
             cmd_approve(args, identity)
         captured = capsys.readouterr()
@@ -152,14 +178,91 @@ class TestApproveInteractive:
 
     def test_interactive_approve_all(self, case_dir, identity, staged_finding, capsys):
         mock_tty = _mock_tty_confirm()
-        args = Namespace(ids=[], case=None, analyst=None)
-        # Simulate: Enter (approve), then tty confirmation
-        with patch("builtins.input", side_effect=["", ""]):
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
+        with patch("builtins.input", side_effect=["a"]):
             with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
                 with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
+
+    def test_interactive_note(self, case_dir, identity, staged_finding, capsys):
+        mock_tty = _mock_tty_confirm()
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
+        with patch("builtins.input", side_effect=["n", "Good finding"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+                    cmd_approve(args, identity)
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "APPROVED"
+        assert findings[0]["examiner_notes"][0]["note"] == "Good finding"
+
+    def test_interactive_reject(self, case_dir, identity, staged_finding, capsys):
+        mock_tty = _mock_tty_confirm()
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
+        with patch("builtins.input", side_effect=["r", "Bad evidence"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+                    cmd_approve(args, identity)
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "REJECTED"
+        assert findings[0]["rejection_reason"] == "Bad evidence"
+
+    def test_interactive_skip(self, case_dir, identity, staged_finding, capsys):
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
+        with patch("builtins.input", side_effect=["s"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                cmd_approve(args, identity)
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "DRAFT"
+
+    def test_interactive_todo(self, case_dir, identity, staged_finding, capsys):
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=False, timeline_only=False)
+        with patch("builtins.input", side_effect=["t", "Verify with net logs", "jane", "high"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                cmd_approve(args, identity)
+        # Finding stays DRAFT
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "DRAFT"
+        # TODO created
+        todos = load_todos(case_dir)
+        assert len(todos) == 1
+        assert todos[0]["description"] == "Verify with net logs"
+        assert todos[0]["assignee"] == "jane"
+        assert todos[0]["related_findings"] == ["F-001"]
+
+    def test_by_filter(self, case_dir, identity, staged_finding, staged_timeline, capsys):
+        """Filter by creator — only jane's items shown."""
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by="jane", findings_only=False, timeline_only=False)
+        mock_tty = _mock_tty_confirm()
+        with patch("builtins.input", side_effect=["a"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+                    cmd_approve(args, identity)
+        # Only T-001 (by jane) approved, F-001 (by steve) stays DRAFT
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "DRAFT"
+        timeline = load_timeline(case_dir)
+        assert timeline[0]["status"] == "APPROVED"
+
+    def test_findings_only(self, case_dir, identity, staged_finding, staged_timeline, capsys):
+        args = Namespace(ids=[], case=None, analyst=None, note=None, edit=False,
+                         interpretation=None, by=None, findings_only=True, timeline_only=False)
+        mock_tty = _mock_tty_confirm()
+        with patch("builtins.input", side_effect=["a"]):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
+                    cmd_approve(args, identity)
+        findings = load_findings(case_dir)
+        assert findings[0]["status"] == "APPROVED"
+        timeline = load_timeline(case_dir)
+        assert timeline[0]["status"] == "DRAFT"  # Not reviewed
 
 
 class TestReject:
@@ -200,4 +303,4 @@ class TestReject:
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"
         log = load_approval_log(case_dir)
-        assert "reason" not in log[0]  # Empty reason not stored
+        assert "reason" not in log[0]
