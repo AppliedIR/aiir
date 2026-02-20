@@ -2,18 +2,21 @@
 #
 # setup-sift.sh — AIIR Platform Installer for SIFT Workstation
 #
+# Installs local AIIR components and gateway. LLM client configuration
+# (which MCPs the AI connects to) is handled separately via 'aiir setup'.
+#
 # Three install modes:
-#   Minimal     — Core MCPs + report writing (~3 min)
-#   Recommended — Adds RAG search, Windows triage, MS Learn (~30 min)
-#   Custom      — Choose individual components
+#   Minimal     — Core MCPs (~3 min)
+#   Recommended — Adds RAG search + Windows triage (~30 min)
+#   Custom      — Choose individual components (+ OpenCTI)
 #
 # Usage:
-#   ./setup-sift.sh                        # Interactive (default: Recommended)
-#   ./setup-sift.sh --minimal              # Fire-and-forget core install
-#   ./setup-sift.sh --minimal -y           # Fully unattended minimal
-#   ./setup-sift.sh --recommended -y       # Fully unattended recommended
-#   ./setup-sift.sh --full                 # Custom mode
-#   ./setup-sift.sh --opencti --remnux     # Add optional components
+#   ./setup-sift.sh                                    # Interactive (default: Recommended)
+#   ./setup-sift.sh --minimal -y --examiner=steve      # Fully unattended minimal
+#   ./setup-sift.sh --recommended -y                   # Fully unattended recommended
+#   ./setup-sift.sh --full                             # Custom mode (interactive)
+#   ./setup-sift.sh --minimal --manual-start           # No auto-start
+#   ./setup-sift.sh --opencti                          # Add OpenCTI (triggers wizard)
 #
 set -euo pipefail
 
@@ -25,34 +28,34 @@ AUTO_YES=false
 MODE=""  # minimal, recommended, custom, or "" (show menu)
 INSTALL_DIR_ARG=""
 EXAMINER_ARG=""
+MANUAL_START=false
 ADD_OPENCTI=false
-ADD_REMNUX=false
 
 for arg in "$@"; do
     case "$arg" in
-        -y|--yes)         AUTO_YES=true ;;
+        -y|--yes)          AUTO_YES=true ;;
         --minimal|--quick) MODE="minimal" ;;
-        --recommended)    MODE="recommended" ;;
-        --full|--custom)  MODE="custom" ;;
-        --opencti)        ADD_OPENCTI=true ;;
-        --remnux)         ADD_REMNUX=true ;;
-        --install-dir=*)  INSTALL_DIR_ARG="${arg#*=}" ;;
-        --examiner=*)     EXAMINER_ARG="${arg#*=}" ;;
+        --recommended)     MODE="recommended" ;;
+        --full|--custom)   MODE="custom" ;;
+        --manual-start)    MANUAL_START=true ;;
+        --opencti)         ADD_OPENCTI=true ;;
+        --install-dir=*)   INSTALL_DIR_ARG="${arg#*=}" ;;
+        --examiner=*)      EXAMINER_ARG="${arg#*=}" ;;
         -h|--help)
             echo "Usage: setup-sift.sh [OPTIONS]"
             echo ""
             echo "Modes (pick one):"
-            echo "  --minimal       Core MCPs + report writing (~3 min)"
-            echo "  --recommended   Adds RAG search, Windows triage, MS Learn (~30 min)"
+            echo "  --minimal       Core MCPs (~3 min)"
+            echo "  --recommended   Adds RAG search + Windows triage (~30 min)"
             echo "  --full          Custom mode — choose individual components"
             echo ""
             echo "Options:"
-            echo "  -y, --yes           Accept all defaults (unattended)"
-            echo "  --opencti           Add OpenCTI threat intelligence"
-            echo "  --remnux            Add REMnux malware analysis"
-            echo "  --install-dir=PATH  Installation directory (default: ~/aiir)"
-            echo "  --examiner=NAME     Examiner identity slug"
-            echo "  -h, --help          Show this help"
+            echo "  -y, --yes            Accept all defaults (unattended)"
+            echo "  --manual-start       Don't auto-start gateway (default: auto-start)"
+            echo "  --opencti            Add OpenCTI threat intelligence (triggers wizard)"
+            echo "  --install-dir=PATH   Installation directory (default: ~/aiir)"
+            echo "  --examiner=NAME      Examiner identity slug"
+            echo "  -h, --help           Show this help"
             exit 0
             ;;
     esac
@@ -67,7 +70,6 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 BOLD='\033[1m'
-DIM='\033[2m'
 NC='\033[0m'
 
 info()   { echo -e "${BLUE}[INFO]${NC} $*"; }
@@ -123,8 +125,8 @@ if [[ -z "$MODE" ]]; then
     if $AUTO_YES; then
         MODE="recommended"
     else
-        echo "  1. Minimal      — Core MCPs + report writing (~3 min)"
-        echo "  2. Recommended  — Adds RAG search, Windows triage, MS Learn (~30 min)"
+        echo "  1. Minimal      — Core MCPs (~3 min)"
+        echo "  2. Recommended  — Adds RAG search + Windows triage (~30 min)"
         echo "  3. Custom       — Choose individual components"
         echo ""
         CHOICE=$(prompt "Choose" "2")
@@ -208,57 +210,38 @@ INSTALL_SIFT=false
 INSTALL_RAG=false
 INSTALL_TRIAGE=false
 INSTALL_OPENCTI=false
-INSTALL_REMNUX=false
-INSTALL_GATEWAY=false
-
-# Flags for remote MCPs to include in config
-INCLUDE_ZELTSER=false    # zeltser-ir-writing (report writing)
-INCLUDE_MSLEARN=false    # microsoft-learn (MS docs)
 
 case "$MODE" in
     minimal)
         INSTALL_SIFT=true
-        INCLUDE_ZELTSER=true
         ;;
     recommended)
         INSTALL_SIFT=true
         INSTALL_RAG=true
         INSTALL_TRIAGE=true
-        INCLUDE_ZELTSER=true
-        INCLUDE_MSLEARN=true
         ;;
     custom)
         # Interactive component selection
         header "Select Components"
 
-        echo -e "  ${BOLD}Local MCPs:${NC}"
-        echo -e "    forensic-mcp        — Case management, findings, discipline ${DIM}(always installed)${NC}"
-        echo -e "    aiir CLI             — Human review, approval, configuration ${DIM}(always installed)${NC}"
+        echo -e "  ${BOLD}Always installed:${NC}"
+        echo -e "    forensic-knowledge   — Forensic tool + artifact knowledge base"
+        echo -e "    forensic-mcp         — Case management, findings, discipline"
+        echo -e "    aiir CLI             — Human review, approval, configuration"
+        echo -e "    aiir-gateway         — HTTP API for all MCPs"
         echo ""
 
+        echo -e "  ${BOLD}Optional MCPs:${NC}"
         prompt_yn "    Install sift-mcp (forensic tool execution)?" "y" && INSTALL_SIFT=true
         prompt_yn "    Install forensic-rag-mcp (knowledge search — Sigma, MITRE, KAPE)?" "y" && INSTALL_RAG=true
         prompt_yn "    Install windows-triage-mcp (Windows baseline validation)?" "y" && INSTALL_TRIAGE=true
         prompt_yn "    Install opencti-mcp (threat intelligence — needs OpenCTI server)?" "n" && INSTALL_OPENCTI=true
-        prompt_yn "    Install aiir-gateway (HTTP gateway — multi-machine / OpenWebUI)?" "n" && INSTALL_GATEWAY=true
-
-        echo ""
-        echo -e "  ${BOLD}Remote MCPs (zero-config):${NC}"
-        INCLUDE_ZELTSER=true
-        INCLUDE_MSLEARN=true
-        ok "zeltser-ir-writing  — IR report writing guidance"
-        ok "microsoft-learn     — Microsoft technical documentation"
-
-        echo ""
-        echo -e "  ${BOLD}Remote MCPs (needs credentials):${NC}"
-        prompt_yn "    Add remnux-mcp (malware analysis — needs REMnux instance)?" "n" && INSTALL_REMNUX=true
         echo ""
         ;;
 esac
 
-# CLI flags override mode defaults
+# CLI flag overrides mode default
 $ADD_OPENCTI && INSTALL_OPENCTI=true
-$ADD_REMNUX && INSTALL_REMNUX=true
 
 # =============================================================================
 # Install Directory
@@ -334,7 +317,7 @@ install_mcp() {
 # forensic-knowledge is a shared dependency
 install_mcp "forensic-knowledge" "forensic-knowledge"
 
-# Always install forensic-mcp and aiir CLI
+# Always install: forensic-mcp, aiir CLI, aiir-gateway
 install_mcp "forensic-mcp" "forensic-mcp" "dev"
 install_mcp "aiir" "aiir" "dev"
 
@@ -343,7 +326,9 @@ $INSTALL_SIFT    && install_mcp "sift-mcp" "sift-mcp" "dev"
 $INSTALL_RAG     && install_mcp "forensic-rag-mcp" "forensic-rag-mcp"
 $INSTALL_TRIAGE  && install_mcp "windows-triage-mcp" "windows-triage-mcp"
 $INSTALL_OPENCTI && install_mcp "opencti-mcp" "opencti-mcp"
-$INSTALL_GATEWAY && install_mcp "aiir-gateway" "aiir-gateway" "dev"
+
+# Always install gateway (after MCPs so we can configure it)
+install_mcp "aiir-gateway" "aiir-gateway" "dev"
 
 # Add aiir CLI to PATH
 AIIR_BIN="$INSTALL_DIR/aiir/.venv/bin"
@@ -429,14 +414,11 @@ if $INSTALL_TRIAGE; then
 fi
 
 # =============================================================================
-# Credential Wizards (Custom mode / --opencti / --remnux flags)
+# OpenCTI Credential Wizard
 # =============================================================================
 
 OPENCTI_URL=""
 OPENCTI_TOKEN=""
-REMNUX_HOST=""
-REMNUX_PORT="3000"
-REMNUX_TOKEN=""
 
 if $INSTALL_OPENCTI; then
     header "OpenCTI Configuration"
@@ -447,9 +429,9 @@ if $INSTALL_OPENCTI; then
         read -rsp "OpenCTI API Token: " OPENCTI_TOKEN
         echo ""
 
-        # Test connectivity
-        if "$INSTALL_DIR/opencti-mcp/.venv/bin/python" -c "
-import os; os.environ['OPENCTI_URL']='$OPENCTI_URL'; os.environ['OPENCTI_TOKEN']='$OPENCTI_TOKEN'
+        # Test connectivity (token passed via env, not CLI arg)
+        if OPENCTI_URL="$OPENCTI_URL" OPENCTI_TOKEN="$OPENCTI_TOKEN" \
+            "$INSTALL_DIR/opencti-mcp/.venv/bin/python" -c "
 from opencti_mcp.config import Config; from opencti_mcp.client import OpenCTIClient
 c = OpenCTIClient(Config.from_env())
 r = c.validate_connection(skip_connectivity=False)
@@ -460,141 +442,11 @@ print('OK' if r['valid'] else 'FAIL')
             warn "Could not connect to OpenCTI — check URL and token"
         fi
     else
-        info "Skipping. Set OPENCTI_URL and OPENCTI_TOKEN env vars later."
+        info "Skipping. Set OPENCTI_URL and OPENCTI_TOKEN in gateway.yaml later."
         OPENCTI_URL=""
         OPENCTI_TOKEN=""
     fi
 fi
-
-if $INSTALL_REMNUX; then
-    header "REMnux Configuration"
-    echo "remnux-mcp connects to a REMnux instance for malware analysis."
-    echo "You need the host/IP, port, and bearer token from the REMnux MCP server."
-    echo ""
-    REMNUX_HOST=$(prompt "REMnux host (IP or hostname)" "")
-    if [[ -n "$REMNUX_HOST" ]]; then
-        REMNUX_PORT=$(prompt "REMnux port" "3000")
-        read -rsp "REMnux bearer token: " REMNUX_TOKEN
-        echo ""
-
-        # Test connectivity
-        if curl -sf "http://$REMNUX_HOST:$REMNUX_PORT/health" &>/dev/null; then
-            ok "REMnux reachable at $REMNUX_HOST:$REMNUX_PORT"
-        else
-            warn "Cannot reach $REMNUX_HOST:$REMNUX_PORT — ensure remnux-mcp-server is running"
-        fi
-    else
-        info "Skipping. Configure remnux-mcp manually later."
-        REMNUX_HOST=""
-    fi
-fi
-
-# =============================================================================
-# LLM Client Configuration
-# =============================================================================
-
-header "Configure LLM Client"
-
-echo "Which LLM client do you use?"
-echo "  1. Claude Code (.mcp.json in project directory)"
-echo "  2. Claude Desktop (~/.config/claude/claude_desktop_config.json)"
-echo "  3. Cursor (.cursor/mcp.json in project directory)"
-echo "  4. Other / manual (prints config to paste)"
-echo "  5. Skip (configure later with: aiir setup)"
-echo ""
-CLIENT_CHOICE=$(prompt "Choose" "1")
-
-generate_mcp_config() {
-    # Build JSON config for all installed MCPs
-    local output_file="$1"
-    local servers=""
-
-    add_stdio_server() {
-        local name="$1" module="$2" venv_dir="$3"
-        local python_path="$venv_dir/.venv/bin/python"
-        if [[ -n "$servers" ]]; then servers="$servers,"; fi
-        local entry="\"$name\":{\"command\":\"$python_path\",\"args\":[\"-m\",\"$module\"]"
-
-        # Add env vars for opencti
-        if [[ "$name" == "opencti-mcp" && -n "${OPENCTI_URL:-}" ]]; then
-            entry="$entry,\"env\":{\"OPENCTI_URL\":\"$OPENCTI_URL\",\"OPENCTI_TOKEN\":\"$OPENCTI_TOKEN\"}"
-        fi
-
-        entry="$entry}"
-        servers="$servers$entry"
-    }
-
-    add_http_server() {
-        local name="$1" url="$2"
-        if [[ -n "$servers" ]]; then servers="$servers,"; fi
-        servers="$servers\"$name\":{\"type\":\"http\",\"url\":\"$url\"}"
-    }
-
-    add_streamable_http_server() {
-        local name="$1" url="$2" token="$3"
-        if [[ -n "$servers" ]]; then servers="$servers,"; fi
-        servers="$servers\"$name\":{\"type\":\"streamable-http\",\"url\":\"$url\",\"headers\":{\"Authorization\":\"Bearer $token\"}}"
-    }
-
-    # Local stdio MCPs (always)
-    add_stdio_server "forensic-mcp" "forensic_mcp" "$INSTALL_DIR/forensic-mcp"
-    $INSTALL_SIFT    && add_stdio_server "sift-mcp" "sift_mcp" "$INSTALL_DIR/sift-mcp"
-    $INSTALL_RAG     && add_stdio_server "forensic-rag" "rag_mcp" "$INSTALL_DIR/forensic-rag-mcp"
-    $INSTALL_TRIAGE  && add_stdio_server "windows-triage" "windows_triage" "$INSTALL_DIR/windows-triage-mcp"
-    $INSTALL_OPENCTI && add_stdio_server "opencti-mcp" "opencti_mcp" "$INSTALL_DIR/opencti-mcp"
-
-    # Remote MCPs (zero-config)
-    $INCLUDE_ZELTSER && add_http_server "zeltser-ir-writing" "https://website-mcp.zeltser.com/mcp"
-    $INCLUDE_MSLEARN && add_http_server "microsoft-learn" "https://learn.microsoft.com/api/mcp"
-
-    # Remote MCPs (with credentials)
-    if $INSTALL_REMNUX && [[ -n "$REMNUX_HOST" ]]; then
-        add_streamable_http_server "remnux-mcp" "http://$REMNUX_HOST:$REMNUX_PORT/mcp" "$REMNUX_TOKEN"
-    fi
-
-    local config="{\"mcpServers\":{$servers}}"
-
-    mkdir -p "$(dirname "$output_file")"
-    echo "$config" | $PYTHON -m json.tool > "$output_file"
-    chmod 600 "$output_file"
-    ok "Generated: $output_file"
-}
-
-case "$CLIENT_CHOICE" in
-    1)
-        CONFIG_DIR=$(prompt "Project directory for .mcp.json" "$(pwd)")
-        generate_mcp_config "$CONFIG_DIR/.mcp.json"
-        # Copy AGENTS.md as CLAUDE.md
-        if [[ -f "$INSTALL_DIR/forensic-mcp/AGENTS.md" ]]; then
-            cp "$INSTALL_DIR/forensic-mcp/AGENTS.md" "$CONFIG_DIR/CLAUDE.md"
-            ok "Copied AGENTS.md → CLAUDE.md"
-        fi
-        ;;
-    2)
-        generate_mcp_config "$HOME/.config/claude/claude_desktop_config.json"
-        ;;
-    3)
-        CONFIG_DIR=$(prompt "Project directory for .cursor/mcp.json" "$(pwd)")
-        generate_mcp_config "$CONFIG_DIR/.cursor/mcp.json"
-        # Copy AGENTS.md as .cursorrules
-        if [[ -f "$INSTALL_DIR/forensic-mcp/AGENTS.md" ]]; then
-            cp "$INSTALL_DIR/forensic-mcp/AGENTS.md" "$CONFIG_DIR/.cursorrules"
-            ok "Copied AGENTS.md → .cursorrules"
-        fi
-        ;;
-    4)
-        echo ""
-        echo "Add the following MCP server entries to your client configuration:"
-        echo ""
-        generate_mcp_config "/tmp/aiir-mcp-config.json"
-        cat /tmp/aiir-mcp-config.json
-        rm -f /tmp/aiir-mcp-config.json
-        echo ""
-        ;;
-    5)
-        info "Skipping client configuration. Run 'aiir setup' later."
-        ;;
-esac
 
 # =============================================================================
 # Examiner Identity
@@ -636,6 +488,147 @@ fi
 export AIIR_EXAMINER="$EXAMINER"
 
 # =============================================================================
+# Gateway Configuration and Startup
+# =============================================================================
+
+header "Gateway Setup"
+
+GATEWAY_DIR="$INSTALL_DIR/aiir-gateway"
+GATEWAY_PYTHON="$GATEWAY_DIR/.venv/bin/python"
+GATEWAY_CONFIG="$GATEWAY_DIR/config/gateway.yaml"
+GATEWAY_PORT=4508
+
+# Generate gateway.yaml with all installed MCPs as backends
+info "Generating gateway configuration..."
+mkdir -p "$(dirname "$GATEWAY_CONFIG")"
+
+$GATEWAY_PYTHON -c "
+import yaml
+
+config = {
+    'gateway': {
+        'host': '127.0.0.1',
+        'port': $GATEWAY_PORT,
+        'log_level': 'INFO',
+    },
+    'backends': {},
+}
+
+# Local stdio backends
+backends = {
+    'forensic-mcp': ('forensic_mcp', '$INSTALL_DIR/forensic-mcp/.venv/bin/python'),
+}
+if '$INSTALL_SIFT' == 'true':
+    backends['sift-mcp'] = ('sift_mcp', '$INSTALL_DIR/sift-mcp/.venv/bin/python')
+if '$INSTALL_RAG' == 'true':
+    backends['forensic-rag'] = ('rag_mcp', '$INSTALL_DIR/forensic-rag-mcp/.venv/bin/python')
+if '$INSTALL_TRIAGE' == 'true':
+    backends['windows-triage'] = ('windows_triage', '$INSTALL_DIR/windows-triage-mcp/.venv/bin/python')
+if '$INSTALL_OPENCTI' == 'true':
+    backends['opencti-mcp'] = ('opencti_mcp', '$INSTALL_DIR/opencti-mcp/.venv/bin/python')
+
+for name, (module, python_path) in backends.items():
+    entry = {
+        'type': 'stdio',
+        'command': python_path,
+        'args': ['-m', module],
+        'enabled': True,
+    }
+    if name == 'opencti-mcp':
+        url = '$OPENCTI_URL'
+        token = '$OPENCTI_TOKEN'
+        if url:
+            entry['env'] = {'OPENCTI_URL': url, 'OPENCTI_TOKEN': token}
+    config['backends'][name] = entry
+
+with open('$GATEWAY_CONFIG', 'w') as f:
+    yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+" 2>/dev/null
+
+chmod 600 "$GATEWAY_CONFIG"
+ok "Generated: $GATEWAY_CONFIG"
+
+# Generate startup script (useful for both manual and auto modes)
+GATEWAY_START="$INSTALL_DIR/start-gateway.sh"
+cat > "$GATEWAY_START" << SCRIPT
+#!/usr/bin/env bash
+# Start AIIR Gateway
+export AIIR_EXAMINER="$EXAMINER"
+exec "$GATEWAY_PYTHON" -m aiir_gateway --config "$GATEWAY_CONFIG"
+SCRIPT
+chmod +x "$GATEWAY_START"
+
+# Start gateway to verify it works
+info "Starting gateway on port $GATEWAY_PORT..."
+"$GATEWAY_PYTHON" -m aiir_gateway --config "$GATEWAY_CONFIG" &
+GATEWAY_PID=$!
+sleep 2
+
+if kill -0 "$GATEWAY_PID" 2>/dev/null; then
+    if curl -sf "http://127.0.0.1:$GATEWAY_PORT/health" &>/dev/null; then
+        ok "Gateway running on port $GATEWAY_PORT"
+    else
+        warn "Gateway started but health check failed"
+    fi
+else
+    warn "Gateway failed to start — check $GATEWAY_CONFIG"
+fi
+
+# Determine auto-start behavior
+AUTOSTART=true
+if $MANUAL_START; then
+    AUTOSTART=false
+elif [[ "$MODE" == "custom" ]]; then
+    echo ""
+    echo "  1. Auto-start at boot (systemd service)"
+    echo "  2. Manual start (use start-gateway.sh)"
+    echo ""
+    START_CHOICE=$(prompt "Choose" "1")
+    [[ "$START_CHOICE" != "1" ]] && AUTOSTART=false
+fi
+
+if $AUTOSTART; then
+    # Install systemd user service
+    SYSTEMD_DIR="$HOME/.config/systemd/user"
+    mkdir -p "$SYSTEMD_DIR"
+
+    cat > "$SYSTEMD_DIR/aiir-gateway.service" << SERVICE
+[Unit]
+Description=AIIR Gateway
+After=network.target
+
+[Service]
+ExecStart=$GATEWAY_PYTHON -m aiir_gateway --config $GATEWAY_CONFIG
+Environment=AIIR_EXAMINER=$EXAMINER
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+SERVICE
+
+    # Stop the test process — systemd will manage it now
+    kill "$GATEWAY_PID" 2>/dev/null || true
+    wait "$GATEWAY_PID" 2>/dev/null || true
+
+    systemctl --user daemon-reload
+    systemctl --user enable aiir-gateway.service 2>/dev/null && \
+        ok "Systemd service enabled (auto-start at login)"
+    systemctl --user start aiir-gateway.service 2>/dev/null && \
+        ok "Gateway started via systemd" || \
+        warn "Could not start via systemd — use $GATEWAY_START manually"
+
+    # Enable lingering so service runs without active login session
+    if command -v loginctl &>/dev/null; then
+        loginctl enable-linger "$(whoami)" 2>/dev/null && \
+            ok "Linger enabled (gateway runs without active login)" || true
+    fi
+else
+    ok "Manual start: $GATEWAY_START"
+    info "Gateway is running now (PID $GATEWAY_PID) — will stop on logout"
+fi
+
+# =============================================================================
 # Team Deployment (Custom mode only)
 # =============================================================================
 
@@ -664,14 +657,6 @@ if [[ "$MODE" == "custom" ]]; then
         echo "  Then run: sudo systemctl restart smbd"
         echo ""
 
-        if $INSTALL_GATEWAY; then
-            echo -e "${BOLD}Gateway:${NC}"
-            echo "  The gateway allows remote MCPs (like wintools-mcp on Windows) to connect."
-            echo "  Configure: $INSTALL_DIR/aiir-gateway/config/gateway.yaml"
-            echo "  Start: cd $INSTALL_DIR/aiir-gateway && .venv/bin/aiir-gateway --config config/gateway.yaml"
-            echo ""
-        fi
-
         # Test connectivity to Windows workstation
         if prompt_yn "Test connectivity to a Windows workstation?" "n"; then
             WIN_HOST=$(prompt "Windows workstation IP or hostname" "")
@@ -694,30 +679,30 @@ fi
 header "Installation Complete"
 
 echo "Installed components:"
+ok "forensic-knowledge"
 ok "forensic-mcp"
 ok "aiir CLI"
+ok "aiir-gateway (port $GATEWAY_PORT)"
 $INSTALL_SIFT    && ok "sift-mcp"
 $INSTALL_RAG     && ok "forensic-rag-mcp"
 $INSTALL_TRIAGE  && ok "windows-triage-mcp"
 $INSTALL_OPENCTI && ok "opencti-mcp"
-$INSTALL_GATEWAY && ok "aiir-gateway"
 
 echo ""
-echo "Remote MCPs:"
-$INCLUDE_ZELTSER && ok "zeltser-ir-writing (IR report writing)"
-$INCLUDE_MSLEARN && ok "microsoft-learn (MS documentation)"
-$INSTALL_REMNUX && [[ -n "$REMNUX_HOST" ]] && ok "remnux-mcp ($REMNUX_HOST:$REMNUX_PORT)"
-
-echo ""
-echo "Examiner: $EXAMINER"
+echo "Examiner:    $EXAMINER"
 echo "Install dir: $INSTALL_DIR"
+echo "Gateway:     http://127.0.0.1:$GATEWAY_PORT"
+if $AUTOSTART; then
+    echo "Auto-start:  enabled (systemd)"
+else
+    echo "Start:       $GATEWAY_START"
+fi
 echo ""
 
 echo "Next steps:"
 echo "  1. Restart your shell (or: source ${SHELL_RC:-~/.bashrc})"
-echo "  2. Start your LLM client and begin an investigation"
-echo "  3. Run: aiir setup test    — to verify all MCPs are working"
-echo "  4. The AI should call init_case() to start a new case"
+echo "  2. Configure your LLM client:  aiir setup"
+echo "  3. Verify installation:         aiir setup test"
 
 if $INSTALL_RAG && [[ "$MODE" != "custom" ]]; then
     echo ""
