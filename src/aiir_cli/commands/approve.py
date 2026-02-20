@@ -27,6 +27,7 @@ import yaml
 
 from aiir_cli.approval_auth import require_confirmation
 from aiir_cli.case_io import (
+    find_draft_item,
     get_case_dir,
     load_findings,
     load_timeline,
@@ -75,7 +76,7 @@ def _approve_specific(
     to_approve = []
 
     for item_id in ids:
-        item = _find_draft_item(item_id, findings, timeline)
+        item = find_draft_item(item_id, findings, timeline)
         if item is None:
             print(f"  {item_id}: not found or not DRAFT", file=sys.stderr)
             continue
@@ -373,17 +374,6 @@ def _create_todos(case_dir: Path, todos_to_create: list[dict], identity: dict) -
         todos.append(todo)
         print(f"  Created {todo_id}: {td['description']}")
     save_todos(case_dir, todos)
-
-
-def _find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -> dict | None:
-    """Find a DRAFT item by ID in findings or timeline."""
-    for f in findings:
-        if f["id"] == item_id and f["status"] == "DRAFT":
-            return f
-    for t in timeline:
-        if t["id"] == item_id and t["status"] == "DRAFT":
-            return t
-    return None
 
 
 def _display_item(item: dict) -> None:

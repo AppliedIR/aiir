@@ -170,6 +170,17 @@ def save_todos(case_dir: Path, todos: list[dict]) -> None:
         json.dump(todos, f, indent=2, default=str)
 
 
+def find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -> dict | None:
+    """Find a DRAFT item by ID in findings or timeline."""
+    for f in findings:
+        if f["id"] == item_id and f["status"] == "DRAFT":
+            return f
+    for t in timeline:
+        if t["id"] == item_id and t["status"] == "DRAFT":
+            return t
+    return None
+
+
 def verify_approval_integrity(case_dir: Path) -> list[dict]:
     """Cross-reference findings.json against approvals.jsonl.
 

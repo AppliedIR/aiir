@@ -13,7 +13,6 @@ import yaml
 from aiir_cli.setup.detect import detect_installed_mcps, detect_venv_mcps, MCP_SERVERS
 from aiir_cli.setup.config_gen import (
     generate_mcp_json,
-    generate_desktop_config,
     generate_gateway_yaml,
 )
 from aiir_cli.setup.wizard import wizard_clients
@@ -113,9 +112,9 @@ class TestConfigGen:
         assert not (mode & stat.S_IRGRP)  # no group read
         assert not (mode & stat.S_IROTH)  # no other read
 
-    def test_generate_desktop_delegates_to_mcp_json(self, tmp_path, sample_mcps):
+    def test_generate_desktop_uses_mcp_json(self, tmp_path, sample_mcps):
         output = tmp_path / "desktop.json"
-        generate_desktop_config(sample_mcps, output)
+        generate_mcp_json(sample_mcps, output)
         config = json.loads(output.read_text())
         assert "mcpServers" in config
 

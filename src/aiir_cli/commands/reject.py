@@ -11,6 +11,7 @@ from pathlib import Path
 
 from aiir_cli.approval_auth import require_confirmation
 from aiir_cli.case_io import (
+    find_draft_item,
     get_case_dir,
     load_findings,
     load_timeline,
@@ -29,7 +30,7 @@ def cmd_reject(args, identity: dict) -> None:
     to_reject = []
 
     for item_id in args.ids:
-        item = _find_draft_item(item_id, findings, timeline)
+        item = find_draft_item(item_id, findings, timeline)
         if item is None:
             print(f"  {item_id}: not found or not DRAFT", file=sys.stderr)
             continue
@@ -51,7 +52,7 @@ def cmd_reject(args, identity: dict) -> None:
     for item in to_reject:
         item["status"] = "REJECTED"
         item["rejected_at"] = now
-        item["rejected_by"] = identity
+        item["rejected_by"] = identity["analyst"]
         if reason:
             item["rejection_reason"] = reason
         write_approval_log(
@@ -68,23 +69,21 @@ def cmd_reject(args, identity: dict) -> None:
     print(msg)
 
 
-def _find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -> dict | None:
-    """Find a DRAFT item by ID in findings or timeline."""
-    for f in findings:
-        if f["id"] == item_id and f["status"] == "DRAFT":
-            return f
-    for t in timeline:
-        if t["id"] == item_id and t["status"] == "DRAFT":
-            return t
-    return None
-
-
 def _display_item(item: dict) -> None:
-    """Display a finding or timeline event."""
-    print(f"\n  [{item['id']}]  {item.get('title', item.get('description', 'Untitled'))}")
+    """Display a finding or timeline event with full context for rejection decisions."""
+    print(f"\n{'─' * 60}")
+    print(f"  [{item['id']}]  {item.get('title', item.get('description', 'Untitled'))}")
+    if item.get("confidence"):
+        print(f"  Confidence: {item['confidence']}", end="")
+    if item.get("evidence_ids"):
+        print(f"  | Evidence: {', '.join(item['evidence_ids'])}", end="")
+    print()
+    print(f"{'─' * 60}")
+
     if "title" in item:
-        print(f"  Confidence: {item.get('confidence', '?')}")
-        print(f"  Observation: {item.get('observation', '')[:120]}")
+        print(f"  Observation: {item.get('observation', '')}")
+        print(f"  Interpretation: {item.get('interpretation', '')}")
     else:
         print(f"  Timestamp: {item.get('timestamp', '?')}")
-        print(f"  Description: {item.get('description', '')[:120]}")
+        print(f"  Description: {item.get('description', '')}")
+    print()

@@ -61,13 +61,6 @@ def wizard_clients() -> list[str]:
     return clients or ["claude_code"]
 
 
-def wizard_analyst() -> str:
-    """Prompt for analyst identity."""
-    print("\n--- Analyst Identity ---")
-    name = _prompt("Your analyst name (for audit trail): ")
-    return name.strip()
-
-
 def _prompt(message: str) -> str:
     """Prompt via stdin."""
     try:

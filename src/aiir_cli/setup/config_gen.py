@@ -53,18 +53,6 @@ def generate_mcp_json(
     return output_path
 
 
-def generate_desktop_config(
-    mcps: list[dict],
-    output_path: Path,
-    opencti_config: dict | None = None,
-) -> Path:
-    """Generate claude_desktop_config.json for Claude Desktop.
-
-    Same format as .mcp.json but written to the Desktop config location.
-    """
-    return generate_mcp_json(mcps, output_path, opencti_config)
-
-
 def generate_gateway_yaml(
     mcps: list[dict],
     output_path: Path,

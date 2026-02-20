@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from aiir_cli import __version__
 from aiir_cli.identity import get_analyst_identity, warn_if_unconfigured
 from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.reject import cmd_reject
@@ -28,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="aiir",
         description="Applied IR — forensic investigation CLI",
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s 0.1.0")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--case", help="Case ID (overrides active case)")
 
     sub = parser.add_subparsers(dest="command", help="Available commands")

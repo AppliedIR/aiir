@@ -9,8 +9,8 @@ Command-line interface for **human-in-the-loop forensic investigation management
 This CLI is designed as a component of the AIIR (Applied Incident Response) platform, working alongside [forensic-mcp](https://github.com/AppliedIR/forensic-mcp).
 
 ```bash
-git clone https://github.com/AppliedIR/cli.git
-cd cli
+git clone https://github.com/AppliedIR/aiir.git
+cd aiir
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
@@ -218,8 +218,8 @@ The OS username is always captured alongside the explicit analyst identity for a
 ## Quick Start
 
 ```bash
-git clone https://github.com/AppliedIR/cli.git
-cd cli
+git clone https://github.com/AppliedIR/aiir.git
+cd aiir
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
@@ -233,7 +233,7 @@ aiir review --case INC-2026-0219120000
 ## Project Structure
 
 ```
-cli/
+aiir/
 ├── src/aiir_cli/
 │   ├── __init__.py
 │   ├── main.py                     # Entry point and argument parser

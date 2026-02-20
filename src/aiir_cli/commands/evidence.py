@@ -10,6 +10,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aiir_cli.approval_auth import require_tty_confirmation
 from aiir_cli.case_io import get_case_dir
 
 
@@ -45,11 +46,10 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
         print(f"Evidence directory not found: {evidence_dir}", file=sys.stderr)
         sys.exit(1)
 
-    # Interactive confirmation — this is a sensitive operation
+    # Confirm via /dev/tty (blocks AI-via-Bash from piping "y")
     print(f"WARNING: Unlocking evidence directory allows writes.")
     print(f"  Path: {evidence_dir}")
-    response = input("Unlock evidence directory? [y/N]: ").strip().lower()
-    if response != "y":
+    if not require_tty_confirmation("Unlock evidence directory? [y/N]: "):
         print("Cancelled.")
         return
 

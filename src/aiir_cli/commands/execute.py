@@ -8,6 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from aiir_cli.approval_auth import require_tty_confirmation
 from aiir_cli.case_io import get_case_dir
 
 
@@ -31,12 +32,11 @@ def cmd_exec(args, identity: dict) -> None:
     command = " ".join(cmd_parts)
     purpose = args.purpose
 
-    # Confirm execution
+    # Confirm execution via /dev/tty (blocks AI-via-Bash from piping "y")
     print(f"Case: {case_dir.name}")
     print(f"Purpose: {purpose}")
     print(f"Command: {command}")
-    response = input("Execute? [y/N]: ").strip().lower()
-    if response != "y":
+    if not require_tty_confirmation("Execute? [y/N]: "):
         print("Cancelled.")
         return
 

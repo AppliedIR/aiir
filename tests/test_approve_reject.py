@@ -275,6 +275,8 @@ class TestReject:
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"
         assert findings[0]["rejection_reason"] == "Insufficient evidence"
+        assert findings[0]["rejected_by"] == "analyst1"
+        assert isinstance(findings[0]["rejected_by"], str)
 
     def test_reject_writes_log(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()

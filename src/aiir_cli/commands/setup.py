@@ -17,11 +17,9 @@ from aiir_cli.setup.wizard import (
     wizard_opencti,
     wizard_remnux,
     wizard_clients,
-    wizard_analyst,
 )
 from aiir_cli.setup.config_gen import (
     generate_mcp_json,
-    generate_desktop_config,
     generate_gateway_yaml,
 )
 
@@ -97,7 +95,7 @@ def cmd_setup(args, identity: dict) -> None:
 
         elif client_type == "claude_desktop":
             output = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
-            generate_desktop_config(available, output, opencti_config)
+            generate_mcp_json(available, output, opencti_config)
             print(f"  Generated: {output}")
 
         elif client_type == "openwebui":
