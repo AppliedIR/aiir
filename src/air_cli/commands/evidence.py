@@ -100,7 +100,7 @@ def cmd_register_evidence(args, identity: dict) -> None:
         json.dump(registry, f, indent=2, default=str)
 
     # Log access
-    _log_evidence_action(case_dir, "register", str(evidence_path), identity, detail=file_hash)
+    _log_evidence_action(case_dir, "register", str(evidence_path), identity, sha256=file_hash)
 
     print(f"Registered: {evidence_path}")
     print(f"  SHA256: {file_hash}")
