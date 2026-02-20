@@ -9,8 +9,24 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _atomic_write(path: Path, content: str) -> None:
+    """Write file atomically via temp file + rename to prevent data loss on crash."""
+    fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(content)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def get_case_dir(case_id: str | None = None) -> Path:
@@ -49,8 +65,10 @@ def load_findings(case_dir: Path) -> list[dict]:
 
 def save_findings(case_dir: Path, findings: list[dict]) -> None:
     """Save findings to JSON store and regenerate FINDINGS.md."""
-    with open(case_dir / ".audit" / "findings.json", "w") as f:
-        json.dump(findings, f, indent=2, default=str)
+    _atomic_write(
+        case_dir / ".audit" / "findings.json",
+        json.dumps(findings, indent=2, default=str),
+    )
     regenerate_findings_md(case_dir, findings)
 
 
@@ -82,8 +100,7 @@ def regenerate_findings_md(case_dir: Path, findings: list[dict]) -> None:
         lines.append(f"### Interpretation\n{f.get('interpretation', '')}\n\n")
         lines.append(f"### Confidence Justification\n{f.get('confidence_justification', '')}\n\n")
         lines.append(f"---\n*Staged: {f.get('staged', '')}*\n\n")
-    with open(case_dir / "FINDINGS.md", "w") as fp:
-        fp.write("".join(lines))
+    _atomic_write(case_dir / "FINDINGS.md", "".join(lines))
 
 
 def load_timeline(case_dir: Path) -> list[dict]:
@@ -96,8 +113,10 @@ def load_timeline(case_dir: Path) -> list[dict]:
 
 def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
     """Save timeline to JSON store and regenerate TIMELINE.md."""
-    with open(case_dir / ".audit" / "timeline.json", "w") as f:
-        json.dump(timeline, f, indent=2, default=str)
+    _atomic_write(
+        case_dir / ".audit" / "timeline.json",
+        json.dumps(timeline, indent=2, default=str),
+    )
     regenerate_timeline_md(case_dir, timeline)
 
 
@@ -115,8 +134,7 @@ def regenerate_timeline_md(case_dir: Path, timeline: list[dict]) -> None:
         if ev.get("source"):
             lines.append(f"**Source:** {ev['source']}\n\n")
         lines.append(f"---\n*Staged: {ev.get('staged', '')}*\n\n")
-    with open(case_dir / "TIMELINE.md", "w") as fp:
-        fp.write("".join(lines))
+    _atomic_write(case_dir / "TIMELINE.md", "".join(lines))
 
 
 def write_approval_log(
@@ -166,8 +184,10 @@ def load_todos(case_dir: Path) -> list[dict]:
 
 def save_todos(case_dir: Path, todos: list[dict]) -> None:
     """Save TODO items to JSON store."""
-    with open(case_dir / ".audit" / "todos.json", "w") as f:
-        json.dump(todos, f, indent=2, default=str)
+    _atomic_write(
+        case_dir / ".audit" / "todos.json",
+        json.dumps(todos, indent=2, default=str),
+    )
 
 
 def find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -> dict | None:

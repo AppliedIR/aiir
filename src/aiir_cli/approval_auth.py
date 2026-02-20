@@ -21,6 +21,9 @@ import yaml
 
 
 PBKDF2_ITERATIONS = 600_000
+_MAX_PIN_ATTEMPTS = 3
+_LOCKOUT_SECONDS = 60
+_pin_failures: dict[str, list[float]] = {}  # analyst -> list of failure timestamps
 
 
 def require_confirmation(config_path: Path, analyst: str) -> str:
@@ -32,10 +35,17 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
     Raises SystemExit on failure or cancellation.
     """
     if has_pin(config_path, analyst):
+        _check_lockout(analyst)
         pin = _getpass_prompt("Enter PIN to confirm: ")
         if not verify_pin(config_path, analyst, pin):
-            print("Incorrect PIN.", file=sys.stderr)
+            _record_failure(analyst)
+            remaining = _MAX_PIN_ATTEMPTS - _recent_failure_count(analyst)
+            if remaining <= 0:
+                print(f"Too many failed attempts. Locked out for {_LOCKOUT_SECONDS}s.", file=sys.stderr)
+            else:
+                print(f"Incorrect PIN. {remaining} attempt(s) remaining.", file=sys.stderr)
             sys.exit(1)
+        _clear_failures(analyst)
         return "pin"
     else:
         if not require_tty_confirmation("Confirm? [y/N]: "):
@@ -118,6 +128,32 @@ def reset_pin(config_path: Path, analyst: str) -> None:
     setup_pin(config_path, analyst)
 
 
+def _recent_failure_count(analyst: str) -> int:
+    """Count failures within the lockout window."""
+    import time
+    now = time.monotonic()
+    failures = _pin_failures.get(analyst, [])
+    return sum(1 for t in failures if now - t < _LOCKOUT_SECONDS)
+
+
+def _check_lockout(analyst: str) -> None:
+    """Exit if analyst is locked out from too many failed attempts."""
+    if _recent_failure_count(analyst) >= _MAX_PIN_ATTEMPTS:
+        print(f"Too many failed PIN attempts. Try again later.", file=sys.stderr)
+        sys.exit(1)
+
+
+def _record_failure(analyst: str) -> None:
+    """Record a failed PIN attempt."""
+    import time
+    _pin_failures.setdefault(analyst, []).append(time.monotonic())
+
+
+def _clear_failures(analyst: str) -> None:
+    """Clear failures on successful authentication."""
+    _pin_failures.pop(analyst, None)
+
+
 def _getpass_prompt(prompt: str) -> str:
     """Read PIN from /dev/tty with masked input (shows * per keystroke)."""
     try:
@@ -169,9 +205,10 @@ def _load_config(config_path: Path) -> dict:
 
 def _save_config(config_path: Path, config: dict) -> None:
     """Save YAML config file with restricted permissions."""
-    with open(config_path, "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
+    fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     try:
-        os.chmod(config_path, 0o600)
-    except OSError:
-        pass
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(config, f, default_flow_style=False)
+    except BaseException:
+        os.close(fd)
+        raise
