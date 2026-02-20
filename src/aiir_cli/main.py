@@ -1,4 +1,4 @@
-"""AIR CLI entry point.
+"""AIIR CLI entry point.
 
 Human-only actions that the LLM orchestrator cannot bypass:
 - approve/reject findings and timeline events (/dev/tty + optional PIN)
@@ -12,18 +12,18 @@ from __future__ import annotations
 import argparse
 import sys
 
-from air_cli.identity import get_analyst_identity, warn_if_unconfigured
-from air_cli.commands.approve import cmd_approve
-from air_cli.commands.reject import cmd_reject
-from air_cli.commands.review import cmd_review
-from air_cli.commands.execute import cmd_exec
-from air_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
-from air_cli.commands.config import cmd_config
+from aiir_cli.identity import get_analyst_identity, warn_if_unconfigured
+from aiir_cli.commands.approve import cmd_approve
+from aiir_cli.commands.reject import cmd_reject
+from aiir_cli.commands.review import cmd_review
+from aiir_cli.commands.execute import cmd_exec
+from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
+from aiir_cli.commands.config import cmd_config
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="air",
+        prog="aiir",
         description="Applied IR — forensic investigation CLI",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s 0.1.0")
@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_reg.add_argument("--description", default="", help="Description of evidence")
 
     # config
-    p_config = sub.add_parser("config", help="Configure AIR settings")
+    p_config = sub.add_parser("config", help="Configure AIIR settings")
     p_config.add_argument("--analyst", help="Set analyst identity")
     p_config.add_argument("--show", action="store_true", help="Show current configuration")
     p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current analyst")

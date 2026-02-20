@@ -16,26 +16,26 @@ from pathlib import Path
 def get_case_dir(case_id: str | None = None) -> Path:
     """Resolve the active case directory."""
     if case_id:
-        cases_dir = Path(os.environ.get("AIR_CASES_DIR", "cases"))
+        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
         case_dir = cases_dir / case_id
         if not case_dir.exists():
             print(f"Case not found: {case_id}", file=sys.stderr)
             sys.exit(1)
         return case_dir
 
-    # Check AIR_CASE_DIR env var
-    env_dir = os.environ.get("AIR_CASE_DIR")
+    # Check AIIR_CASE_DIR env var
+    env_dir = os.environ.get("AIIR_CASE_DIR")
     if env_dir:
         return Path(env_dir)
 
-    # Check .air/active_case pointer
-    active_file = Path(".air") / "active_case"
+    # Check .aiir/active_case pointer
+    active_file = Path(".aiir") / "active_case"
     if active_file.exists():
         case_id = active_file.read_text().strip()
-        cases_dir = Path(os.environ.get("AIR_CASES_DIR", "cases"))
+        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
         return cases_dir / case_id
 
-    print("No active case. Use --case <id> or set AIR_CASE_DIR.", file=sys.stderr)
+    print("No active case. Use --case <id> or set AIIR_CASE_DIR.", file=sys.stderr)
     sys.exit(1)
 
 

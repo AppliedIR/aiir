@@ -1,4 +1,4 @@
-"""Tests for air exec command."""
+"""Tests for aiir exec command."""
 
 import json
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from air_cli.commands.execute import cmd_exec
+from aiir_cli.commands.execute import cmd_exec
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ class FakeArgs:
 
 class TestExec:
     def test_audit_written_on_exec(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["echo", "hello"], purpose="test command")
         with patch("builtins.input", return_value="y"):
             cmd_exec(args, identity)
@@ -43,7 +43,7 @@ class TestExec:
         assert entry["analyst"] == "analyst1"
 
     def test_cancelled_exec_writes_nothing(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["echo", "hello"], purpose="test")
         with patch("builtins.input", return_value="n"):
             cmd_exec(args, identity)
@@ -51,7 +51,7 @@ class TestExec:
         assert not log_file.exists()
 
     def test_actions_md_appended(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["echo", "hello"], purpose="test output")
         with patch("builtins.input", return_value="y"):
             cmd_exec(args, identity)

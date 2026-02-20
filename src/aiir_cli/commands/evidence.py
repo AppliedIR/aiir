@@ -10,7 +10,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from air_cli.case_io import get_case_dir
+from aiir_cli.case_io import get_case_dir
 
 
 def cmd_lock_evidence(args, identity: dict) -> None:
@@ -58,7 +58,7 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
 
     _log_evidence_action(case_dir, "unlock", "Unlocked evidence directory", identity)
     print("Evidence directory unlocked (755). Files remain read-only.")
-    print("Use 'air register-evidence <path>' after adding new files.")
+    print("Use 'aiir register-evidence <path>' after adding new files.")
 
 
 def cmd_register_evidence(args, identity: dict) -> None:

@@ -10,8 +10,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from air_cli.approval_auth import require_confirmation
-from air_cli.case_io import (
+from aiir_cli.approval_auth import require_confirmation
+from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     load_timeline,
@@ -24,7 +24,7 @@ from air_cli.case_io import (
 def cmd_approve(args, identity: dict) -> None:
     """Approve findings/timeline events."""
     case_dir = get_case_dir(getattr(args, "case", None))
-    config_path = Path.home() / ".air" / "config.yaml"
+    config_path = Path.home() / ".aiir" / "config.yaml"
 
     if args.ids:
         _approve_specific(case_dir, args.ids, identity, config_path)

@@ -9,8 +9,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from air_cli.approval_auth import require_confirmation
-from air_cli.case_io import (
+from aiir_cli.approval_auth import require_confirmation
+from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     load_timeline,
@@ -23,7 +23,7 @@ from air_cli.case_io import (
 def cmd_reject(args, identity: dict) -> None:
     """Reject specific findings/timeline events."""
     case_dir = get_case_dir(getattr(args, "case", None))
-    config_path = Path.home() / ".air" / "config.yaml"
+    config_path = Path.home() / ".aiir" / "config.yaml"
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)
     to_reject = []

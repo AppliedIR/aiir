@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from air_cli.case_io import (
+from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     save_findings,
@@ -28,19 +28,19 @@ def case_dir(tmp_path):
 
 class TestGetCaseDir:
     def test_from_env(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(tmp_path))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(tmp_path))
         assert get_case_dir() == tmp_path
 
     def test_from_explicit_id(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("AIR_CASES_DIR", str(tmp_path))
+        monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
         case = tmp_path / "INC-TEST"
         case.mkdir()
         result = get_case_dir("INC-TEST")
         assert result == case
 
     def test_no_case_exits(self, monkeypatch):
-        monkeypatch.delenv("AIR_CASE_DIR", raising=False)
-        monkeypatch.delenv("AIR_CASES_DIR", raising=False)
+        monkeypatch.delenv("AIIR_CASE_DIR", raising=False)
+        monkeypatch.delenv("AIIR_CASES_DIR", raising=False)
         with pytest.raises(SystemExit):
             get_case_dir()
 

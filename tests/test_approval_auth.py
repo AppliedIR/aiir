@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
-from air_cli.approval_auth import (
+from aiir_cli.approval_auth import (
     has_pin,
     setup_pin,
     verify_pin,
@@ -20,12 +20,12 @@ from air_cli.approval_auth import (
 @pytest.fixture
 def config_path(tmp_path):
     """Config file path in a temp directory."""
-    return tmp_path / ".air" / "config.yaml"
+    return tmp_path / ".aiir" / "config.yaml"
 
 
 class TestPinSetup:
     def test_setup_pin_creates_config(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
             setup_pin(config_path, "steve")
         assert config_path.exists()
         config = yaml.safe_load(config_path.read_text())
@@ -34,12 +34,12 @@ class TestPinSetup:
         assert "salt" in config["pins"]["steve"]
 
     def test_setup_pin_verify_roundtrip(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["mypin", "mypin"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["mypin", "mypin"]):
             setup_pin(config_path, "analyst1")
         assert verify_pin(config_path, "analyst1", "mypin")
 
     def test_wrong_pin_fails(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["correct", "correct"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["correct", "correct"]):
             setup_pin(config_path, "analyst1")
         assert not verify_pin(config_path, "analyst1", "wrong")
 
@@ -47,17 +47,17 @@ class TestPinSetup:
         assert not has_pin(config_path, "analyst1")
 
     def test_has_pin_true_after_setup(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
             setup_pin(config_path, "analyst1")
         assert has_pin(config_path, "analyst1")
 
     def test_setup_pin_mismatch_exits(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["pin1", "pin2"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["pin1", "pin2"]):
             with pytest.raises(SystemExit):
                 setup_pin(config_path, "analyst1")
 
     def test_setup_pin_empty_exits(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["", ""]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["", ""]):
             with pytest.raises(SystemExit):
                 setup_pin(config_path, "analyst1")
 
@@ -65,7 +65,7 @@ class TestPinSetup:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w") as f:
             yaml.dump({"analyst": "steve"}, f)
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
             setup_pin(config_path, "steve")
         config = yaml.safe_load(config_path.read_text())
         assert config["analyst"] == "steve"
@@ -74,18 +74,18 @@ class TestPinSetup:
 
 class TestPinReset:
     def test_reset_pin_requires_current(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["old", "old"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["old", "old"]):
             setup_pin(config_path, "analyst1")
         # Wrong current PIN
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["wrong"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["wrong"]):
             with pytest.raises(SystemExit):
                 reset_pin(config_path, "analyst1")
 
     def test_reset_pin_success(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["old", "old"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["old", "old"]):
             setup_pin(config_path, "analyst1")
         # Correct current, then new PIN twice
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["old", "new", "new"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["old", "new", "new"]):
             reset_pin(config_path, "analyst1")
         assert verify_pin(config_path, "analyst1", "new")
         assert not verify_pin(config_path, "analyst1", "old")
@@ -97,16 +97,16 @@ class TestPinReset:
 
 class TestRequireConfirmation:
     def test_pin_mode_correct(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
             setup_pin(config_path, "analyst1")
-        with patch("air_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
             mode = require_confirmation(config_path, "analyst1")
         assert mode == "pin"
 
     def test_pin_mode_wrong_exits(self, config_path):
-        with patch("air_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+        with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
             setup_pin(config_path, "analyst1")
-        with patch("air_cli.approval_auth._getpass_prompt", return_value="wrong"):
+        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="wrong"):
             with pytest.raises(SystemExit):
                 require_confirmation(config_path, "analyst1")
 

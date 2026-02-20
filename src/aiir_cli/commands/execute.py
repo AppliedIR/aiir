@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from air_cli.case_io import get_case_dir
+from aiir_cli.case_io import get_case_dir
 
 
 def cmd_exec(args, identity: dict) -> None:
@@ -16,7 +16,7 @@ def cmd_exec(args, identity: dict) -> None:
     case_dir = get_case_dir(getattr(args, "case", None))
 
     if not args.cmd:
-        print("No command specified. Usage: air exec --purpose '...' -- <command>", file=sys.stderr)
+        print("No command specified. Usage: aiir exec --purpose '...' -- <command>", file=sys.stderr)
         sys.exit(1)
 
     # Strip leading '--' if present
@@ -93,7 +93,7 @@ def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
 
     # Also append to ACTIONS.md
     ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    md_entry = f"### {ts}\n\n**Executed by:** {identity['analyst']} (via `air exec`)\n"
+    md_entry = f"### {ts}\n\n**Executed by:** {identity['analyst']} (via `aiir exec`)\n"
     md_entry += f"**Purpose:** {purpose}\n**Command:** `{command}`\n**Exit code:** {exit_code}\n\n---\n\n"
     with open(case_dir / "ACTIONS.md", "a") as f:
         f.write(md_entry)

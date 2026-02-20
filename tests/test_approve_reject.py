@@ -9,9 +9,9 @@ from unittest.mock import patch, MagicMock
 import pytest
 import yaml
 
-from air_cli.commands.approve import cmd_approve, _approve_specific
-from air_cli.commands.reject import cmd_reject
-from air_cli.case_io import load_findings, save_findings, load_timeline, save_timeline, load_approval_log
+from aiir_cli.commands.approve import cmd_approve, _approve_specific
+from aiir_cli.commands.reject import cmd_reject
+from aiir_cli.case_io import load_findings, save_findings, load_timeline, save_timeline, load_approval_log
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def case_dir(tmp_path, monkeypatch):
     with open(case_path / ".audit" / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
-    monkeypatch.setenv("AIR_CASE_DIR", str(case_path))
+    monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
     return case_path
 
 
@@ -40,7 +40,7 @@ def identity():
 
 @pytest.fixture
 def config_path(tmp_path):
-    return tmp_path / ".air" / "config.yaml"
+    return tmp_path / ".aiir" / "config.yaml"
 
 
 @pytest.fixture
@@ -90,7 +90,7 @@ def _mock_tty_confirm():
 class TestApproveSpecific:
     def test_approve_finding(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
-        with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             _approve_specific(case_dir, ["F-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
@@ -98,7 +98,7 @@ class TestApproveSpecific:
 
     def test_approve_timeline_event(self, case_dir, identity, staged_timeline, config_path):
         mock_tty = _mock_tty_confirm()
-        with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             _approve_specific(case_dir, ["T-001"], identity, config_path)
         timeline = load_timeline(case_dir)
         assert timeline[0]["status"] == "APPROVED"
@@ -111,7 +111,7 @@ class TestApproveSpecific:
 
     def test_approve_already_approved(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
-        with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             _approve_specific(case_dir, ["F-001"], identity, config_path)
         # Try approving again — should say "not found or not DRAFT"
         _approve_specific(case_dir, ["F-001"], identity, config_path)
@@ -120,7 +120,7 @@ class TestApproveSpecific:
 
     def test_approval_log_written(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
-        with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             _approve_specific(case_dir, ["F-001"], identity, config_path)
         log = load_approval_log(case_dir)
         assert len(log) == 1
@@ -132,7 +132,7 @@ class TestApproveSpecific:
     def test_approval_cancelled(self, case_dir, identity, staged_finding, config_path):
         mock_tty = MagicMock()
         mock_tty.readline.return_value = "n\n"
-        with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             with pytest.raises(SystemExit):
                 _approve_specific(case_dir, ["F-001"], identity, config_path)
         findings = load_findings(case_dir)
@@ -145,7 +145,7 @@ class TestApproveInteractive:
         save_timeline(case_dir, [])
         args = Namespace(ids=[], case=None, analyst=None)
         # Mock Path.home() to point to temp dir to avoid picking up real PIN
-        with patch("air_cli.commands.approve.Path.home", return_value=case_dir.parent):
+        with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
             cmd_approve(args, identity)
         captured = capsys.readouterr()
         assert "No staged items" in captured.out
@@ -155,8 +155,8 @@ class TestApproveInteractive:
         args = Namespace(ids=[], case=None, analyst=None)
         # Simulate: Enter (approve), then tty confirmation
         with patch("builtins.input", side_effect=["", ""]):
-            with patch("air_cli.commands.approve.Path.home", return_value=case_dir.parent):
-                with patch("air_cli.approval_auth.open", return_value=mock_tty):
+            with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
+                with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
@@ -166,8 +166,8 @@ class TestReject:
     def test_reject_finding(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
         args = Namespace(ids=["F-001"], reason="Insufficient evidence", case=None, analyst=None)
-        with patch("air_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
+            with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"
@@ -176,8 +176,8 @@ class TestReject:
     def test_reject_writes_log(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
         args = Namespace(ids=["F-001"], reason="Bad data", case=None, analyst=None)
-        with patch("air_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
+            with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
         log = load_approval_log(case_dir)
         assert log[0]["action"] == "REJECTED"
@@ -186,7 +186,7 @@ class TestReject:
 
     def test_reject_nonexistent(self, case_dir, identity, staged_finding, capsys):
         args = Namespace(ids=["F-999"], reason="nope", case=None, analyst=None)
-        with patch("air_cli.commands.reject.Path.home", return_value=case_dir.parent):
+        with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
             cmd_reject(args, identity)
         captured = capsys.readouterr()
         assert "not found or not DRAFT" in captured.err
@@ -194,8 +194,8 @@ class TestReject:
     def test_reject_no_reason(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
         args = Namespace(ids=["F-001"], reason="", case=None, analyst=None)
-        with patch("air_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("air_cli.approval_auth.open", return_value=mock_tty):
+        with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
+            with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"

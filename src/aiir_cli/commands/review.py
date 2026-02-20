@@ -1,15 +1,15 @@
 """Review case status, audit trail, evidence integrity, and findings.
 
 Supports multiple view modes:
-  air review                        — case summary
-  air review --findings             — finding summary table
-  air review --findings --detail    — full findings with all fields
-  air review --findings --verify    — cross-check against approvals.jsonl
-  air review --iocs                 — IOCs grouped by approval status
-  air review --timeline             — timeline summary
-  air review --timeline --detail    — full timeline with evidence refs
-  air review --evidence             — evidence registry
-  air review --audit                — audit trail
+  aiir review                        — case summary
+  aiir review --findings             — finding summary table
+  aiir review --findings --detail    — full findings with all fields
+  aiir review --findings --verify    — cross-check against approvals.jsonl
+  aiir review --iocs                 — IOCs grouped by approval status
+  aiir review --timeline             — timeline summary
+  aiir review --timeline --detail    — full timeline with evidence refs
+  aiir review --evidence             — evidence registry
+  aiir review --audit                — audit trail
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 
 import yaml
 
-from air_cli.case_io import (
+from aiir_cli.case_io import (
     get_case_dir,
     load_findings,
     load_timeline,
@@ -344,7 +344,7 @@ def _show_audit(case_dir: Path, limit: int) -> None:
                 continue
             entry = json.loads(line)
             entry["tool"] = "approval"
-            entry["mcp"] = "air-cli"
+            entry["mcp"] = "aiir-cli"
             entries.append(entry)
 
     entries.sort(key=lambda e: e.get("ts", ""))

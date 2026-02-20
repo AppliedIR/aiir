@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from air_cli.commands.review import cmd_review, _extract_iocs_from_findings, _extract_text_iocs
-from air_cli.case_io import save_findings, save_timeline, write_approval_log, verify_approval_integrity
+from aiir_cli.commands.review import cmd_review, _extract_iocs_from_findings, _extract_text_iocs
+from aiir_cli.case_io import save_findings, save_timeline, write_approval_log, verify_approval_integrity
 
 
 @pytest.fixture
@@ -26,7 +26,7 @@ def case_dir(tmp_path, monkeypatch):
     with open(case_path / ".audit" / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
-    monkeypatch.setenv("AIR_CASE_DIR", str(case_path))
+    monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
     return case_path
 
 

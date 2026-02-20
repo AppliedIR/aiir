@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from air_cli.commands.evidence import cmd_lock_evidence, cmd_register_evidence
+from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_register_evidence
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ class FakeArgs:
 
 class TestLockEvidence:
     def test_lock_sets_444_perms(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         ev_file = case_dir / "evidence" / "sample.bin"
         ev_file.write_bytes(b"evidence data")
         cmd_lock_evidence(FakeArgs(), identity)
@@ -44,7 +44,7 @@ class TestLockEvidence:
 
 class TestRegisterEvidence:
     def test_register_updates_evidence_json(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         ev_file = case_dir / "evidence" / "malware.bin"
         ev_file.write_bytes(b"malware content")
         args = FakeArgs(path=str(ev_file), description="Test malware")
@@ -55,7 +55,7 @@ class TestRegisterEvidence:
         assert reg["files"][0]["description"] == "Test malware"
 
     def test_register_sets_readonly(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         ev_file = case_dir / "evidence" / "data.bin"
         ev_file.write_bytes(b"data")
         args = FakeArgs(path=str(ev_file))

@@ -1,23 +1,23 @@
-# AIR CLI
+# AIIR CLI
 
-Command-line interface for **human-in-the-loop forensic investigation management**. The `air` CLI provides the actions that only a human analyst should perform: approving findings, rejecting conclusions, managing evidence integrity, and executing forensic commands with audit trails.
+Command-line interface for **human-in-the-loop forensic investigation management**. The `aiir` CLI provides the actions that only a human analyst should perform: approving findings, rejecting conclusions, managing evidence integrity, and executing forensic commands with audit trails.
 
 ## Installation Options
 
-### Option A: As Part of AIR (Recommended)
+### Option A: As Part of AIIR (Recommended)
 
-This CLI is designed as a component of the AIR (Applied Incident Response) platform, working alongside [forensic-mcp](https://github.com/AppliedIR/forensic-mcp).
+This CLI is designed as a component of the AIIR (Applied Incident Response) platform, working alongside [forensic-mcp](https://github.com/AppliedIR/forensic-mcp).
 
 ```bash
-git clone https://github.com/AppliedIR/cli.git
-cd cli
+git clone https://github.com/AppliedIR/aiir.git
+cd aiir
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
 ### Option B: Standalone Installation
 
-Use standalone when you need the approval workflow without the full AIR platform.
+Use standalone when you need the approval workflow without the full AIIR platform.
 
 See the **Quick Start** section below.
 
@@ -27,9 +27,9 @@ See the **Quick Start** section below.
 
 ## Overview
 
-The AI assistant (via forensic-mcp) stages findings and timeline events as DRAFT. The `air` CLI is how a human analyst reviews, approves, or rejects those items. This separation is structural — the AI cannot approve its own work.
+The AI assistant (via forensic-mcp) stages findings and timeline events as DRAFT. The `aiir` CLI is how a human analyst reviews, approves, or rejects those items. This separation is structural — the AI cannot approve its own work.
 
-> **Important:** The `air` CLI is a human-only tool. It is not designed to be called by the AI orchestrator. Every approval and rejection is logged with analyst identity, timestamp, and OS user for full accountability.
+> **Important:** The `aiir` CLI is a human-only tool. It is not designed to be called by the AI orchestrator. Every approval and rejection is logged with analyst identity, timestamp, and OS user for full accountability.
 
 **Key Capabilities:**
 
@@ -46,66 +46,66 @@ The AI assistant (via forensic-mcp) stages findings and timeline events as DRAFT
 
 ```bash
 # Approve specific findings/timeline events by ID
-air approve F-001 F-002 T-001
+aiir approve F-001 F-002 T-001
 
 # Review all staged items, then batch approve
-air approve --all
+aiir approve --all
 
 # Interactive one-by-one review
-air approve --review
+aiir approve --review
 ```
 
 ### reject
 
 ```bash
 # Reject with required reason
-air reject F-003 --reason "Insufficient evidence for attribution"
+aiir reject F-003 --reason "Insufficient evidence for attribution"
 ```
 
 ### review
 
 ```bash
 # Case summary (default)
-air review
+aiir review
 
 # Findings grouped by status
-air review --findings
+aiir review --findings
 
 # Evidence registry and access log
-air review --evidence
+aiir review --evidence
 
 # Audit trail (last N entries)
-air review --audit --limit 100
+aiir review --audit --limit 100
 ```
 
 ### exec
 
 ```bash
 # Execute forensic command with audit trail
-air exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
+aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
 ```
 
 ### evidence
 
 ```bash
 # Register evidence file (SHA256 hash + chmod 444)
-air register-evidence /path/to/image.E01 --description "Disk image from workstation"
+aiir register-evidence /path/to/image.E01 --description "Disk image from workstation"
 
 # Lock evidence directory (all files read-only, dir set to 555)
-air lock-evidence
+aiir lock-evidence
 
 # Unlock evidence directory for new files (interactive confirmation)
-air unlock-evidence
+aiir unlock-evidence
 ```
 
 ### config
 
 ```bash
 # Set analyst identity
-air config --analyst "jane.doe"
+aiir config --analyst "jane.doe"
 
 # Show current configuration
-air config --show
+aiir config --show
 ```
 
 ## Analyst Identity
@@ -114,9 +114,9 @@ Every approval, rejection, and execution is logged with analyst identity. Resolu
 
 | Priority | Source | Example |
 |----------|--------|---------|
-| 1 | `--analyst` flag | `air approve --analyst jane.doe F-001` |
-| 2 | `AIR_ANALYST` env var | `export AIR_ANALYST=jane.doe` |
-| 3 | `~/.air/config.yaml` | `analyst: jane.doe` |
+| 1 | `--analyst` flag | `aiir approve --analyst jane.doe F-001` |
+| 2 | `AIIR_ANALYST` env var | `export AIIR_ANALYST=jane.doe` |
+| 3 | `~/.aiir/config.yaml` | `analyst: jane.doe` |
 | 4 | OS username (fallback) | Warns if unconfigured |
 
 The OS username is always captured alongside the explicit analyst identity for accountability.
@@ -125,30 +125,30 @@ The OS username is always captured alongside the explicit analyst identity for a
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AIR_ANALYST` | (none) | Analyst identity for audit trail |
-| `AIR_CASE_DIR` | (none) | Active case directory |
-| `AIR_CASES_DIR` | `cases` | Root directory for case storage |
+| `AIIR_ANALYST` | (none) | Analyst identity for audit trail |
+| `AIIR_CASE_DIR` | (none) | Active case directory |
+| `AIIR_CASES_DIR` | `cases` | Root directory for case storage |
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/AppliedIR/cli.git
-cd cli
+git clone https://github.com/AppliedIR/aiir.git
+cd aiir
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .
 
 # Set your identity
-air config --analyst "your.name"
+aiir config --analyst "your.name"
 
 # Review a case
-air review --case INC-2026-0219120000
+aiir review --case INC-2026-0219120000
 ```
 
 ## Project Structure
 
 ```
-cli/
-├── src/air_cli/
+aiir/
+├── src/aiir_cli/
 │   ├── __init__.py
 │   ├── main.py                  # Entry point and argument parser
 │   ├── identity.py              # Analyst identity resolution
@@ -176,12 +176,12 @@ cli/
 .venv/bin/pytest tests/ -v
 
 # Run with coverage
-.venv/bin/pytest tests/ --cov=air_cli --cov-report=term-missing
+.venv/bin/pytest tests/ --cov=aiir_cli --cov-report=term-missing
 ```
 
 ## Responsible Use
 
-This tool exists because AI-assisted forensic analysis requires human oversight. The `air` CLI enforces that boundary.
+This tool exists because AI-assisted forensic analysis requires human oversight. The `aiir` CLI enforces that boundary.
 
 **Core principles:**
 

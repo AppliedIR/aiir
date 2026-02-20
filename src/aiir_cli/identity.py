@@ -2,8 +2,8 @@
 
 Always captures os_user. Explicit analyst identity resolved by priority:
 1. --analyst flag (highest)
-2. AIR_ANALYST env var
-3. .air/config.yaml analyst field
+2. AIIR_ANALYST env var
+3. .aiir/config.yaml analyst field
 4. Falls back to OS username
 """
 
@@ -32,13 +32,13 @@ def get_analyst_identity(flag_override: str | None = None) -> dict:
     if flag_override:
         return {"os_user": os_user, "analyst": flag_override, "analyst_source": "flag"}
 
-    # Priority 2: AIR_ANALYST env var
-    env_analyst = os.environ.get("AIR_ANALYST")
+    # Priority 2: AIIR_ANALYST env var
+    env_analyst = os.environ.get("AIIR_ANALYST")
     if env_analyst:
         return {"os_user": os_user, "analyst": env_analyst, "analyst_source": "env"}
 
-    # Priority 3: .air/config.yaml
-    config_path = Path.home() / ".air" / "config.yaml"
+    # Priority 3: .aiir/config.yaml
+    config_path = Path.home() / ".aiir" / "config.yaml"
     if config_path.exists():
         try:
             with open(config_path) as f:
@@ -58,7 +58,7 @@ def warn_if_unconfigured(identity: dict) -> None:
     if identity["analyst_source"] == "os_user":
         print(
             f"No analyst identity configured. Using OS user '{identity['os_user']}'.\n"
-            f"Run 'air config --analyst <name>' to set your identity.\n"
+            f"Run 'aiir config --analyst <name>' to set your identity.\n"
             f"Tip: For audit accountability, use individual OS accounts rather than shared ones.\n",
             file=sys.stderr,
         )
