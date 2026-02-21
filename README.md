@@ -49,44 +49,42 @@ AIIR is a multi-component forensic investigation platform. The components can be
 ```mermaid
 graph TB
     subgraph clients ["LLM Clients (any MCP-compatible)"]
-        CC[Claude Code]
-        CD[Claude Desktop]
-        CU[Cursor]
-        OW[OpenWebUI]
-        OT["Other (Goose, OpenCode, ...)"]
+        CC["Claude Code / Cursor / Claude Desktop /<br/>OpenWebUI / Goose / OpenCode / ..."]
     end
 
-    subgraph api ["API Layer"]
-        GW["aiir-gateway :4508<br/>(REST + MCP Streamable HTTP)"]
-        WT["wintools-mcp :4624<br/>(MCP Streamable HTTP)"]
-    end
-
-    subgraph sift ["SIFT MCP Servers (stdio)"]
+    subgraph sift ["SIFT Workstation"]
+        GW["aiir-gateway :4508<br/>(optional — for remote or multi-user access)"]
         FM[forensic-mcp<br/>Case management + discipline]
         SM[sift-mcp<br/>Linux tool execution]
         FR[forensic-rag-mcp<br/>Knowledge search]
         WTR[windows-triage-mcp<br/>Baseline validation]
         OC[opencti-mcp<br/>Threat intelligence]
-    end
-
-    subgraph data ["Data Layer"]
-        FK[forensic-knowledge<br/>YAML data package]
         CASE["Case Directory<br/>examiners/{slug}/"]
-    end
-
-    subgraph human ["Human Layer"]
         CLI["aiir CLI<br/>approve / reject / review"]
+
+        GW -->|stdio| FM
+        GW -->|stdio| SM
+        GW -->|stdio| FR
+        GW -->|stdio| WTR
+        GW -->|stdio| OC
+        FM --> CASE
+        CLI --> CASE
     end
 
-    clients -->|"streamable-http<br/>or stdio"| api
-    clients -->|stdio| sift
-    GW -->|stdio| sift
+    subgraph winbox ["Windows Forensic Workstation (optional)"]
+        WT["wintools-mcp :4624"]
+    end
+
+    FK["forensic-knowledge<br/>(shared YAML data package)"]
+
+    CC -->|"streamable-http<br/>(remote access)"| GW
+    CC -->|"streamable-http"| WT
     FM --> FK
     SM --> FK
-    FM --> CASE
-    CLI --> CASE
-    clients -.->|streamable-http| WT
+    WT --> FK
 ```
+
+When the LLM client runs directly on SIFT, it can connect to MCPs via stdio (no gateway needed). When the client is on a different machine, the gateway aggregates SIFT MCPs behind a single HTTP endpoint. wintools-mcp is an independent server on Windows — not managed by the gateway.
 
 ### Deployment Topologies
 
@@ -118,7 +116,7 @@ graph LR
     end
 ```
 
-Setup: `aiir setup` (local detection) or `aiir setup client --sift=http://127.0.0.1:4508` (if gateway is running).
+Setup: `aiir setup` (auto-detects locally installed MCPs and generates stdio config).
 
 #### SIFT + Windows Forensic VM
 
