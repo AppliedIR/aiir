@@ -4,17 +4,15 @@ AI-assisted incident response platform -- CLI, installers, and architecture refe
 
 ## Platform Architecture
 
-AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others.
+AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others. The LLM client and the aiir CLI are the two human-facing tools -- they always run on the same machine (the SIFT workstation).
 
 ### Component Map
 
 ```mermaid
 graph TB
-    subgraph clients ["LLM Clients (any MCP-compatible)"]
-        CC["Claude Code / Cursor / Claude Desktop /<br/>OpenWebUI / Goose / OpenCode / ..."]
-    end
-
     subgraph sift ["SIFT Workstation"]
+        CC["LLM Client<br/>(Claude Code / Cursor / Claude Desktop /<br/>OpenWebUI / Goose / OpenCode / ...)"]
+        CLI["aiir CLI<br/>Human-only terminal tool"]
         GW["aiir-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Case management + discipline"]
         SM["sift-mcp<br/>Linux tool execution"]
@@ -23,8 +21,8 @@ graph TB
         OC["opencti-mcp<br/>Threat intelligence"]
         FK["forensic-knowledge<br/>(shared YAML data package)"]
         CASE["Case Directory<br/>examiners/{slug}/"]
-        CLI["aiir CLI<br/>Human-only terminal tool"]
 
+        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
@@ -42,7 +40,6 @@ graph TB
         WT --> FK2
     end
 
-    CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WT
 ```
 
@@ -92,11 +89,9 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph analyst ["Analyst Machine"]
-        CC["LLM Client"]
-    end
-
     subgraph sift ["SIFT Workstation"]
+        CC["LLM Client"]
+        CLI["aiir CLI"]
         GW["aiir-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
@@ -104,8 +99,8 @@ graph LR
         WTR[windows-triage-mcp]
         OC[opencti-mcp]
         CASE[Case Directory]
-        CLI[aiir CLI]
 
+        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
@@ -119,7 +114,6 @@ graph LR
         WT["wintools-mcp<br/>:4624"]
     end
 
-    CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WT
 ```
 
@@ -127,30 +121,28 @@ graph LR
 
 ```mermaid
 graph LR
-    subgraph e1 ["Examiner 1"]
+    subgraph e1 ["Examiner 1 Machine"]
         C1["LLM Client"]
+        CLI1["aiir CLI"]
     end
-    subgraph e2 ["Examiner 2"]
+    subgraph e2 ["Examiner 2 Machine"]
         C2["LLM Client"]
-    end
-    subgraph dashboard ["SOC Dashboard"]
-        OW[OpenWebUI]
+        CLI2["aiir CLI"]
     end
 
     subgraph sift ["SIFT Server"]
         GW["aiir-gateway<br/>:4508"]
         MCPs["MCP Servers<br/>(forensic, sift, rag, triage, opencti)"]
         CASE["Shared Case Dir<br/>examiners/steve/<br/>examiners/jane/"]
-        CLI["aiir CLI<br/>(per-examiner)"]
 
         GW --> MCPs
         MCPs --> CASE
-        CLI --> CASE
     end
 
-    C1 -->|"API key -> steve"| GW
-    C2 -->|"API key -> jane"| GW
-    OW -->|"API key -> dashboard"| GW
+    C1 -->|"API key → steve"| GW
+    C2 -->|"API key → jane"| GW
+    CLI1 -->|"NFS / SMB"| CASE
+    CLI2 -->|"NFS / SMB"| CASE
 ```
 
 ### Human-in-the-Loop Workflow
