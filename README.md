@@ -275,42 +275,23 @@ git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./scripts/setup-sift.sh
 ```
 
-The SIFT installer handles all platform components (MCPs, gateway, forensic-knowledge) and the aiir CLI. Three tiers:
-
-```bash
-./scripts/setup-sift.sh                                                # interactive wizard
-./scripts/setup-sift.sh --quick -y --examiner=steve --client=claude-code  # unattended
-./scripts/setup-sift.sh --recommended -y --client=cursor               # adds RAG + triage
-```
+The interactive SIFT installer handles all platform components (MCPs, gateway, forensic-knowledge), the aiir CLI, and LLM client configuration.
 
 ### Windows Forensic Workstation (optional)
 
 ```powershell
+# Option 1: git clone
 git clone https://github.com/AppliedIR/wintools-mcp.git; cd wintools-mcp
+
+# Option 2: download ZIP (no git required)
+Invoke-WebRequest https://github.com/AppliedIR/wintools-mcp/archive/refs/heads/main.zip -OutFile wintools.zip
+Expand-Archive wintools.zip -DestinationPath .; cd wintools-mcp-main
+```
+
+Then run the installer:
+
+```powershell
 .\scripts\setup-windows.ps1
-```
-
-### aiir CLI Only
-
-If you only need the CLI (e.g. on a separate analyst machine):
-
-```bash
-git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./scripts/setup-aiir.sh
-```
-
-### Configure LLM Client
-
-```bash
-aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624
-```
-
-### First Investigation
-
-```bash
-aiir case init "Ransomware Investigation"
-# ... AI stages findings via MCP tools ...
-aiir approve    # Interactive review of AI-staged findings
 ```
 
 ## Security Considerations
