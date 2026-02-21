@@ -168,44 +168,18 @@ graph LR
         RM[remnux-mcp]
     end
 
-    subgraph mslearn ["External"]
-        ML[MS Learn MCP]
+    subgraph internet ["Internet"]
+        ML["MS Learn MCP<br/>(HTTPS)"]
+        ZE["Zeltser IR Writing MCP<br/>(HTTPS)"]
     end
 
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
     CC -->|"streamable-http"| RM
-    CC -->|"streamable-http"| ML
-    OC -->|"HTTPS"| OCTI
+    CC -->|"HTTPS"| ML
+    CC -->|"HTTPS"| ZE
+    OC -->|"HTTP(S)"| OCTI
     CLI -->|"NFS / SMB"| CASE
-```
-
-#### Multi-Examiner Team
-
-```mermaid
-graph LR
-    subgraph e1 ["Examiner 1"]
-        C1["LLM Client<br/>(human interface)"]
-        CLI1["aiir CLI<br/>(human interface)"]
-    end
-    subgraph e2 ["Examiner 2"]
-        C2["LLM Client<br/>(human interface)"]
-        CLI2["aiir CLI<br/>(human interface)"]
-    end
-
-    subgraph sift ["SIFT Server"]
-        GW["aiir-gateway<br/>:4508"]
-        MCPs["MCP Servers<br/>(forensic, sift, rag, triage, opencti)"]
-        CASE["Shared Case Dir<br/>examiners/steve/<br/>examiners/jane/"]
-
-        GW --> MCPs
-        MCPs --> CASE
-    end
-
-    C1 -->|"API key → steve"| GW
-    C2 -->|"API key → jane"| GW
-    CLI1 -->|"NFS / SMB"| CASE
-    CLI2 -->|"NFS / SMB"| CASE
 ```
 
 ### Human-in-the-Loop Workflow
