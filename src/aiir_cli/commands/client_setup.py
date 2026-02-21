@@ -161,7 +161,7 @@ def _wizard_client() -> str:
         "3": "cursor",
         "4": "librechat",
         "5": "other",
-    }.get(choice, "claude-code")
+    }.get(choice, "other")
 
 
 def _prompt(message: str, default: str = "") -> str:
@@ -235,8 +235,8 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
     lines = ["# AIIR MCP servers — merge into your librechat.yaml", "mcpServers:"]
     for name, info in servers.items():
         lines.append(f"  {name}:")
-        lines.append(f"    type: {info['type']}")
-        lines.append(f"    url: {info['url']}")
+        lines.append(f"    type: \"{info['type']}\"")
+        lines.append(f"    url: \"{info['url']}\"")
         lines.append("    timeout: 60000")
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_600(path, "\n".join(lines) + "\n")

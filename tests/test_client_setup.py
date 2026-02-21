@@ -197,9 +197,9 @@ class TestCmdSetupClient:
         assert config_path.is_file()
         content = config_path.read_text()
         assert "mcpServers:" in content
-        assert "type: streamable-http" in content
-        assert "http://127.0.0.1:4508/mcp" in content
-        assert "http://192.168.1.20:4624/mcp" in content
+        assert 'type: "streamable-http"' in content
+        assert 'url: "http://127.0.0.1:4508/mcp"' in content
+        assert 'url: "http://192.168.1.20:4624/mcp"' in content
         assert "timeout: 60000" in content
         assert "zeltser-ir-writing" in content
 
@@ -223,6 +223,11 @@ class TestWizardClient:
         monkeypatch.setattr("builtins.input", lambda _: "5")
         assert _wizard_client() == "other"
 
-    def test_default_is_claude_code(self, monkeypatch):
+    def test_unrecognized_falls_back_to_other(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "99")
+        assert _wizard_client() == "other"
+
+    def test_empty_input_defaults_to_choice_1(self, monkeypatch):
+        """Empty input uses prompt default '1', which maps to claude-code."""
         monkeypatch.setattr("builtins.input", lambda _: "")
         assert _wizard_client() == "claude-code"
