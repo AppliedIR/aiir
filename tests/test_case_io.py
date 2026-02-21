@@ -7,12 +7,14 @@ from pathlib import Path
 import pytest
 
 from aiir_cli.case_io import (
+    compute_content_hash,
     get_case_dir,
     import_bundle,
     load_findings,
     save_findings,
     load_timeline,
     save_timeline,
+    verify_approval_integrity,
     write_approval_log,
 )
 
@@ -163,3 +165,78 @@ class TestIdentityLowercase:
         from aiir_cli.identity import get_examiner_identity
         identity = get_examiner_identity(flag_override="ALICE")
         assert identity["examiner"] == "alice"
+
+
+class TestContentHash:
+    def test_deterministic(self):
+        item = {"id": "F-001", "title": "Test", "observation": "something"}
+        h1 = compute_content_hash(item)
+        h2 = compute_content_hash(item)
+        assert h1 == h2
+        assert len(h1) == 64  # SHA-256 hex
+
+    def test_excludes_volatile_fields(self):
+        base = {"id": "F-001", "title": "Test", "observation": "something"}
+        h1 = compute_content_hash(base)
+        with_volatile = dict(base, status="APPROVED", approved_at="2026-01-01",
+                             approved_by="tester", content_hash="old")
+        h2 = compute_content_hash(with_volatile)
+        assert h1 == h2
+
+    def test_detects_content_changes(self):
+        item1 = {"id": "F-001", "title": "Test", "observation": "original"}
+        item2 = {"id": "F-001", "title": "Test", "observation": "modified"}
+        assert compute_content_hash(item1) != compute_content_hash(item2)
+
+
+class TestContentHashIntegrity:
+    """Tests that simulate the actual approve.py flow.
+
+    approve.py loads via load_all_findings (scopes ids, adds examiner),
+    computes hash on that scoped version, then saves content_hash back
+    to the local store (bare ids). verify_approval_integrity loads via
+    load_all_findings again, so recomputation matches.
+    """
+
+    def test_verify_detects_tampering(self, case_dir, monkeypatch):
+        from aiir_cli.case_io import load_all_findings
+        identity = {"os_user": "testuser", "examiner": "tester",
+                    "examiner_source": "env"}
+        # Save DRAFT finding
+        save_findings(case_dir, [{"id": "F-001", "title": "Test",
+                                  "observation": "original", "status": "DRAFT"}])
+        # Simulate approve: load merged, compute hash, save back
+        merged = load_all_findings(case_dir)
+        merged[0]["content_hash"] = compute_content_hash(merged[0])
+        local = load_findings(case_dir)
+        local[0]["status"] = "APPROVED"
+        local[0]["content_hash"] = merged[0]["content_hash"]
+        save_findings(case_dir, local)
+        write_approval_log(case_dir, "F-001", "APPROVED", identity)
+
+        # Tamper with the finding after approval
+        findings = load_findings(case_dir)
+        findings[0]["observation"] = "tampered content"
+        save_findings(case_dir, findings)
+
+        results = verify_approval_integrity(case_dir)
+        assert results[0]["verification"] == "tampered"
+
+    def test_verify_confirmed_with_hash(self, case_dir, monkeypatch):
+        from aiir_cli.case_io import load_all_findings
+        identity = {"os_user": "testuser", "examiner": "tester",
+                    "examiner_source": "env"}
+        # Save DRAFT finding
+        save_findings(case_dir, [{"id": "F-001", "title": "Test",
+                                  "observation": "original", "status": "DRAFT"}])
+        # Simulate approve: load merged, compute hash, save back
+        merged = load_all_findings(case_dir)
+        merged[0]["content_hash"] = compute_content_hash(merged[0])
+        local = load_findings(case_dir)
+        local[0]["status"] = "APPROVED"
+        local[0]["content_hash"] = merged[0]["content_hash"]
+        save_findings(case_dir, local)
+        write_approval_log(case_dir, "F-001", "APPROVED", identity)
+
+        results = verify_approval_integrity(case_dir)
+        assert results[0]["verification"] == "confirmed"

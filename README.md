@@ -347,9 +347,12 @@ aiir reject F-003 T-002 --reason "Contradicted by memory analysis"
 aiir review                                # Case summary (counts by status)
 aiir review --findings                     # Findings table
 aiir review --findings --detail            # Full finding detail
-aiir review --findings --verify            # Cross-check against approval records
+aiir review --findings --verify            # Cross-check against approval records + content hash integrity
 aiir review --iocs                         # IOCs grouped by approval status
 aiir review --timeline                     # Timeline events
+aiir review --timeline --status APPROVED   # Filter timeline by status
+aiir review --timeline --start 2026-01-01 --end 2026-01-31   # Filter by date range
+aiir review --timeline --type execution    # Filter by event type
 aiir review --evidence                     # Evidence registry and access log
 aiir review --audit --limit 100            # Audit trail (last N entries)
 aiir review --todos --open                 # Open TODOs across all examiners

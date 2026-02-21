@@ -27,6 +27,7 @@ import yaml
 
 from aiir_cli.approval_auth import require_confirmation
 from aiir_cli.case_io import (
+    compute_content_hash,
     find_draft_item,
     get_case_dir,
     load_findings,
@@ -103,6 +104,7 @@ def _approve_specific(
 
     now = datetime.now(timezone.utc).isoformat()
     for item in to_approve:
+        item["content_hash"] = compute_content_hash(item)
         item["status"] = "APPROVED"
         item["approved_at"] = now
         item["approved_by"] = identity["examiner"]
@@ -114,7 +116,7 @@ def _approve_specific(
     local_timeline = load_timeline(case_dir)
     # Update any local items that were approved
     _SYNC_KEYS = (
-        "status", "approved_at", "approved_by",
+        "status", "approved_at", "approved_by", "content_hash",
         "examiner_notes", "examiner_modifications",
         "interpretation", "title", "confidence", "confidence_justification",
         "observation", "description", "source", "timestamp",
@@ -248,6 +250,7 @@ def _interactive_review(
     # Apply approvals
     for item in all_items:
         if item["id"] in approvals:
+            item["content_hash"] = compute_content_hash(item)
             item["status"] = "APPROVED"
             item["approved_at"] = now
             item["approved_by"] = identity["examiner"]
@@ -271,7 +274,7 @@ def _interactive_review(
     local_findings = load_findings(case_dir)
     local_timeline = load_timeline(case_dir)
     _SYNC_KEYS_INTERACTIVE = (
-        "status", "approved_at", "approved_by",
+        "status", "approved_at", "approved_by", "content_hash",
         "rejected_at", "rejected_by", "rejection_reason",
         "examiner_notes", "examiner_modifications",
         "interpretation", "title", "confidence", "confidence_justification",

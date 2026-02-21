@@ -76,6 +76,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_review.add_argument("--timeline", action="store_true", help="Show timeline events")
     p_review.add_argument("--todos", action="store_true", help="Show TODO items")
     p_review.add_argument("--open", action="store_true", help="Show only open TODOs (with --todos)")
+    p_review.add_argument("--status", help="Filter by status (DRAFT/APPROVED/REJECTED)")
+    p_review.add_argument("--start", help="Start date filter (ISO format, e.g. 2026-01-01)")
+    p_review.add_argument("--end", help="End date filter (ISO format, e.g. 2026-12-31)")
+    p_review.add_argument("--type", help="Filter by event type (with --timeline)")
     p_review.add_argument("--limit", type=int, default=50, help="Limit entries shown")
 
     # exec

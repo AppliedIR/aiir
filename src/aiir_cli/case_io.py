@@ -6,6 +6,7 @@ Read operations merge from all examiners/*/ for unified views.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -317,13 +318,34 @@ def find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) ->
     return None
 
 
+# --- Content hashing ---
+
+_HASH_EXCLUDE_KEYS = {
+    "status", "approved_at", "approved_by", "rejected_at", "rejected_by",
+    "rejection_reason", "examiner_notes", "examiner_modifications",
+    "content_hash", "verification",
+}
+
+
+def compute_content_hash(item: dict) -> str:
+    """SHA-256 of canonical JSON excluding volatile fields.
+
+    Volatile fields (status, approval metadata, content_hash itself)
+    are excluded so the hash covers only the substantive content.
+    """
+    hashable = {k: v for k, v in item.items() if k not in _HASH_EXCLUDE_KEYS}
+    canonical = json.dumps(hashable, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
 # --- Integrity verification ---
 
 def verify_approval_integrity(case_dir: Path) -> list[dict]:
     """Cross-reference findings against approvals.
 
     Returns findings with an added 'verification' field:
-    - 'confirmed': status matches an approval record
+    - 'confirmed': status matches an approval record and content hash is valid
+    - 'tampered': APPROVED/REJECTED but content hash does not match
     - 'no approval record': APPROVED/REJECTED but no matching record
     - 'draft': still in DRAFT status
     """
@@ -347,7 +369,15 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
             result["verification"] = "draft"
         elif record:
             if record["action"] == status:
-                result["verification"] = "confirmed"
+                # Check content hash if present
+                if f.get("content_hash"):
+                    expected = compute_content_hash(f)
+                    if expected != f["content_hash"]:
+                        result["verification"] = "tampered"
+                    else:
+                        result["verification"] = "confirmed"
+                else:
+                    result["verification"] = "confirmed"
             else:
                 result["verification"] = "no approval record"
         else:

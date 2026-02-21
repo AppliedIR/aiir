@@ -8,7 +8,13 @@ import pytest
 import yaml
 
 from aiir_cli.commands.review import cmd_review, _extract_iocs_from_findings, _extract_text_iocs
-from aiir_cli.case_io import save_findings, save_timeline, write_approval_log, verify_approval_integrity
+from aiir_cli.case_io import (
+    compute_content_hash,
+    save_findings,
+    save_timeline,
+    write_approval_log,
+    verify_approval_integrity,
+)
 
 
 @pytest.fixture
@@ -274,3 +280,75 @@ class TestSummary:
         assert "1 draft" in output
         assert "1 approved" in output
         assert "1 rejected" in output
+
+
+class TestTimelineFiltering:
+    def test_filter_by_status(self, case_dir, sample_timeline, capsys):
+        args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
+                         timeline=True, audit=False, evidence=False, limit=50,
+                         status="APPROVED", start=None, end=None, type=None)
+        cmd_review(args, {})
+        output = capsys.readouterr().out
+        assert "T-001" in output
+        assert "T-002" not in output
+
+    def test_filter_by_date_range(self, case_dir, sample_timeline, capsys):
+        args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
+                         timeline=True, audit=False, evidence=False, limit=50,
+                         status=None, start="2026-02-19T10:30:00Z", end=None, type=None)
+        cmd_review(args, {})
+        output = capsys.readouterr().out
+        assert "T-002" in output
+        assert "T-001" not in output
+
+    def test_filter_by_event_type(self, case_dir, capsys):
+        events = [
+            {"id": "T-010", "status": "DRAFT", "timestamp": "2026-02-19T10:00:00Z",
+             "description": "Process execution", "event_type": "execution"},
+            {"id": "T-011", "status": "DRAFT", "timestamp": "2026-02-19T11:00:00Z",
+             "description": "Registry change", "event_type": "registry"},
+        ]
+        save_timeline(case_dir, events)
+        args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
+                         timeline=True, audit=False, evidence=False, limit=50,
+                         status=None, start=None, end=None, type="execution")
+        cmd_review(args, {})
+        output = capsys.readouterr().out
+        assert "T-010" in output
+        assert "T-011" not in output
+
+    def test_no_results_after_filter(self, case_dir, sample_timeline, capsys):
+        args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
+                         timeline=True, audit=False, evidence=False, limit=50,
+                         status="REJECTED", start=None, end=None, type=None)
+        cmd_review(args, {})
+        output = capsys.readouterr().out
+        assert "No timeline" in output
+
+
+class TestVerifyTampered:
+    def test_tampered_finding_shown(self, case_dir, identity, capsys):
+        from aiir_cli.case_io import load_all_findings, load_findings
+        # Save DRAFT
+        save_findings(case_dir, [{"id": "F-010", "title": "Test",
+                                  "observation": "original", "status": "DRAFT"}])
+        # Simulate approve: load merged, compute hash, save back
+        merged = load_all_findings(case_dir)
+        merged[0]["content_hash"] = compute_content_hash(merged[0])
+        local = load_findings(case_dir)
+        local[0]["status"] = "APPROVED"
+        local[0]["content_hash"] = merged[0]["content_hash"]
+        save_findings(case_dir, local)
+        write_approval_log(case_dir, "F-010", "APPROVED", identity)
+
+        # Tamper
+        findings = load_findings(case_dir)
+        findings[0]["observation"] = "tampered"
+        save_findings(case_dir, findings)
+
+        args = Namespace(case=None, findings=True, detail=False, verify=True, iocs=False,
+                         timeline=False, audit=False, evidence=False, limit=50)
+        cmd_review(args, {})
+        output = capsys.readouterr().out
+        assert "TAMPERED" in output
+        assert "Investigate immediately" in output

@@ -42,7 +42,13 @@ def cmd_review(args, identity: dict) -> None:
         _show_iocs(case_dir)
     elif getattr(args, "timeline", False):
         detail = getattr(args, "detail", False)
-        _show_timeline(case_dir, detail)
+        _show_timeline(
+            case_dir, detail,
+            status=getattr(args, "status", None),
+            start=getattr(args, "start", None),
+            end=getattr(args, "end", None),
+            event_type=getattr(args, "type", None),
+        )
     elif getattr(args, "audit", False):
         _show_audit(case_dir, getattr(args, "limit", 50))
     elif getattr(args, "evidence", False):
@@ -185,6 +191,8 @@ def _show_findings_verify(case_dir: Path) -> None:
         # Format verification with markers
         if verification == "confirmed":
             vdisplay = "confirmed"
+        elif verification == "tampered":
+            vdisplay = "TAMPERED"
         elif verification == "no approval record":
             vdisplay = "NO APPROVAL RECORD"
         else:
@@ -195,9 +203,16 @@ def _show_findings_verify(case_dir: Path) -> None:
 
     # Summary
     confirmed = sum(1 for f in results if f["verification"] == "confirmed")
+    tampered = sum(1 for f in results if f["verification"] == "tampered")
     unverified = sum(1 for f in results if f["verification"] == "no approval record")
     draft = sum(1 for f in results if f["verification"] == "draft")
-    print(f"\n{confirmed} confirmed, {unverified} unverified, {draft} draft")
+    parts = [f"{confirmed} confirmed"]
+    if tampered:
+        parts.append(f"{tampered} TAMPERED")
+    parts.extend([f"{unverified} unverified", f"{draft} draft"])
+    print(f"\n{', '.join(parts)}")
+    if tampered:
+        print("ALERT: Content was modified after approval. Investigate immediately.")
     if unverified:
         print("WARNING: Some findings have status changes without approval records.")
 
@@ -300,9 +315,24 @@ def _extract_text_iocs(text: str, collected: dict[str, set[str]]) -> None:
         collected.setdefault("Domain", set()).add(d.lower())
 
 
-def _show_timeline(case_dir: Path, detail: bool) -> None:
-    """Show timeline events."""
+def _show_timeline(
+    case_dir: Path,
+    detail: bool,
+    status: str | None = None,
+    start: str | None = None,
+    end: str | None = None,
+    event_type: str | None = None,
+) -> None:
+    """Show timeline events with optional filters."""
     timeline = load_all_timeline(case_dir)
+    if status:
+        timeline = [t for t in timeline if t.get("status") == status.upper()]
+    if start:
+        timeline = [t for t in timeline if t.get("timestamp", "") >= start]
+    if end:
+        timeline = [t for t in timeline if t.get("timestamp", "") <= end]
+    if event_type:
+        timeline = [t for t in timeline if t.get("event_type", "") == event_type]
     if not timeline:
         print("No timeline events recorded.")
         return
