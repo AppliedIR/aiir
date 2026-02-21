@@ -421,6 +421,7 @@ aiir setup client --no-zeltser -y                                          # Exc
 | Claude Code | `.mcp.json` | Copies `AGENTS.md` as `CLAUDE.md` |
 | Claude Desktop | `~/.config/claude/claude_desktop_config.json` | -- |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
+| LibreChat | `librechat_mcp.yaml` | Merge into `librechat.yaml` |
 | Other | `aiir-mcp-config.json` | Manual integration |
 
 ## Examiner Identity
