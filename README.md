@@ -68,12 +68,9 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph human ["Human Tools"]
+    subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
         CLI["aiir CLI<br/>(human interface)"]
-    end
-
-    subgraph sift ["SIFT Workstation"]
         GW["aiir-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
@@ -82,28 +79,24 @@ graph LR
         OC[opencti-mcp]
         CASE[Case Directory]
 
+        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
         FM --> CASE
+        CLI --> CASE
     end
-
-    CC -->|"streamable-http"| GW
-    CLI --> CASE
 ```
 
 #### SIFT + Windows Forensic Workstation
 
 ```mermaid
 graph LR
-    subgraph human ["Human Tools"]
+    subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
         CLI["aiir CLI<br/>(human interface)"]
-    end
-
-    subgraph sift ["SIFT Workstation"]
         GW["aiir-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
@@ -112,12 +105,14 @@ graph LR
         OC[opencti-mcp]
         CASE[Case Directory]
 
+        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
         FM --> CASE
+        CLI --> CASE
     end
 
     subgraph winbox ["Windows Forensic Workstation"]
@@ -127,9 +122,7 @@ graph LR
         WAPI --> WM
     end
 
-    CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
-    CLI --> CASE
 ```
 
 #### Multi-Examiner Team
