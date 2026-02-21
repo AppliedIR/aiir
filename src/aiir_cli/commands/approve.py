@@ -382,7 +382,7 @@ def _apply_field_override(item: dict, field: str, value: str, identity: dict) ->
     item.setdefault("examiner_modifications", {})[field] = {
         "original": original,
         "modified": value,
-        "modified_by": identity["analyst"],
+        "modified_by": identity["examiner"],
         "modified_at": now,
     }
 

@@ -29,13 +29,13 @@ def cmd_exec(args, identity: dict) -> None:
         print("No command specified after '--'.", file=sys.stderr)
         sys.exit(1)
 
-    command = " ".join(cmd_parts)
+    command_str = " ".join(cmd_parts)
     purpose = args.purpose
 
     # Confirm execution via /dev/tty (blocks AI-via-Bash from piping "y")
     print(f"Case: {case_dir.name}")
     print(f"Purpose: {purpose}")
-    print(f"Command: {command}")
+    print(f"Command: {command_str}")
     if not require_tty_confirmation("Execute? [y/N]: "):
         print("Cancelled.")
         return
@@ -43,8 +43,8 @@ def cmd_exec(args, identity: dict) -> None:
     # Execute
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            cmd_parts,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=300,
@@ -70,7 +70,7 @@ def cmd_exec(args, identity: dict) -> None:
     print(f"\nExit code: {exit_code}")
 
     # Write audit entry
-    _log_exec(case_dir, command, purpose, exit_code, stdout, stderr, identity)
+    _log_exec(case_dir, command_str, purpose, exit_code, stdout, stderr, identity)
     print("(logged to audit trail)")
 
 

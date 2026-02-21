@@ -83,12 +83,15 @@ def get_examiner(case_dir: Path | None = None) -> str:
     """Get the current examiner identity.
 
     Resolution: AIIR_EXAMINER > AIIR_ANALYST (deprecated) > CASE.yaml > OS user.
+    Validates the result to prevent path traversal via crafted env vars.
     """
     env_exam = os.environ.get("AIIR_EXAMINER", "").strip().lower()
     if env_exam:
+        _validate_examiner(env_exam)
         return env_exam
     env_analyst = os.environ.get("AIIR_ANALYST", "").strip().lower()
     if env_analyst:
+        _validate_examiner(env_analyst)
         return env_analyst
     if case_dir:
         meta = load_case_meta(case_dir)
@@ -449,6 +452,9 @@ def import_bundle(case_dir: Path, bundle: dict) -> dict:
                 f.write(json.dumps(entry, default=str) + "\n")
     if "audit" in bundle:
         for mcp_name, entries in bundle["audit"].items():
+            # Validate mcp_name to prevent path traversal
+            if not mcp_name or ".." in mcp_name or "/" in mcp_name or "\\" in mcp_name:
+                continue
             with open(import_dir / "audit" / f"{mcp_name}.jsonl", "w") as f:
                 for entry in entries:
                     f.write(json.dumps(entry, default=str) + "\n")

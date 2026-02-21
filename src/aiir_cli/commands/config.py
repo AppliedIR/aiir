@@ -14,11 +14,11 @@ def cmd_config(args, identity: dict) -> None:
     config_path = Path.home() / ".aiir" / "config.yaml"
 
     if getattr(args, "setup_pin", False):
-        setup_pin(config_path, identity["analyst"])
+        setup_pin(config_path, identity["examiner"])
         return
 
     if getattr(args, "reset_pin", False):
-        reset_pin(config_path, identity["analyst"])
+        reset_pin(config_path, identity["examiner"])
         return
 
     if args.show:
