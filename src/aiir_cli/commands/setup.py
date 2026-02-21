@@ -26,8 +26,15 @@ from aiir_cli.setup.config_gen import (
 
 def cmd_setup(args, identity: dict) -> None:
     """Run interactive setup or connectivity test."""
-    if getattr(args, "setup_action", None) == "test":
+    action = getattr(args, "setup_action", None)
+
+    if action == "test":
         _run_connectivity_test()
+        return
+
+    if action == "client":
+        from aiir_cli.commands.client_setup import cmd_setup_client
+        cmd_setup_client(args, identity)
         return
 
     force = getattr(args, "force_reprompt", False)

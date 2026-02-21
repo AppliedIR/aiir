@@ -123,6 +123,15 @@ def build_parser() -> argparse.ArgumentParser:
     setup_sub = p_setup.add_subparsers(dest="setup_action")
     setup_sub.add_parser("test", help="Test connectivity to all detected MCP servers")
 
+    p_client = setup_sub.add_parser("client", help="Configure LLM client for AIIR endpoints")
+    p_client.add_argument("--client", choices=["claude-code", "claude-desktop", "cursor"], help="Target LLM client")
+    p_client.add_argument("--sift", help="SIFT gateway URL (e.g., http://127.0.0.1:4508)")
+    p_client.add_argument("--windows", help="Windows wintools-mcp endpoint (e.g., 192.168.1.20:4624)")
+    p_client.add_argument("--remnux", help="REMnux endpoint (e.g., 192.168.1.30:3000)")
+    p_client.add_argument("--examiner", help="Examiner identity")
+    p_client.add_argument("--no-zeltser", action="store_true", help="Exclude Zeltser IR Writing MCP")
+    p_client.add_argument("-y", "--yes", action="store_true", help="Accept defaults, no prompts")
+
     # sync
     p_sync = sub.add_parser("sync", help="Multi-examiner sync: export/import contribution bundles")
     sync_sub = p_sync.add_subparsers(dest="sync_action", help="Sync actions")

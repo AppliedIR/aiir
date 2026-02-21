@@ -2,21 +2,23 @@
 #
 # setup-sift.sh — AIIR Platform Installer for SIFT Workstation
 #
-# Installs local AIIR components and gateway. LLM client configuration
-# (which MCPs the AI connects to) is handled separately via 'aiir setup'.
+# Installs local AIIR components, gateway, and optionally configures the
+# LLM client on this machine (via 'aiir setup client').
 #
 # Three install modes:
-#   Minimal     — Core MCPs (~3 min)
+#   Quick       — Core MCPs (~3 min)
 #   Recommended — Adds RAG search + Windows triage (~30 min)
 #   Custom      — Choose individual components (+ OpenCTI)
 #
 # Usage:
 #   ./setup-sift.sh                                    # Interactive (default: Recommended)
-#   ./setup-sift.sh --minimal -y --examiner=steve      # Fully unattended minimal
+#   ./setup-sift.sh --quick -y --examiner=steve        # Fully unattended quick
 #   ./setup-sift.sh --recommended -y                   # Fully unattended recommended
 #   ./setup-sift.sh --full                             # Custom mode (interactive)
-#   ./setup-sift.sh --minimal --manual-start           # No auto-start
+#   ./setup-sift.sh --quick --manual-start             # No auto-start
 #   ./setup-sift.sh --opencti                          # Add OpenCTI (triggers wizard)
+#   ./setup-sift.sh --client=claude-code               # Install + configure LLM client
+#   ./setup-sift.sh --remote                           # Install only, print remote instructions
 #
 set -euo pipefail
 
@@ -30,22 +32,26 @@ INSTALL_DIR_ARG=""
 EXAMINER_ARG=""
 MANUAL_START=false
 ADD_OPENCTI=false
+CLIENT_ARG=""
+REMOTE_MODE=false
 
 for arg in "$@"; do
     case "$arg" in
         -y|--yes)          AUTO_YES=true ;;
-        --minimal|--quick) MODE="minimal" ;;
+        --quick|--minimal) MODE="minimal" ;;
         --recommended)     MODE="recommended" ;;
         --full|--custom)   MODE="custom" ;;
         --manual-start)    MANUAL_START=true ;;
         --opencti)         ADD_OPENCTI=true ;;
+        --remote)          REMOTE_MODE=true ;;
         --install-dir=*)   INSTALL_DIR_ARG="${arg#*=}" ;;
         --examiner=*)      EXAMINER_ARG="${arg#*=}" ;;
+        --client=*)        CLIENT_ARG="${arg#*=}" ;;
         -h|--help)
             echo "Usage: setup-sift.sh [OPTIONS]"
             echo ""
             echo "Modes (pick one):"
-            echo "  --minimal       Core MCPs (~3 min)"
+            echo "  --quick         Core MCPs (~3 min)"
             echo "  --recommended   Adds RAG search + Windows triage (~30 min)"
             echo "  --full          Custom mode — choose individual components"
             echo ""
@@ -55,6 +61,8 @@ for arg in "$@"; do
             echo "  --opencti            Add OpenCTI threat intelligence (triggers wizard)"
             echo "  --install-dir=PATH   Installation directory (default: ~/aiir)"
             echo "  --examiner=NAME      Examiner identity slug"
+            echo "  --client=CLIENT      Configure LLM client (claude-code|claude-desktop|cursor)"
+            echo "  --remote             Skip client config, print remote instructions"
             echo "  -h, --help           Show this help"
             exit 0
             ;;
@@ -125,7 +133,7 @@ if [[ -z "$MODE" ]]; then
     if $AUTO_YES; then
         MODE="recommended"
     else
-        echo "  1. Minimal      — Core MCPs (~3 min)"
+        echo "  1. Quick        — Core MCPs (~3 min)"
         echo "  2. Recommended  — Adds RAG search + Windows triage (~30 min)"
         echo "  3. Custom       — Choose individual components"
         echo ""
@@ -673,6 +681,63 @@ if [[ "$MODE" == "custom" ]]; then
 fi
 
 # =============================================================================
+# LLM Client Configuration
+# =============================================================================
+
+AIIR_CLI="$INSTALL_DIR/aiir/.venv/bin/aiir"
+CLIENT_CONFIGURED=false
+
+if $REMOTE_MODE; then
+    # --remote: skip local client config, print instructions for remote machine
+    header "Remote Client Instructions"
+    echo "To configure your LLM client on your remote machine:"
+    echo ""
+    echo "  pip install aiir"
+    echo "  aiir setup client --sift=http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'THIS_IP'):$GATEWAY_PORT"
+    echo ""
+    echo "Replace the IP with this machine's address if auto-detect is wrong."
+elif [[ -n "$CLIENT_ARG" ]]; then
+    # --client=X: implies local, pass through
+    header "LLM Client Configuration"
+    "$AIIR_CLI" setup client \
+        --sift="http://127.0.0.1:$GATEWAY_PORT" \
+        --client="$CLIENT_ARG" \
+        --examiner="$EXAMINER" \
+        -y && CLIENT_CONFIGURED=true || warn "Client configuration failed"
+elif [[ "$MODE" == "minimal" ]]; then
+    # Quick mode: auto-configure Claude Code
+    header "LLM Client Configuration"
+    info "Auto-configuring Claude Code..."
+    "$AIIR_CLI" setup client \
+        --sift="http://127.0.0.1:$GATEWAY_PORT" \
+        --client=claude-code \
+        --examiner="$EXAMINER" \
+        -y && CLIENT_CONFIGURED=true || warn "Client configuration failed"
+else
+    # Recommended / Custom: ask
+    header "LLM Client Configuration"
+    if $AUTO_YES; then
+        info "Auto-configuring Claude Code..."
+        "$AIIR_CLI" setup client \
+            --sift="http://127.0.0.1:$GATEWAY_PORT" \
+            --client=claude-code \
+            --examiner="$EXAMINER" \
+            -y && CLIENT_CONFIGURED=true || warn "Client configuration failed"
+    elif prompt_yn "Working from this machine? Configure LLM client now?" "y"; then
+        "$AIIR_CLI" setup client \
+            --sift="http://127.0.0.1:$GATEWAY_PORT" \
+            --examiner="$EXAMINER" && CLIENT_CONFIGURED=true || warn "Client configuration failed"
+    else
+        echo ""
+        echo "To configure your LLM client on your remote machine:"
+        echo ""
+        echo "  pip install aiir"
+        echo "  aiir setup client --sift=http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo 'THIS_IP'):$GATEWAY_PORT"
+        echo ""
+    fi
+fi
+
+# =============================================================================
 # Summary
 # =============================================================================
 
@@ -697,12 +762,20 @@ if $AUTOSTART; then
 else
     echo "Start:       $GATEWAY_START"
 fi
+if $CLIENT_CONFIGURED; then
+    echo "LLM client:  configured"
+fi
 echo ""
 
 echo "Next steps:"
-echo "  1. Restart your shell (or: source ${SHELL_RC:-~/.bashrc})"
-echo "  2. Configure your LLM client:  aiir setup"
-echo "  3. Verify installation:         aiir setup test"
+STEP=1
+echo "  $STEP. Restart your shell (or: source ${SHELL_RC:-~/.bashrc})"
+if ! $CLIENT_CONFIGURED && ! $REMOTE_MODE; then
+    STEP=$((STEP + 1))
+    echo "  $STEP. Configure your LLM client:  aiir setup client"
+fi
+STEP=$((STEP + 1))
+echo "  $STEP. Verify installation:         aiir setup test"
 
 if $INSTALL_RAG && [[ "$MODE" != "custom" ]]; then
     echo ""
