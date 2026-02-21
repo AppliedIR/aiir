@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph sift ["SIFT Workstation"]
-        GW["aiir-gateway<br/>:4508"]
+        GW["sift-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Case management + discipline"]
         SM["sift-mcp<br/>Linux tool execution"]
         FR["forensic-rag-mcp<br/>Knowledge search"]
@@ -75,7 +75,7 @@ sequenceDiagram
 
 | Component | Runs on | Port | Purpose |
 |-----------|---------|------|---------|
-| aiir-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
+| sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
 | forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline, reports |
 | sift-mcp | SIFT | (via gateway) | Catalog-gated forensic tool execution on Linux/SIFT |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
@@ -94,7 +94,7 @@ graph LR
     subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
         CLI["aiir CLI<br/>(human interface)"]
-        GW["aiir-gateway<br/>:4508"]
+        GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
@@ -120,7 +120,7 @@ graph LR
     subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
         CLI["aiir CLI<br/>(human interface)"]
-        GW["aiir-gateway<br/>:4508"]
+        GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
@@ -159,7 +159,7 @@ graph LR
     end
 
     subgraph sift ["SIFT Workstation"]
-        GW["aiir-gateway<br/>:4508"]
+        GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
@@ -214,7 +214,7 @@ graph LR
     subgraph e1 ["Examiner 1 — SIFT Workstation"]
         CC1["LLM Client<br/>(human interface)"]
         CLI1["aiir CLI<br/>(human interface)"]
-        GW1["aiir-gateway<br/>:4508"]
+        GW1["sift-gateway<br/>:4508"]
         MCPs1["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
 
         CC1 -->|"streamable-http"| GW1
@@ -224,7 +224,7 @@ graph LR
     subgraph e2 ["Examiner 2 — SIFT Workstation"]
         CC2["LLM Client<br/>(human interface)"]
         CLI2["aiir CLI<br/>(human interface)"]
-        GW2["aiir-gateway<br/>:4508"]
+        GW2["sift-gateway<br/>:4508"]
         MCPs2["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
 
         CC2 -->|"streamable-http"| GW2
@@ -271,38 +271,40 @@ cases/INC-2026-0219/
 ### SIFT Workstation
 
 ```bash
-# Option A: With git (recommended)
-git clone https://github.com/AppliedIR/aiir.git && cd aiir
+git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./scripts/setup-sift.sh
-
-# Option B: Without git
-curl -fsSL https://raw.githubusercontent.com/AppliedIR/aiir/main/scripts/setup-sift.sh | bash
 ```
 
-Three installer modes:
+The SIFT installer handles all platform components (MCPs, gateway, forensic-knowledge) and the aiir CLI. Three tiers:
 
 ```bash
-./scripts/setup-sift.sh --quick -y --examiner=steve --client=claude-code   # unattended, core MCPs
-./scripts/setup-sift.sh --recommended -y --examiner=steve                  # adds RAG + triage
-./scripts/setup-sift.sh                                                    # interactive wizard
+./scripts/setup-sift.sh                            # interactive wizard
+./scripts/setup-sift.sh --quick -y --examiner=steve # core platform only
+./scripts/setup-sift.sh --recommended -y            # adds RAG + triage
 ```
 
 ### Windows Forensic Workstation (optional)
 
 ```powershell
-# Download and run the installer (no git required)
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AppliedIR/aiir/main/scripts/setup-windows.ps1" -OutFile setup-windows.ps1
+# With git
+git clone https://github.com/AppliedIR/wintools-mcp.git; cd wintools-mcp
+.\scripts\setup-windows.ps1
+
+# Without git
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AppliedIR/wintools-mcp/main/scripts/setup-windows.ps1" -OutFile setup-windows.ps1
 .\setup-windows.ps1
 ```
 
-Or with git:
+### aiir CLI Only
 
-```powershell
-git clone https://github.com/AppliedIR/aiir.git; cd aiir
-.\scripts\setup-windows.ps1
+If you only need the CLI (e.g. on a separate analyst machine):
+
+```bash
+git clone https://github.com/AppliedIR/aiir.git && cd aiir
+./scripts/setup-aiir.sh
 ```
 
-Then configure your LLM client to connect to both endpoints:
+### Configure LLM Client
 
 ```bash
 aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624
@@ -457,15 +459,9 @@ Every approval, rejection, and command execution is logged with examiner identit
 
 | Repo | Purpose |
 |------|---------|
-| [aiir](https://github.com/AppliedIR/aiir) | CLI, installers, architecture reference |
-| [forensic-mcp](https://github.com/AppliedIR/forensic-mcp) | Case management MCP (48 tools) |
-| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | SIFT tool execution MCP (36 catalog entries) |
-| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows tool execution MCP (22 catalog entries) |
-| [forensic-knowledge](https://github.com/AppliedIR/forensic-knowledge) | Shared YAML data package (59 tools, 51 artifacts, 28 discipline) |
-| [aiir-gateway](https://github.com/AppliedIR/aiir-gateway) | Streamable HTTP gateway |
-| [forensic-rag-mcp](https://github.com/AppliedIR/forensic-rag-mcp) | Knowledge search MCP |
-| [windows-triage-mcp](https://github.com/AppliedIR/windows-triage-mcp) | Windows baseline validation MCP |
-| [opencti-mcp](https://github.com/AppliedIR/opencti-mcp) | Threat intelligence MCP |
+| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: all SIFT components (forensic-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti) |
+| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (22 catalog entries) |
+| [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
 ## Evidence Handling
 
