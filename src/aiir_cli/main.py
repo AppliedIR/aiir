@@ -224,17 +224,34 @@ def _case_init(args, identity: dict) -> None:
         sys.exit(1)
 
     examiner = identity["examiner"]
+    if not examiner:
+        print("Cannot initialize case: examiner identity is empty.", file=sys.stderr)
+        sys.exit(1)
+
     collaborative = getattr(args, "collaborative", False)
     mode = "collaborative" if collaborative else "solo"
 
-    case_dir.mkdir(parents=True)
-    (case_dir / "evidence").mkdir()
-    (case_dir / "extracted").mkdir()
-    (case_dir / "reports").mkdir()
+    # Create directory structure. If any step fails, report what was partially created.
+    created_dirs: list[Path] = []
+    try:
+        case_dir.mkdir(parents=True)
+        created_dirs.append(case_dir)
+        for subdir in ("evidence", "extracted", "reports"):
+            d = case_dir / subdir
+            d.mkdir()
+            created_dirs.append(d)
 
-    exam_dir = case_dir / "examiners" / examiner
-    exam_dir.mkdir(parents=True)
-    (exam_dir / "audit").mkdir()
+        exam_dir = case_dir / "examiners" / examiner
+        exam_dir.mkdir(parents=True)
+        created_dirs.append(exam_dir)
+        audit_dir = exam_dir / "audit"
+        audit_dir.mkdir()
+        created_dirs.append(audit_dir)
+    except OSError as e:
+        print(f"Failed to create case directories: {e}", file=sys.stderr)
+        if created_dirs:
+            print(f"  Partially created directories: {', '.join(str(d) for d in created_dirs)}", file=sys.stderr)
+        sys.exit(1)
 
     case_meta = {
         "case_id": case_id,
@@ -248,20 +265,40 @@ def _case_init(args, identity: dict) -> None:
         "created_by": examiner,
     }
 
-    with open(case_dir / "CASE.yaml", "w") as f:
-        yaml.dump(case_meta, f, default_flow_style=False)
+    try:
+        with open(case_dir / "CASE.yaml", "w") as f:
+            yaml.dump(case_meta, f, default_flow_style=False)
+            f.flush()
+            os.fsync(f.fileno())
+    except (OSError, yaml.YAMLError) as e:
+        print(f"Failed to write CASE.yaml: {e}", file=sys.stderr)
+        print(f"  Directories were created at: {case_dir}", file=sys.stderr)
+        sys.exit(1)
 
-    for fname in ("findings.json", "timeline.json", "todos.json"):
-        with open(exam_dir / fname, "w") as f:
-            f.write("[]")
-    with open(exam_dir / "evidence.json", "w") as f:
-        json.dump({"files": []}, f)
+    try:
+        for fname in ("findings.json", "timeline.json", "todos.json"):
+            with open(exam_dir / fname, "w") as f:
+                f.write("[]")
+                f.flush()
+                os.fsync(f.fileno())
+        with open(exam_dir / "evidence.json", "w") as f:
+            json.dump({"files": []}, f)
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError as e:
+        print(f"Failed to write initial case files: {e}", file=sys.stderr)
+        print(f"  Case directory partially initialized at: {case_dir}", file=sys.stderr)
+        sys.exit(1)
 
     # Set active case pointer
-    aiir_dir = Path(".aiir")
-    aiir_dir.mkdir(exist_ok=True)
-    with open(aiir_dir / "active_case", "w") as f:
-        f.write(case_id)
+    try:
+        aiir_dir = Path(".aiir")
+        aiir_dir.mkdir(exist_ok=True)
+        with open(aiir_dir / "active_case", "w") as f:
+            f.write(case_id)
+    except OSError as e:
+        # Non-fatal: case was created successfully, just can't set active pointer
+        print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
 
     print(f"Case initialized: {case_id}")
     print(f"  Name: {args.name}")
@@ -280,6 +317,10 @@ def _case_join(args, identity: dict) -> None:
 
     case_id = args.case_id
     examiner = getattr(args, "examiner", None) or identity["examiner"]
+    if not examiner:
+        print("Cannot join case: examiner identity is empty.", file=sys.stderr)
+        sys.exit(1)
+
     cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
     case_dir = cases_dir / case_id
 
@@ -288,32 +329,57 @@ def _case_join(args, identity: dict) -> None:
         sys.exit(1)
 
     meta_file = case_dir / "CASE.yaml"
-    with open(meta_file) as f:
-        meta = yaml.safe_load(f) or {}
+    try:
+        with open(meta_file) as f:
+            meta = yaml.safe_load(f) or {}
+    except OSError as e:
+        print(f"Failed to read CASE.yaml: {e}", file=sys.stderr)
+        sys.exit(1)
+    except yaml.YAMLError as e:
+        print(f"CASE.yaml is corrupt or invalid YAML: {e}", file=sys.stderr)
+        sys.exit(1)
 
     exam_dir = case_dir / "examiners" / examiner
     if exam_dir.exists():
         print(f"Examiner '{examiner}' already has a directory in case {case_id}")
     else:
-        exam_dir.mkdir(parents=True)
-        (exam_dir / "audit").mkdir()
-        for fname in ("findings.json", "timeline.json", "todos.json"):
-            with open(exam_dir / fname, "w") as f:
-                f.write("[]")
-        with open(exam_dir / "evidence.json", "w") as f:
-            json.dump({"files": []}, f)
+        try:
+            exam_dir.mkdir(parents=True)
+            (exam_dir / "audit").mkdir()
+            for fname in ("findings.json", "timeline.json", "todos.json"):
+                with open(exam_dir / fname, "w") as f:
+                    f.write("[]")
+                    f.flush()
+                    os.fsync(f.fileno())
+            with open(exam_dir / "evidence.json", "w") as f:
+                json.dump({"files": []}, f)
+                f.flush()
+                os.fsync(f.fileno())
+        except OSError as e:
+            print(f"Failed to create examiner directory: {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Add to team list
     if examiner not in meta.get("team", []):
         meta.setdefault("team", []).append(examiner)
-        with open(meta_file, "w") as f:
-            yaml.dump(meta, f, default_flow_style=False)
+        try:
+            with open(meta_file, "w") as f:
+                yaml.dump(meta, f, default_flow_style=False)
+                f.flush()
+                os.fsync(f.fileno())
+        except (OSError, yaml.YAMLError) as e:
+            print(f"Failed to update team list in CASE.yaml: {e}", file=sys.stderr)
+            sys.exit(1)
 
     # Set active case pointer
-    aiir_dir = Path(".aiir")
-    aiir_dir.mkdir(exist_ok=True)
-    with open(aiir_dir / "active_case", "w") as f:
-        f.write(case_id)
+    try:
+        aiir_dir = Path(".aiir")
+        aiir_dir.mkdir(exist_ok=True)
+        with open(aiir_dir / "active_case", "w") as f:
+            f.write(case_id)
+    except OSError as e:
+        # Non-fatal: join succeeded, just can't set active pointer
+        print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
 
     print(f"Joined case {case_id} as examiner '{examiner}'")
     print(f"  Team: {', '.join(meta.get('team', []))}")

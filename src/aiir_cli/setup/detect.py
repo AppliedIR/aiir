@@ -54,7 +54,17 @@ def _check_module(python_path: str, module: str) -> bool:
             timeout=10,
         )
         return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
+    except subprocess.TimeoutExpired:
+        import logging
+        logging.debug("Module check timed out: %s (via %s)", module, python_path)
+        return False
+    except FileNotFoundError:
+        import logging
+        logging.debug("Python not found at %s when checking %s", python_path, module)
+        return False
+    except OSError as e:
+        import logging
+        logging.debug("OS error checking module %s via %s: %s", module, python_path, e)
         return False
 
 

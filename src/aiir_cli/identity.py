@@ -34,6 +34,15 @@ def get_examiner_identity(flag_override: str | None = None) -> dict:
 
     def _result(examiner: str, source: str) -> dict:
         examiner = examiner.lower().strip()
+        if not examiner:
+            # Safeguard: if the resolved value is empty, fall back to os_user
+            print(
+                f"Warning: empty examiner identity from source '{source}'. "
+                f"Falling back to OS user '{os_user}'.",
+                file=sys.stderr,
+            )
+            examiner = os_user
+            source = "os_user"
         return {
             "os_user": os_user,
             "examiner": examiner,
@@ -66,8 +75,11 @@ def get_examiner_identity(flag_override: str | None = None) -> dict:
             examiner = config.get("examiner") or config.get("analyst")
             if examiner:
                 return _result(examiner, "config")
-        except Exception:
-            pass  # Config file unreadable, fall through
+        except (OSError, yaml.YAMLError) as e:
+            print(
+                f"Warning: could not read identity config {config_path}: {e}",
+                file=sys.stderr,
+            )
 
     # Priority 5: OS username
     return _result(os_user, "os_user")

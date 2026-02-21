@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import yaml
@@ -23,7 +24,10 @@ def cmd_config(args, identity: dict) -> None:
 
     if args.show:
         if config_path.exists():
-            print(config_path.read_text())
+            try:
+                print(config_path.read_text())
+            except OSError as e:
+                print(f"Failed to read configuration file: {e}", file=sys.stderr)
         else:
             print("No configuration file found.")
             print(f"Current identity: {identity['examiner']} (source: {identity['examiner_source']})")
@@ -31,16 +35,34 @@ def cmd_config(args, identity: dict) -> None:
 
     examiner_val = getattr(args, "examiner", None)
     if examiner_val:
-        config_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print(f"Failed to create config directory {config_path.parent}: {e}", file=sys.stderr)
+            return
+
         config = {}
         if config_path.exists():
-            with open(config_path) as f:
-                config = yaml.safe_load(f) or {}
+            try:
+                with open(config_path) as f:
+                    config = yaml.safe_load(f) or {}
+            except yaml.YAMLError as e:
+                print(f"Warning: existing config is invalid YAML ({e}), overwriting.", file=sys.stderr)
+                config = {}
+            except OSError as e:
+                print(f"Warning: could not read existing config ({e}), creating new.", file=sys.stderr)
+                config = {}
+
         config["examiner"] = examiner_val
         # Remove deprecated 'analyst' key if present
         config.pop("analyst", None)
-        with open(config_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False)
+
+        try:
+            with open(config_path, "w") as f:
+                yaml.dump(config, f, default_flow_style=False)
+        except (OSError, yaml.YAMLError) as e:
+            print(f"Failed to write configuration: {e}", file=sys.stderr)
+            return
         print(f"Examiner identity set to: {examiner_val}")
         return
 

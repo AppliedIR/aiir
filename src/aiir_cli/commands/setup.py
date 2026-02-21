@@ -180,10 +180,13 @@ def _run_connectivity_test() -> None:
                 print(f"  {name:25s} FAIL ({err})")
                 fail_count += 1
         except subprocess.TimeoutExpired:
-            print(f"  {name:25s} TIMEOUT")
+            print(f"  {name:25s} TIMEOUT (import took >15s)")
             fail_count += 1
-        except Exception as e:
-            print(f"  {name:25s} ERROR ({e})")
+        except FileNotFoundError:
+            print(f"  {name:25s} ERROR (Python not found at {python_path})")
+            fail_count += 1
+        except OSError as e:
+            print(f"  {name:25s} ERROR (OS error: {e})")
             fail_count += 1
 
         # FK availability check for MCPs that use it
@@ -200,8 +203,10 @@ def _run_connectivity_test() -> None:
                     print(f"  {'forensic-knowledge':25s} {tool_count} tools loaded")
                 else:
                     print(f"  {'forensic-knowledge':25s} WARNING: not available in this venv")
-            except Exception:
-                print(f"  {'forensic-knowledge':25s} WARNING: check failed")
+            except subprocess.TimeoutExpired:
+                print(f"  {'forensic-knowledge':25s} WARNING: import timed out")
+            except OSError as e:
+                print(f"  {'forensic-knowledge':25s} WARNING: check failed ({e})")
 
     print(f"\n{ok_count} of {ok_count + fail_count} MCPs operational.", end="")
     if fail_count:

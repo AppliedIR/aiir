@@ -84,7 +84,11 @@ def cmd_setup_client(args, identity: dict) -> None:
         return
 
     # 3. Generate config for selected client
-    _generate_config(client, servers, examiner)
+    try:
+        _generate_config(client, servers, examiner)
+    except OSError as e:
+        print(f"Failed to write client configuration: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # 4. Print internet MCP summary
     internet_mcps = []
@@ -301,15 +305,21 @@ def _merge_and_write(path: Path, config: dict) -> None:
     if path.is_file():
         try:
             existing = json.loads(path.read_text())
-        except (json.JSONDecodeError, OSError):
-            pass
+        except json.JSONDecodeError as e:
+            print(f"Warning: existing config {path} has invalid JSON ({e}), overwriting.", file=sys.stderr)
+        except OSError as e:
+            print(f"Warning: could not read existing config {path}: {e}", file=sys.stderr)
 
     # Merge: existing servers are preserved, AIIR servers overwritten
     existing_servers = existing.get("mcpServers", {})
     existing_servers.update(config.get("mcpServers", {}))
     existing["mcpServers"] = existing_servers
 
-    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        print(f"Failed to create directory {path.parent}: {e}", file=sys.stderr)
+        raise
     _write_600(path, json.dumps(existing, indent=2) + "\n")
 
 
@@ -340,8 +350,8 @@ def _copy_agents_md(target: Path) -> None:
             try:
                 shutil.copy2(src, target)
                 print(f"  Copied:    {src.name} → {target.name}")
-            except OSError:
-                pass
+            except OSError as e:
+                print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
             return
     print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
 
@@ -354,6 +364,10 @@ def _normalise_url(raw: str, default_port: int) -> str:
     """Turn ``IP:port`` or bare ``IP`` into ``http://IP:port``."""
     raw = raw.strip()
     if not raw:
+        return ""
+    # Reject obviously invalid input
+    if any(c in raw for c in (" ", "\t", "\n", "<", ">", '"', "'")):
+        print(f"Warning: invalid characters in URL input: {raw!r}", file=sys.stderr)
         return ""
     if raw.startswith("http://") or raw.startswith("https://"):
         return raw
@@ -378,5 +392,12 @@ def _probe_health(base_url: str) -> bool:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=2) as resp:
             return resp.status == 200
-    except Exception:
+    except OSError as e:
+        # Network/connection errors (includes URLError, socket.error)
+        import logging
+        logging.debug("Health probe failed for %s: %s", base_url, e)
+        return False
+    except Exception as e:
+        import logging
+        logging.debug("Health probe unexpected error for %s: %s", base_url, e)
         return False

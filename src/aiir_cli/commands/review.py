@@ -387,10 +387,19 @@ def _show_evidence(case_dir: Path) -> None:
         print(f"\n{'=' * 60}")
         print("  Evidence Access Log")
         print(f"{'=' * 60}")
-        for line in access_log.read_text().strip().split("\n"):
+        try:
+            log_text = access_log.read_text()
+        except OSError as e:
+            print(f"  Warning: could not read evidence access log: {e}", file=sys.stderr)
+            return
+        for line in log_text.strip().split("\n"):
             if not line:
                 continue
-            entry = json.loads(line)
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                print(f"  Warning: skipping corrupt log line", file=sys.stderr)
+                continue
             print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}")
 
 
@@ -408,17 +417,35 @@ def _show_audit(case_dir: Path, limit: int) -> None:
             audit_dir = ex_dir / "audit"
             if audit_dir.is_dir():
                 for jsonl_file in audit_dir.glob("*.jsonl"):
-                    for line in jsonl_file.read_text().strip().split("\n"):
+                    try:
+                        file_text = jsonl_file.read_text()
+                    except OSError as e:
+                        print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
+                        continue
+                    for line in file_text.strip().split("\n"):
                         if not line:
                             continue
-                        entries.append(json.loads(line))
+                        try:
+                            entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
+                            continue
             # Approvals
             approvals_file = ex_dir / "approvals.jsonl"
             if approvals_file.exists():
-                for line in approvals_file.read_text().strip().split("\n"):
+                try:
+                    approvals_text = approvals_file.read_text()
+                except OSError as e:
+                    print(f"  Warning: could not read {approvals_file}: {e}", file=sys.stderr)
+                    continue
+                for line in approvals_text.strip().split("\n"):
                     if not line:
                         continue
-                    entry = json.loads(line)
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        print(f"  Warning: skipping corrupt approval line in {ex_dir.name}", file=sys.stderr)
+                        continue
                     entry["tool"] = "approval"
                     entry["mcp"] = "aiir-cli"
                     entries.append(entry)
@@ -448,4 +475,12 @@ def _load_evidence(case_dir: Path) -> list[dict]:
     reg_file = _examiner_dir(case_dir) / "evidence.json"
     if not reg_file.exists():
         return []
-    return json.loads(reg_file.read_text()).get("files", [])
+    try:
+        data = json.loads(reg_file.read_text())
+        return data.get("files", [])
+    except json.JSONDecodeError as e:
+        print(f"Warning: evidence registry is corrupt: {e}", file=sys.stderr)
+        return []
+    except OSError as e:
+        print(f"Warning: could not read evidence registry: {e}", file=sys.stderr)
+        return []

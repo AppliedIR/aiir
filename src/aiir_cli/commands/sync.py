@@ -39,10 +39,21 @@ def _sync_export(args, identity: dict) -> None:
         print("--file is required for sync export", file=sys.stderr)
         sys.exit(1)
 
-    bundle = export_bundle(case_dir)
+    try:
+        bundle = export_bundle(case_dir)
+    except OSError as e:
+        print(f"Failed to read case data for export: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    with open(output_file, "w") as f:
-        json.dump(bundle, f, indent=2, default=str)
+    try:
+        with open(output_file, "w") as f:
+            json.dump(bundle, f, indent=2, default=str)
+            f.flush()
+            import os
+            os.fsync(f.fileno())
+    except (OSError, TypeError) as e:
+        print(f"Failed to write export bundle to {output_file}: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Exported bundle to {output_file}")
     print(f"  Examiner: {bundle.get('examiner', '?')}")
@@ -67,10 +78,21 @@ def _sync_import(args, identity: dict) -> None:
         print(f"File not found: {input_file}", file=sys.stderr)
         sys.exit(1)
 
-    with open(input_file) as f:
-        bundle = json.load(f)
+    try:
+        with open(input_file) as f:
+            bundle = json.load(f)
+    except json.JSONDecodeError as e:
+        print(f"Bundle file contains invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print(f"Failed to read bundle file {input_file}: {e}", file=sys.stderr)
+        sys.exit(1)
 
-    result = import_bundle(case_dir, bundle)
+    try:
+        result = import_bundle(case_dir, bundle)
+    except OSError as e:
+        print(f"Failed to write imported data: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if result.get("status") == "error":
         print(f"Import failed: {result.get('message')}", file=sys.stderr)

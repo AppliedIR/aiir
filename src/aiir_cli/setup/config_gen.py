@@ -59,7 +59,10 @@ def generate_mcp_json(
         servers[remote["name"]] = entry
 
     config = {"mcpServers": servers}
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise OSError(f"Failed to create directory {output_path.parent}: {e}") from e
     _write_600(output_path, json.dumps(config, indent=2))
     return output_path
 
@@ -123,19 +126,33 @@ def generate_gateway_yaml(
                 "Authorization": f"Bearer {remnux_config['token']}"
             }
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise OSError(f"Failed to create directory {output_path.parent}: {e}") from e
     _write_600(output_path, yaml.dump(config, default_flow_style=False, sort_keys=False))
     return output_path
 
 
 def _write_600(path: Path, content: str) -> None:
     """Write file with 0o600 permissions from creation — no world-readable window."""
-    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    except OSError as e:
+        raise OSError(f"Failed to create temp file in {path.parent}: {e}") from e
     try:
         os.fchmod(fd, stat.S_IRUSR | stat.S_IWUSR)
         with os.fdopen(fd, "w") as f:
             f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp_path, str(path))
+    except OSError as e:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise OSError(f"Failed to write config file {path}: {e}") from e
     except BaseException:
         try:
             os.unlink(tmp_path)

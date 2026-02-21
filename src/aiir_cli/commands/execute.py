@@ -71,10 +71,12 @@ def cmd_exec(args, identity: dict) -> None:
         exit_code = -1
         stdout = ""
         stderr = "Command timed out (300s)"
-    except Exception as e:
+    except OSError as e:
         exit_code = -1
         stdout = ""
-        stderr = str(e)
+        stderr = f"Failed to execute command: {e}"
+        if e.errno == 2:
+            stderr = f"Command not found: {cmd_parts[0]}"
     elapsed_ms = (time.monotonic() - start) * 1000
 
     # Display output
@@ -114,8 +116,9 @@ def _next_evidence_id(case_dir: Path, examiner: str) -> str:
                             pass
                 except json.JSONDecodeError:
                     continue
-        except Exception:
-            pass
+        except OSError as e:
+            import logging
+            logging.debug("Could not read audit log for sequence: %s", e)
     return f"{_EVIDENCE_PREFIX}-{examiner}-{today}-{max_seq + 1:03d}"
 
 
