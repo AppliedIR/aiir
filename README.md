@@ -40,6 +40,204 @@ The AI assistant (via forensic-mcp) stages findings and timeline events as DRAFT
 - **Platform Setup** - Interactive `aiir setup` to detect MCPs and generate config for Claude Code, Cursor, Claude Desktop, and OpenWebUI
 - **Analyst Identity** - Configurable identity resolution for audit accountability
 
+## Platform Architecture
+
+AIIR is a multi-component forensic investigation platform. The components can be deployed in several configurations depending on team size, workstation setup, and LLM client preference.
+
+### Component Map
+
+```mermaid
+graph TB
+    subgraph clients ["LLM Clients (any MCP-compatible)"]
+        CC[Claude Code]
+        CD[Claude Desktop]
+        CU[Cursor]
+        OW[OpenWebUI]
+        OT["Other (Goose, OpenCode, ...)"]
+    end
+
+    subgraph api ["API Layer"]
+        GW["aiir-gateway :4508<br/>(REST + MCP Streamable HTTP)"]
+        WT["wintools-mcp :4624<br/>(MCP Streamable HTTP)"]
+    end
+
+    subgraph sift ["SIFT MCP Servers (stdio)"]
+        FM[forensic-mcp<br/>Case management + discipline]
+        SM[sift-mcp<br/>Linux tool execution]
+        FR[forensic-rag-mcp<br/>Knowledge search]
+        WTR[windows-triage-mcp<br/>Baseline validation]
+        OC[opencti-mcp<br/>Threat intelligence]
+    end
+
+    subgraph data ["Data Layer"]
+        FK[forensic-knowledge<br/>YAML data package]
+        CASE["Case Directory<br/>examiners/{slug}/"]
+    end
+
+    subgraph human ["Human Layer"]
+        CLI["aiir CLI<br/>approve / reject / review"]
+    end
+
+    clients -->|"streamable-http<br/>or stdio"| api
+    clients -->|stdio| sift
+    GW -->|stdio| sift
+    FM --> FK
+    SM --> FK
+    FM --> CASE
+    CLI --> CASE
+    clients -.->|streamable-http| WT
+```
+
+### Deployment Topologies
+
+AIIR supports several deployment configurations. Choose the one that fits your environment.
+
+#### Solo Analyst on SIFT (stdio)
+
+The simplest setup. One analyst, one SIFT workstation. The LLM client runs directly on SIFT and connects to MCP servers via stdio. No gateway needed.
+
+```mermaid
+graph LR
+    subgraph sift ["SIFT Workstation"]
+        CC["LLM Client<br/>(Claude Code, Cursor, etc.)"]
+        FM[forensic-mcp]
+        SM[sift-mcp]
+        FR[forensic-rag-mcp]
+        WTR[windows-triage-mcp]
+        OC[opencti-mcp]
+        CASE[Case Directory]
+        CLI[aiir CLI]
+
+        CC -->|stdio| FM
+        CC -->|stdio| SM
+        CC -->|stdio| FR
+        CC -->|stdio| WTR
+        CC -->|stdio| OC
+        FM --> CASE
+        CLI --> CASE
+    end
+```
+
+Setup: `aiir setup` (local detection) or `aiir setup client --sift=http://127.0.0.1:4508` (if gateway is running).
+
+#### SIFT + Windows Forensic VM
+
+Two machines: a SIFT workstation running the gateway and a Windows VM running wintools-mcp. The analyst's LLM client connects to both via Streamable HTTP.
+
+```mermaid
+graph LR
+    subgraph laptop ["Analyst Machine"]
+        CC["LLM Client"]
+    end
+
+    subgraph sift ["SIFT Workstation"]
+        GW["aiir-gateway :4508"]
+        FM[forensic-mcp]
+        SM[sift-mcp]
+        FR[forensic-rag-mcp]
+        WTR[windows-triage-mcp]
+        OC[opencti-mcp]
+        CASE[Case Directory]
+        CLI[aiir CLI]
+
+        GW -->|stdio| FM
+        GW -->|stdio| SM
+        GW -->|stdio| FR
+        GW -->|stdio| WTR
+        GW -->|stdio| OC
+        FM --> CASE
+        CLI --> CASE
+    end
+
+    subgraph winvm ["Windows Forensic VM"]
+        WT["wintools-mcp :4624"]
+    end
+
+    CC -->|"streamable-http"| GW
+    CC -->|"streamable-http"| WT
+```
+
+Setup on analyst machine: `aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624`
+
+#### Multi-Examiner Team
+
+Multiple analysts share a case through the gateway. Each examiner has a unique API key that maps to their identity. All examiners work in isolated `examiners/{slug}/` directories with merged reads for team visibility.
+
+```mermaid
+graph LR
+    subgraph e1 ["Examiner 1"]
+        C1["LLM Client"]
+    end
+    subgraph e2 ["Examiner 2"]
+        C2["LLM Client"]
+    end
+    subgraph dashboard ["SOC Dashboard"]
+        OW[OpenWebUI]
+    end
+
+    subgraph sift ["SIFT Server"]
+        GW["aiir-gateway :4508"]
+        MCPs["MCP Servers<br/>(forensic, sift, rag, triage, opencti)"]
+        CASE["Shared Case Dir<br/>examiners/steve/<br/>examiners/jane/"]
+        CLI["aiir CLI<br/>(per-examiner)"]
+
+        GW --> MCPs
+        MCPs --> CASE
+        CLI --> CASE
+    end
+
+    C1 -->|"API key → steve"| GW
+    C2 -->|"API key → jane"| GW
+    OW -->|"API key → dashboard"| GW
+```
+
+Setup: `aiir case init "Investigation" --collaborative`, then each examiner runs `aiir setup client --sift=SERVER:4508`.
+
+### Human-in-the-Loop Workflow
+
+All findings and timeline events are staged as DRAFT by the AI. Only a human analyst can approve or reject them via the `aiir` CLI. This is a structural guarantee.
+
+```mermaid
+sequenceDiagram
+    participant AI as LLM + MCP Tools
+    participant Case as Case Directory
+    participant Human as aiir CLI (human)
+
+    AI->>Case: record_finding() → DRAFT
+    AI->>Case: record_timeline_event() → DRAFT
+    Note over Case: Staged for review
+
+    Human->>Case: aiir approve (interactive review)
+    Human-->>Case: Edit, add note, or approve as-is
+    Human->>Case: APPROVED ✓ or REJECTED ✗
+
+    Note over Case: Only APPROVED items<br/>appear in reports
+    AI->>Case: generate_full_report()
+```
+
+### Case Directory Structure
+
+```
+cases/INC-2026-0219/
+├── CASE.yaml                    # Case metadata (name, mode, team)
+├── evidence/                    # Original evidence (read-only after registration)
+├── extracted/                   # Extracted artifacts
+├── reports/                     # Generated reports
+└── examiners/
+    ├── steve/                   # Examiner "steve"
+    │   ├── findings.json        # Findings (DRAFT → APPROVED/REJECTED)
+    │   ├── timeline.json        # Timeline events
+    │   ├── todos.json           # Investigation TODOs
+    │   ├── evidence.json        # Evidence registry
+    │   ├── approvals.jsonl      # Approval audit trail
+    │   └── audit/
+    │       ├── forensic-mcp.jsonl
+    │       ├── sift-mcp.jsonl
+    │       └── ...
+    └── jane/                    # Examiner "jane" (same structure)
+        └── ...
+```
+
 ## Commands
 
 ### approve
@@ -183,6 +381,32 @@ Setup phases:
 aiir setup test
 ```
 
+#### setup client
+
+Generate LLM client configuration pointing at AIIR API servers. All entries use `streamable-http` — the client connects to gateways over HTTP, not stdio.
+
+```bash
+# Interactive wizard
+aiir setup client
+
+# Non-interactive with switches
+aiir setup client \
+    --client=claude-code \
+    --sift=http://192.168.1.10:4508 \
+    --windows=192.168.1.20:4624 \
+    --examiner=steve \
+    -y
+
+# Exclude optional MCPs
+aiir setup client --no-zeltser -y
+```
+
+Generates:
+- **Claude Code**: `.mcp.json` + `CLAUDE.md` (from `AGENTS.md`)
+- **Claude Desktop**: `~/.config/claude/claude_desktop_config.json`
+- **Cursor**: `.cursor/mcp.json` + `.cursorrules` (from `AGENTS.md`)
+- **Other**: `aiir-mcp-config.json` (manual integration)
+
 ### case
 
 ```bash
@@ -277,7 +501,8 @@ aiir/
 │   │   ├── evidence.py             # Lock/unlock/register evidence
 │   │   ├── config.py               # Analyst identity and PIN configuration
 │   │   ├── todo.py                 # TODO management commands
-│   │   └── setup.py                # Interactive platform setup
+│   │   ├── setup.py                # Interactive platform setup
+│   │   └── client_setup.py         # LLM client config generation (streamable-http)
 │   └── setup/
 │       ├── detect.py               # MCP server detection (system + venvs)
 │       ├── wizard.py               # Interactive credential and client wizards
@@ -292,7 +517,8 @@ aiir/
 │   ├── test_evidence_cmds.py       # Evidence management tests
 │   ├── test_config.py              # Config command tests
 │   ├── test_todo.py                # TODO command tests
-│   └── test_setup.py               # Setup wizard and config generation tests
+│   ├── test_setup.py               # Setup wizard and config generation tests
+│   └── test_client_setup.py        # Client config generation tests
 ├── pyproject.toml
 └── README.md
 ```
@@ -309,11 +535,7 @@ aiir/
 
 ## Architecture
 
-```
-forensic-mcp ──► Case Directory ◄── aiir CLI
- (DRAFT findings)  examiners/     (APPROVED / REJECTED)
-                   {slug}/         human-only actions
-```
+See [Platform Architecture](#platform-architecture) above for deployment diagrams and the component map.
 
 ## Responsible Use
 
