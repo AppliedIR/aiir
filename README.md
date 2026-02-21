@@ -125,6 +125,61 @@ graph LR
     CC -->|"streamable-http"| WAPI
 ```
 
+#### Optional External MCPs
+
+```mermaid
+graph LR
+    subgraph analyst ["Analyst Machine"]
+        CC["LLM Client<br/>(human interface)"]
+        CLI["aiir CLI<br/>(human interface)"]
+    end
+
+    subgraph sift ["SIFT Workstation"]
+        GW["aiir-gateway<br/>:4508"]
+        FM[forensic-mcp]
+        SM[sift-mcp]
+        FR[forensic-rag-mcp]
+        WTR[windows-triage-mcp]
+        OC[opencti-mcp]
+        FK[forensic-knowledge]
+        CASE[Case Directory]
+
+        GW -->|stdio| FM
+        GW -->|stdio| SM
+        GW -->|stdio| FR
+        GW -->|stdio| WTR
+        GW -->|stdio| OC
+        FM --> FK
+        SM --> FK
+        FM --> CASE
+    end
+
+    subgraph winbox ["Windows Forensic Workstation"]
+        WAPI["wintools-mcp API<br/>:4624"]
+        WM["wintools-mcp<br/>Windows tool execution"]
+        WAPI --> WM
+    end
+
+    subgraph octi ["OpenCTI Instance"]
+        OCTI[OpenCTI]
+    end
+
+    subgraph remnux ["REMnux Workstation"]
+        RM[remnux-mcp]
+    end
+
+    subgraph mslearn ["External"]
+        ML[MS Learn MCP]
+    end
+
+    CC -->|"streamable-http"| GW
+    CC -->|"streamable-http"| WAPI
+    CC -->|"streamable-http"| RM
+    CC -->|"streamable-http"| ML
+    OC -->|"HTTPS"| OCTI
+    CLI -->|"NFS / SMB"| CASE
+```
+
 #### Multi-Examiner Team
 
 ```mermaid
