@@ -182,6 +182,40 @@ graph LR
     CLI -->|"NFS / SMB"| CASE
 ```
 
+#### Multi-Examiner Team
+
+```mermaid
+graph LR
+    subgraph e1 ["Examiner 1 — SIFT Workstation"]
+        CC1["LLM Client<br/>(human interface)"]
+        CLI1["aiir CLI<br/>(human interface)"]
+        GW1["aiir-gateway<br/>:4508"]
+        MCPs1["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+
+        CC1 -->|"streamable-http"| GW1
+        GW1 -->|stdio| MCPs1
+    end
+
+    subgraph e2 ["Examiner 2 — SIFT Workstation"]
+        CC2["LLM Client<br/>(human interface)"]
+        CLI2["aiir CLI<br/>(human interface)"]
+        GW2["aiir-gateway<br/>:4508"]
+        MCPs2["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+
+        CC2 -->|"streamable-http"| GW2
+        GW2 -->|stdio| MCPs2
+    end
+
+    subgraph shared ["Shared Storage (NFS / SMB)"]
+        CASE["Case Directory<br/>examiners/steve/<br/>examiners/jane/"]
+    end
+
+    MCPs1 --> CASE
+    CLI1 --> CASE
+    MCPs2 --> CASE
+    CLI2 --> CASE
+```
+
 ### Human-in-the-Loop Workflow
 
 All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. The CLI reads confirmation from `/dev/tty`, which the AI cannot control.
