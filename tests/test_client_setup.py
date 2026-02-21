@@ -8,6 +8,8 @@ from unittest.mock import patch
 import pytest
 
 from aiir_cli.commands.client_setup import (
+    _MSLEARN_MCP,
+    _ZELTSER_MCP,
     _ensure_mcp_path,
     _merge_and_write,
     _normalise_url,
@@ -92,6 +94,7 @@ class TestCmdSetupClient:
             "remnux": None,
             "examiner": "testuser",
             "no_zeltser": False,
+            "no_mslearn": False,
             "yes": True,
         }
         defaults.update(kwargs)
@@ -120,6 +123,38 @@ class TestCmdSetupClient:
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "zeltser-ir-writing" not in data["mcpServers"]
+
+    def test_mslearn_included_by_default(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        assert "microsoft-learn" in data["mcpServers"]
+        assert data["mcpServers"]["microsoft-learn"]["url"] == _MSLEARN_MCP["url"]
+        assert data["mcpServers"]["microsoft-learn"]["type"] == "streamable-http"
+
+    def test_no_mslearn_flag(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        args = self._make_args(no_mslearn=True)
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        assert "microsoft-learn" not in data["mcpServers"]
+        # Zeltser still present
+        assert "zeltser-ir-writing" in data["mcpServers"]
+
+    def test_no_both_internet_mcps(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        args = self._make_args(no_zeltser=True, no_mslearn=True)
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        assert "zeltser-ir-writing" not in data["mcpServers"]
+        assert "microsoft-learn" not in data["mcpServers"]
 
     def test_windows_endpoint(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -165,7 +200,7 @@ class TestCmdSetupClient:
 
     def test_no_endpoints_does_nothing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        args = self._make_args(sift=None, no_zeltser=True)
+        args = self._make_args(sift=None, no_zeltser=True, no_mslearn=True)
         # Need to set sift to empty via the flag path
         args.sift = ""
         identity = {"examiner": "testuser"}
@@ -202,6 +237,7 @@ class TestCmdSetupClient:
         assert 'url: "http://192.168.1.20:4624/mcp"' in content
         assert "timeout: 60000" in content
         assert "zeltser-ir-writing" in content
+        assert "microsoft-learn" in content
 
     def test_librechat_no_json_merge(self, tmp_path, monkeypatch):
         """LibreChat writes YAML, not JSON — no .mcp.json created."""

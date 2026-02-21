@@ -18,7 +18,7 @@ MCP_SERVERS = {
 
 REMOTE_SERVERS = {
     "remnux-mcp": {"type": "http", "default_port": 8080},
-    "microsoft-learn": {"type": "http", "default_url": "https://learn.microsoft.com/mcp"},
+    "microsoft-learn": {"type": "http", "default_url": "https://learn.microsoft.com/api/mcp"},
     "zeltser-ir-writing": {"type": "http", "default_url": "https://zeltser.com/mcp"},
 }
 

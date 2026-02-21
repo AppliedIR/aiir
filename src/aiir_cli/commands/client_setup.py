@@ -23,6 +23,12 @@ _ZELTSER_MCP = {
     "url": "https://website-mcp.zeltser.com/mcp",
 }
 
+_MSLEARN_MCP = {
+    "name": "microsoft-learn",
+    "type": "streamable-http",
+    "url": "https://learn.microsoft.com/api/mcp",
+}
+
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -38,7 +44,7 @@ def cmd_setup_client(args, identity: dict) -> None:
     windows_url = _resolve_windows(args, auto)
     remnux_url = _resolve_remnux(args, auto)
     examiner = _resolve_examiner(args, identity)
-    include_zeltser = not getattr(args, "no_zeltser", False)
+    include_zeltser, include_mslearn = _resolve_internet_mcps(args, auto)
 
     # 2. Build endpoint list
     servers: dict[str, dict] = {}
@@ -67,12 +73,29 @@ def cmd_setup_client(args, identity: dict) -> None:
             "url": _ZELTSER_MCP["url"],
         }
 
+    if include_mslearn:
+        servers[_MSLEARN_MCP["name"]] = {
+            "type": _MSLEARN_MCP["type"],
+            "url": _MSLEARN_MCP["url"],
+        }
+
     if not servers:
         print("No endpoints configured — nothing to write.", file=sys.stderr)
         return
 
     # 3. Generate config for selected client
     _generate_config(client, servers, examiner)
+
+    # 4. Print internet MCP summary
+    internet_mcps = []
+    if include_zeltser:
+        internet_mcps.append((_ZELTSER_MCP["name"], _ZELTSER_MCP["url"]))
+    if include_mslearn:
+        internet_mcps.append((_MSLEARN_MCP["name"], _MSLEARN_MCP["url"]))
+    if internet_mcps:
+        print("  Internet MCPs:")
+        for name, url in internet_mcps:
+            print(f"    {name:<25s}{url}")
 
 
 # ---------------------------------------------------------------------------
@@ -100,11 +123,19 @@ def _resolve_sift(args, auto: bool) -> str:
 
     detected = _probe_health(default)
     if detected:
-        hint = f" (detected at {default})"
+        status = "detected running"
     else:
-        hint = ""
+        status = "not detected, will use default"
 
-    answer = _prompt(f"SIFT gateway URL{hint}", default)
+    print("\n--- SIFT Workstation (Gateway) ---")
+    print("The AIIR gateway runs on your SIFT workstation and provides")
+    print("forensic tools (forensic-mcp, sift-mcp, forensic-rag, etc.).")
+    print()
+    print(f"  Default:  {default}  ({status})")
+    print("  Format:   URL              Example: http://10.0.0.2:4508")
+    print('  Enter "skip" to omit.')
+
+    answer = _prompt("\nSIFT gateway URL", default)
     if answer.lower() == "skip":
         return ""
     return answer
@@ -116,7 +147,15 @@ def _resolve_windows(args, auto: bool) -> str:
         return _normalise_url(val, 4624) if val else ""
     if auto:
         return ""
-    answer = _prompt("Windows endpoint (skip if none)", "skip")
+
+    print("\n--- Windows Forensic Workstation ---")
+    print("If you have a Windows workstation running wintools-mcp, enter its")
+    print("IP address or hostname. The default port is 4624.")
+    print()
+    print("  Format:   IP or IP:PORT     Examples: 192.168.1.20, 10.0.0.5:4624")
+    print("  Find it:  On the Windows box, run: ipconfig | findstr IPv4")
+
+    answer = _prompt("\nWindows endpoint", "skip")
     if answer.lower() == "skip":
         return ""
     return _normalise_url(answer, 4624)
@@ -128,10 +167,42 @@ def _resolve_remnux(args, auto: bool) -> str:
         return _normalise_url(val, 3000) if val else ""
     if auto:
         return ""
-    answer = _prompt("REMnux endpoint (skip if none)", "skip")
+
+    print("\n--- REMnux Malware Analysis Workstation ---")
+    print("If you have a REMnux VM running remnux-mcp, enter its IP address")
+    print("or hostname. The default port is 3000.")
+    print()
+    print("  Format:   IP or IP:PORT     Examples: 192.168.1.30, 10.0.0.10:3000")
+    print("  Find it:  On the REMnux box, run: ip addr show | grep inet")
+
+    answer = _prompt("\nREMnux endpoint", "skip")
     if answer.lower() == "skip":
         return ""
     return _normalise_url(answer, 3000)
+
+
+def _resolve_internet_mcps(args, auto: bool) -> tuple[bool, bool]:
+    """Resolve which internet MCPs to include. Returns (zeltser, mslearn)."""
+    no_zeltser = getattr(args, "no_zeltser", False)
+    no_mslearn = getattr(args, "no_mslearn", False)
+
+    if auto or (no_zeltser or no_mslearn):
+        return (not no_zeltser, not no_mslearn)
+
+    print("\n--- Internet MCPs (public, no auth required) ---")
+    print("These connect your LLM client directly to public knowledge servers.")
+    print()
+
+    include_zeltser = _prompt_yn(
+        "  Zeltser IR Writing   Helps write and improve IR reports",
+        default=True,
+    )
+    include_mslearn = _prompt_yn(
+        "  Microsoft Learn      Search Microsoft docs and code samples",
+        default=True,
+    )
+
+    return (include_zeltser, include_mslearn)
 
 
 def _resolve_examiner(args, identity: dict) -> str:
@@ -146,15 +217,15 @@ def _resolve_examiner(args, identity: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def _wizard_client() -> str:
-    print("\n=== AIIR Client Configuration ===\n")
-    print("Which LLM client?")
-    print("  1. Claude Code")
-    print("  2. Claude Desktop")
-    print("  3. Cursor")
-    print("  4. LibreChat")
-    print("  5. Other / manual")
+    print("\n=== AIIR Client Configuration ===")
+    print("Which LLM client will connect to your AIIR endpoints?\n")
+    print("  1. Claude Code      CLI agent (writes .mcp.json + CLAUDE.md)")
+    print("  2. Claude Desktop   Desktop app (writes claude_desktop_config.json)")
+    print("  3. Cursor           IDE (writes .cursor/mcp.json + .cursorrules)")
+    print("  4. LibreChat        Web UI (writes librechat_mcp.yaml)")
+    print("  5. Other / manual   Raw JSON config for any MCP client")
 
-    choice = _prompt("Choose", "1")
+    choice = _prompt("\nChoose", "1")
     return {
         "1": "claude-code",
         "2": "claude-desktop",
@@ -172,6 +243,18 @@ def _prompt(message: str, default: str = "") -> str:
         return input(f"{message}: ").strip()
     except EOFError:
         return default
+
+
+def _prompt_yn(message: str, default: bool = True) -> bool:
+    """Prompt for a yes/no answer. Returns bool."""
+    hint = "Y/n" if default else "y/N"
+    try:
+        answer = input(f"{message} [{hint}]: ").strip().lower()
+    except EOFError:
+        return default
+    if not answer:
+        return default
+    return answer in ("y", "yes")
 
 
 # ---------------------------------------------------------------------------
