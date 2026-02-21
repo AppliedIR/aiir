@@ -10,10 +10,12 @@ AIIR is an LLM-agnostic forensic investigation platform built on the Model Conte
 
 ```mermaid
 graph TB
-    subgraph sift ["SIFT Workstation"]
+    subgraph human ["Human Tools"]
         CC["LLM Client"]
         CLI["aiir CLI"]
-        CC ~~~ CLI
+    end
+
+    subgraph sift ["SIFT Workstation"]
         GW["aiir-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Case management + discipline"]
         SM["sift-mcp<br/>Linux tool execution"]
@@ -23,7 +25,6 @@ graph TB
         FK["forensic-knowledge<br/>(shared YAML data package)"]
         CASE["Case Directory<br/>examiners/{slug}/"]
 
-        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
@@ -32,7 +33,6 @@ graph TB
         FM --> FK
         SM --> FK
         FM --> CASE
-        CLI --> CASE
     end
 
     subgraph winbox ["Windows Forensic Workstation (optional)"]
@@ -41,7 +41,9 @@ graph TB
         WT --> FK2
     end
 
+    CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WT
+    CLI --> CASE
 ```
 
 ### Where Things Run
