@@ -42,11 +42,11 @@ These are structural facts. If a diagram, README, or plan contradicts any of the
 |-----------|---------|
 | **aiir-gateway** | Aggregates SIFT-local MCPs. Starts each as a stdio subprocess. Exposes all their tools via `/mcp` (Streamable HTTP) and `/api/v1/tools` (REST). API key → examiner identity mapping for multi-user. |
 | **forensic-mcp** | Case management, findings, timeline, evidence, TODOs, audit, discipline rules, reports. The investigation state machine. 48 tools. |
-| **sift-mcp** | Catalog-gated forensic tool execution on Linux/SIFT. Zimmerman suite, Volatility, Sleuth Kit, Hayabusa, etc. FK-enriched response envelopes. |
+| **sift-mcp** | Catalog-gated forensic tool execution on Linux/SIFT. Zimmerman suite, Volatility, Sleuth Kit, Hayabusa, etc. FK-enriched response envelopes. 35 tools, 36 catalog entries. |
 | **forensic-rag-mcp** | Semantic search across Sigma rules, MITRE ATT&CK, Atomic Red Team, Splunk, KAPE, Velociraptor, LOLBAS, GTFOBins. |
 | **windows-triage-mcp** | Offline Windows baseline validation. Checks files, processes, services, scheduled tasks, registry, DLLs, pipes against known-good databases. |
 | **opencti-mcp** | Threat intelligence from OpenCTI. IOC lookup, threat actor search, malware search, MITRE technique search. |
-| **wintools-mcp** | Catalog-gated forensic tool execution on Windows. Zimmerman suite, Hayabusa. FK-enriched response envelopes. Denylist blocks dangerous binaries. |
+| **wintools-mcp** | Catalog-gated forensic tool execution on Windows. Zimmerman suite, Hayabusa. FK-enriched response envelopes. Denylist blocks dangerous binaries. 23 tools, 16 catalog entries. |
 | **aiir CLI** | Human-only actions: approve/reject findings, review case status, manage evidence, execute forensic commands with audit trail, configure examiner identity. Not callable by AI. |
 | **forensic-knowledge** | Pip-installable YAML data package. Tool guidance, artifact knowledge, discipline rules, playbooks, collection checklists. No runtime state. |
 
@@ -102,6 +102,8 @@ cases/INC-2026-0219/
     │   ├── timeline.json
     │   ├── todos.json
     │   ├── evidence.json
+    │   ├── actions.jsonl         # Investigative actions (append-only)
+    │   ├── evidence_access.jsonl # Chain-of-custody log
     │   ├── approvals.jsonl
     │   └── audit/
     │       ├── forensic-mcp.jsonl
