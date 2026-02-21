@@ -127,7 +127,11 @@ def load_findings(case_dir: Path) -> list[dict]:
     findings_file = _examiner_dir(case_dir) / "findings.json"
     if not findings_file.exists():
         return []
-    return json.loads(findings_file.read_text())
+    try:
+        return json.loads(findings_file.read_text())
+    except json.JSONDecodeError as e:
+        print(f"WARNING: Corrupt findings.json ({findings_file}): {e}", file=sys.stderr)
+        return []
 
 
 def save_findings(case_dir: Path, findings: list[dict]) -> None:
@@ -145,7 +149,11 @@ def load_timeline(case_dir: Path) -> list[dict]:
     timeline_file = _examiner_dir(case_dir) / "timeline.json"
     if not timeline_file.exists():
         return []
-    return json.loads(timeline_file.read_text())
+    try:
+        return json.loads(timeline_file.read_text())
+    except json.JSONDecodeError as e:
+        print(f"WARNING: Corrupt timeline.json ({timeline_file}): {e}", file=sys.stderr)
+        return []
 
 
 def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
@@ -163,7 +171,11 @@ def load_todos(case_dir: Path) -> list[dict]:
     todos_file = _examiner_dir(case_dir) / "todos.json"
     if not todos_file.exists():
         return []
-    return json.loads(todos_file.read_text())
+    try:
+        return json.loads(todos_file.read_text())
+    except json.JSONDecodeError as e:
+        print(f"WARNING: Corrupt todos.json ({todos_file}): {e}", file=sys.stderr)
+        return []
 
 
 def save_todos(case_dir: Path, todos: list[dict]) -> None:
@@ -190,7 +202,11 @@ def load_all_findings(case_dir: Path) -> list[dict]:
         exam = ex_dir.name
         f_file = ex_dir / "findings.json"
         if f_file.exists():
-            ex_findings = json.loads(f_file.read_text())
+            try:
+                ex_findings = json.loads(f_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"WARNING: Skipping corrupt {f_file}: {e}", file=sys.stderr)
+                continue
             for f in ex_findings:
                 f.setdefault("examiner", exam)
                 if "/" not in f.get("id", ""):
@@ -211,7 +227,11 @@ def load_all_timeline(case_dir: Path) -> list[dict]:
         exam = ex_dir.name
         t_file = ex_dir / "timeline.json"
         if t_file.exists():
-            ex_timeline = json.loads(t_file.read_text())
+            try:
+                ex_timeline = json.loads(t_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"WARNING: Skipping corrupt {t_file}: {e}", file=sys.stderr)
+                continue
             for t in ex_timeline:
                 t.setdefault("examiner", exam)
                 if "/" not in t.get("id", ""):
@@ -233,7 +253,11 @@ def load_all_todos(case_dir: Path) -> list[dict]:
         exam = ex_dir.name
         t_file = ex_dir / "todos.json"
         if t_file.exists():
-            ex_todos = json.loads(t_file.read_text())
+            try:
+                ex_todos = json.loads(t_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"WARNING: Skipping corrupt {t_file}: {e}", file=sys.stderr)
+                continue
             for t in ex_todos:
                 t.setdefault("examiner", exam)
                 if "/" not in t.get("todo_id", ""):
@@ -253,9 +277,18 @@ def load_all_approvals(case_dir: Path) -> list[dict]:
             continue
         approvals_file = ex_dir / "approvals.jsonl"
         if approvals_file.exists():
-            for line in approvals_file.read_text().strip().split("\n"):
-                if line:
+            try:
+                text = approvals_file.read_text()
+            except OSError as e:
+                print(f"WARNING: Skipping unreadable {approvals_file}: {e}", file=sys.stderr)
+                continue
+            for line in text.strip().split("\n"):
+                if not line:
+                    continue
+                try:
                     approvals.append(json.loads(line))
+                except json.JSONDecodeError:
+                    print(f"WARNING: Corrupt JSONL line in {approvals_file}", file=sys.stderr)
     approvals.sort(key=lambda a: a.get("ts", ""))
     return approvals
 

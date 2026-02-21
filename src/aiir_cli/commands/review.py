@@ -355,12 +355,12 @@ def _show_timeline(
         print("-" * 75)
         for t in timeline:
             tid = t.get("id", "?")
-            status = t.get("status", "?")
+            item_status = t.get("status", "?")
             ts = t.get("timestamp", "?")[:19] if t.get("timestamp") else "?"
             desc = t.get("description", "")
             if len(desc) > 40:
                 desc = desc[:37] + "..."
-            print(f"{tid:<8} {status:<10} {ts:<22} {desc}")
+            print(f"{tid:<8} {item_status:<10} {ts:<22} {desc}")
 
 
 def _show_evidence(case_dir: Path) -> None:
