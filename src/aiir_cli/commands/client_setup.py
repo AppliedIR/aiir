@@ -151,13 +151,16 @@ def _wizard_client() -> str:
     print("  1. Claude Code")
     print("  2. Claude Desktop")
     print("  3. Cursor")
-    print("  4. Other / manual")
+    print("  4. LibreChat")
+    print("  5. Other / manual")
 
     choice = _prompt("Choose", "1")
     return {
         "1": "claude-code",
         "2": "claude-desktop",
         "3": "cursor",
+        "4": "librechat",
+        "5": "other",
     }.get(choice, "claude-code")
 
 
@@ -196,6 +199,12 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         _copy_agents_md(Path.cwd() / ".cursorrules")
         print(f"  Generated: {output}")
 
+    elif client == "librechat":
+        output = Path.cwd() / "librechat_mcp.yaml"
+        _write_librechat_yaml(output, servers)
+        print(f"  Generated: {output}")
+        print("  Merge into your librechat.yaml under the mcpServers key.")
+
     else:
         # Manual / other — just dump JSON
         output = Path.cwd() / "aiir-mcp-config.json"
@@ -219,6 +228,18 @@ def _merge_and_write(path: Path, config: dict) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_600(path, json.dumps(existing, indent=2) + "\n")
+
+
+def _write_librechat_yaml(path: Path, servers: dict) -> None:
+    """Write LibreChat mcpServers YAML snippet."""
+    lines = ["# AIIR MCP servers — merge into your librechat.yaml", "mcpServers:"]
+    for name, info in servers.items():
+        lines.append(f"  {name}:")
+        lines.append(f"    type: {info['type']}")
+        lines.append(f"    url: {info['url']}")
+        lines.append("    timeout: 60000")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_600(path, "\n".join(lines) + "\n")
 
 
 def _copy_agents_md(target: Path) -> None:

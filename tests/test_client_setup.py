@@ -11,6 +11,7 @@ from aiir_cli.commands.client_setup import (
     _ensure_mcp_path,
     _merge_and_write,
     _normalise_url,
+    _wizard_client,
     cmd_setup_client,
 )
 
@@ -185,3 +186,43 @@ class TestCmdSetupClient:
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "my-custom-mcp" in data["mcpServers"]
         assert "aiir" in data["mcpServers"]
+
+    def test_librechat_config(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        args = self._make_args(client="librechat", windows="192.168.1.20:4624")
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        config_path = tmp_path / "librechat_mcp.yaml"
+        assert config_path.is_file()
+        content = config_path.read_text()
+        assert "mcpServers:" in content
+        assert "type: streamable-http" in content
+        assert "http://127.0.0.1:4508/mcp" in content
+        assert "http://192.168.1.20:4624/mcp" in content
+        assert "timeout: 60000" in content
+        assert "zeltser-ir-writing" in content
+
+    def test_librechat_no_json_merge(self, tmp_path, monkeypatch):
+        """LibreChat writes YAML, not JSON — no .mcp.json created."""
+        monkeypatch.chdir(tmp_path)
+        args = self._make_args(client="librechat")
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        assert not (tmp_path / ".mcp.json").exists()
+        assert (tmp_path / "librechat_mcp.yaml").is_file()
+
+
+class TestWizardClient:
+    def test_choice_4_maps_to_librechat(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "4")
+        assert _wizard_client() == "librechat"
+
+    def test_choice_5_maps_to_other(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "5")
+        assert _wizard_client() == "other"
+
+    def test_default_is_claude_code(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "")
+        assert _wizard_client() == "claude-code"
