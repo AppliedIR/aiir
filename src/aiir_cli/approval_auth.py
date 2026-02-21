@@ -14,8 +14,12 @@ import os
 import secrets
 import sys
 import tempfile
-import termios
-import tty
+try:
+    import termios
+    import tty
+    _HAS_TERMIOS = True
+except ImportError:
+    _HAS_TERMIOS = False
 from pathlib import Path
 
 import yaml
@@ -156,12 +160,19 @@ def _clear_failures(analyst: str) -> None:
 
 
 def _getpass_prompt(prompt: str) -> str:
-    """Read PIN from /dev/tty with masked input (shows * per keystroke)."""
+    """Read PIN from /dev/tty with masked input (shows * per keystroke).
+
+    On Windows (no termios), falls back to getpass.getpass().
+    """
+    if not _HAS_TERMIOS:
+        import getpass
+        return getpass.getpass(prompt)
+
     try:
         tty_in = open("/dev/tty", "r")
     except OSError:
-        print("No terminal available. Cannot prompt for PIN.", file=sys.stderr)
-        sys.exit(1)
+        import getpass
+        return getpass.getpass(prompt)
     try:
         fd = tty_in.fileno()
         sys.stderr.write(prompt)

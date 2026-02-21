@@ -70,6 +70,44 @@ class TestDetection:
         assert results[0]["name"] == "forensic-mcp"
         assert "venv_path" in results[0]
 
+    def test_detect_venv_shared_venv(self, tmp_path):
+        """Finds MCPs via shared venv at base_dir/.venv/."""
+        shared_python = tmp_path / ".venv" / "bin" / "python"
+        shared_python.parent.mkdir(parents=True)
+        shared_python.touch()
+        with patch("aiir_cli.setup.detect._check_module", return_value=True):
+            results = detect_venv_mcps(search_dirs=[tmp_path])
+        names = {r["name"] for r in results}
+        assert names == set(MCP_SERVERS.keys())
+        # All should point to the shared python
+        for r in results:
+            assert r["python_path"] == str(shared_python)
+
+    def test_detect_venv_shared_skips_per_repo(self, tmp_path):
+        """When shared venv exists, per-repo venvs are not checked."""
+        shared_python = tmp_path / ".venv" / "bin" / "python"
+        shared_python.parent.mkdir(parents=True)
+        shared_python.touch()
+        # Also create a per-repo venv (should be ignored)
+        per_repo = tmp_path / "forensic-mcp" / ".venv" / "bin" / "python"
+        per_repo.parent.mkdir(parents=True)
+        per_repo.touch()
+        with patch("aiir_cli.setup.detect._check_module", return_value=True):
+            results = detect_venv_mcps(search_dirs=[tmp_path])
+        # Should all be shared, not per-repo
+        for r in results:
+            assert r["python_path"] == str(shared_python)
+
+    def test_detect_venv_shared_unavailable_excluded(self, tmp_path):
+        """Shared venv only includes MCPs that are actually importable."""
+        shared_python = tmp_path / ".venv" / "bin" / "python"
+        shared_python.parent.mkdir(parents=True)
+        shared_python.touch()
+        with patch("aiir_cli.setup.detect._check_module", return_value=False):
+            results = detect_venv_mcps(search_dirs=[tmp_path])
+        # None importable, so none returned
+        assert results == []
+
     def test_detect_venv_empty_when_no_dirs(self, tmp_path):
         nonexistent = tmp_path / "nowhere"
         results = detect_venv_mcps(search_dirs=[nonexistent])

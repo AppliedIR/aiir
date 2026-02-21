@@ -151,6 +151,9 @@ def _run_connectivity_test() -> None:
     ok_count = 0
     fail_count = 0
 
+    # Track which python paths we've tested FK on (avoid duplicate checks)
+    fk_checked: set[str] = set()
+
     for name, info in sorted(mcp_map.items()):
         python_path = info.get("python_path", "python")
         module = info.get("module", "")
@@ -182,6 +185,23 @@ def _run_connectivity_test() -> None:
         except Exception as e:
             print(f"  {name:25s} ERROR ({e})")
             fail_count += 1
+
+        # FK availability check for MCPs that use it
+        if module in ("forensic_mcp", "sift_mcp") and python_path not in fk_checked:
+            fk_checked.add(python_path)
+            try:
+                fk_result = subprocess.run(
+                    [python_path, "-c",
+                     "import forensic_knowledge; print(len(forensic_knowledge.loader.list_tools()))"],
+                    capture_output=True, timeout=15, text=True,
+                )
+                if fk_result.returncode == 0:
+                    tool_count = fk_result.stdout.strip()
+                    print(f"  {'forensic-knowledge':25s} {tool_count} tools loaded")
+                else:
+                    print(f"  {'forensic-knowledge':25s} WARNING: not available in this venv")
+            except Exception:
+                print(f"  {'forensic-knowledge':25s} WARNING: check failed")
 
     print(f"\n{ok_count} of {ok_count + fail_count} MCPs operational.", end="")
     if fail_count:

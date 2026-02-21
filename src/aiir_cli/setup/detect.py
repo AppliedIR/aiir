@@ -61,6 +61,10 @@ def _check_module(python_path: str, module: str) -> bool:
 def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     """Search for MCP servers installed in venvs under common directories.
 
+    Checks both:
+    - Shared venv at ``<base_dir>/.venv/`` (preferred, used by setup-sift.sh)
+    - Per-repo venvs at ``<base_dir>/<name>/.venv/`` (legacy layout)
+
     Returns list of dicts with name, venv_path, python_path, available.
     """
     if search_dirs is None:
@@ -74,6 +78,23 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     for base_dir in search_dirs:
         if not base_dir.exists():
             continue
+
+        # Check shared venv first (setup-sift.sh installs all packages here)
+        shared_python = base_dir / ".venv" / "bin" / "python"
+        if shared_python.exists():
+            for name, info in MCP_SERVERS.items():
+                available = _check_module(str(shared_python), info["module"])
+                if available:
+                    results.append({
+                        "name": name,
+                        "venv_path": str(base_dir),
+                        "python_path": str(shared_python),
+                        "available": True,
+                    })
+            # If shared venv found, skip per-repo check for this base_dir
+            continue
+
+        # Fallback: per-repo venvs (legacy layout)
         for name, info in MCP_SERVERS.items():
             venv_python = base_dir / name / ".venv" / "bin" / "python"
             if venv_python.exists():

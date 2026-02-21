@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "aiir-cli"
-dynamic = ["version"]
+version = "0.1.0"
 description = "AIIR CLI: human-in-the-loop approval, evidence management, forensic command execution"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -39,11 +39,8 @@ dev = [
     "pytest-cov>=4.0",
 ]
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.dynamic]
-version = {attr = "aiir_cli.__version__"}
+[tool.hatch.build.targets.wheel]
+packages = ["src/aiir_cli"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -51,11 +48,3 @@ testpaths = ["tests"]
 [tool.coverage.run]
 source = ["src/aiir_cli"]
 branch = true
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise NotImplementedError",
-    "if TYPE_CHECKING:",
-]

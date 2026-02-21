@@ -271,8 +271,12 @@ cases/INC-2026-0219/
 ### SIFT Workstation
 
 ```bash
+# Option A: With git (recommended)
 git clone https://github.com/AppliedIR/aiir.git && cd aiir
 ./scripts/setup-sift.sh
+
+# Option B: Without git
+curl -fsSL https://raw.githubusercontent.com/AppliedIR/aiir/main/scripts/setup-sift.sh | bash
 ```
 
 Three installer modes:
@@ -284,6 +288,14 @@ Three installer modes:
 ```
 
 ### Windows Forensic Workstation (optional)
+
+```powershell
+# Download and run the installer (no git required)
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/AppliedIR/aiir/main/scripts/setup-windows.ps1" -OutFile setup-windows.ps1
+.\setup-windows.ps1
+```
+
+Or with git:
 
 ```powershell
 git clone https://github.com/AppliedIR/aiir.git; cd aiir
@@ -376,7 +388,7 @@ aiir todo update TODO-002 --note "Waiting on third party" --priority low
 aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
 ```
 
-Requires `/dev/tty` confirmation. Logged to `audit/exec.jsonl`.
+Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`.
 
 ### evidence
 
@@ -448,8 +460,8 @@ Every approval, rejection, and command execution is logged with examiner identit
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, installers, architecture reference |
 | [forensic-mcp](https://github.com/AppliedIR/forensic-mcp) | Case management MCP (48 tools) |
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | SIFT tool execution MCP (36 catalog entries) |
-| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows tool execution MCP (16 catalog entries) |
-| [forensic-knowledge](https://github.com/AppliedIR/forensic-knowledge) | Shared YAML data package (59 tools, 51 artifacts, 18 discipline) |
+| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows tool execution MCP (22 catalog entries) |
+| [forensic-knowledge](https://github.com/AppliedIR/forensic-knowledge) | Shared YAML data package (59 tools, 51 artifacts, 28 discipline) |
 | [aiir-gateway](https://github.com/AppliedIR/aiir-gateway) | Streamable HTTP gateway |
 | [forensic-rag-mcp](https://github.com/AppliedIR/forensic-rag-mcp) | Knowledge search MCP |
 | [windows-triage-mcp](https://github.com/AppliedIR/windows-triage-mcp) | Windows baseline validation MCP |
@@ -458,6 +470,10 @@ Every approval, rejection, and command execution is logged with examiner identit
 ## Evidence Handling
 
 Never place original evidence on any AIIR system. Only use working copies for which verified originals or backups exist. AIIR workstations process evidence through AI-connected tools, and any data loaded into these systems may be transmitted to the configured AI provider. Treat all AIIR systems as analysis environments, not evidence storage.
+
+AIIR sets registered evidence files to read-only (chmod 444) as a defense-in-depth measure to prevent accidental modification. This is not an evidence integrity feature. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
+
+Case directories can reside on external or removable media. ext4 is preferred for full permission support. NTFS and exFAT are acceptable but file permission controls (read-only protection) will be silently ineffective. FAT32 is discouraged due to the 4 GB file size limit.
 
 ## Responsible Use
 

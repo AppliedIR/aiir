@@ -243,11 +243,14 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
 
 
 def _copy_agents_md(target: Path) -> None:
-    """Copy AGENTS.md from forensic-mcp as the client instruction file."""
+    """Copy AGENTS.md from sift-mcp monorepo as the client instruction file."""
     # Search common locations for AGENTS.md
     candidates = [
         Path.cwd() / "AGENTS.md",
+        Path.home() / "aiir" / "sift-mcp" / "AGENTS.md",
         Path.home() / "aiir" / "forensic-mcp" / "AGENTS.md",
+        Path("/opt/aiir/sift-mcp") / "AGENTS.md",
+        Path("/opt/aiir") / "AGENTS.md",
     ]
     for src in candidates:
         if src.is_file():
@@ -257,6 +260,7 @@ def _copy_agents_md(target: Path) -> None:
             except OSError:
                 pass
             return
+    print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
 
 
 # ---------------------------------------------------------------------------
