@@ -1,10 +1,10 @@
 # AIIR
 
-AI-assisted incident response platform -- CLI, installers, and architecture reference.
+AI-assisted incident response platform. CLI, installers, and architecture reference.
 
 ## Platform Architecture
 
-AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others. The LLM client and the aiir CLI are the two human-facing tools -- they always run on the same machine (the SIFT workstation).
+AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others. The LLM client and the aiir CLI are the two human-facing tools. They always run on the same machine, which can be the SIFT workstation or a separate computer.
 
 ### Core Component Map
 
