@@ -312,6 +312,8 @@ Any data loaded into the system or its component VMs, computers, or instances ru
 
 While outgoing connections to the Internet are used for some optional components (OpenCTI, MS Learn MCP, Zeltser IR Writing MCP), no incoming connections from external systems should be allowed.
 
+When choosing an LLM client, we recommend constrained clients that are limited to chat and MCP functionality. AIIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. AI clients with the ability to run arbitrary commands on the host system can bypass those safeguards. Such clients can still interact with AIIR, but they can also conduct activities outside the scope of the platform's controls. AIIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
+
 ## Commands
 
 ### case
@@ -452,6 +454,10 @@ Every approval, rejection, and command execution is logged with examiner identit
 | [forensic-rag-mcp](https://github.com/AppliedIR/forensic-rag-mcp) | Knowledge search MCP |
 | [windows-triage-mcp](https://github.com/AppliedIR/windows-triage-mcp) | Windows baseline validation MCP |
 | [opencti-mcp](https://github.com/AppliedIR/opencti-mcp) | Threat intelligence MCP |
+
+## Evidence Handling
+
+Never place original evidence on any AIIR system. Only use working copies for which verified originals or backups exist. AIIR workstations process evidence through AI-connected tools, and any data loaded into these systems may be transmitted to the configured AI provider. Treat all AIIR systems as analysis environments, not evidence storage.
 
 ## Responsible Use
 

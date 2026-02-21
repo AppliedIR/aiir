@@ -1,15 +1,24 @@
-"""Execute forensic commands with case context and audit trail."""
+"""Execute forensic commands with case context and audit trail.
+
+Writes to cli-exec.jsonl using the canonical audit schema with
+source="cli_exec" and evidence IDs (cliexec-{examiner}-{YYYYMMDD}-{NNN}).
+"""
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 from aiir_cli.approval_auth import require_tty_confirmation
 from aiir_cli.case_io import get_case_dir
+
+_MCP_NAME = "cli-exec"
+_EVIDENCE_PREFIX = "cliexec"
 
 
 def cmd_exec(args, identity: dict) -> None:
@@ -31,6 +40,7 @@ def cmd_exec(args, identity: dict) -> None:
 
     command_str = " ".join(cmd_parts)
     purpose = args.purpose
+    examiner = identity.get("examiner", identity.get("analyst", ""))
 
     # Confirm execution via /dev/tty (blocks AI-via-Bash from piping "y")
     print(f"Case: {case_dir.name}")
@@ -40,7 +50,11 @@ def cmd_exec(args, identity: dict) -> None:
         print("Cancelled.")
         return
 
+    # Pre-allocate evidence ID
+    evidence_id = _next_evidence_id(case_dir, examiner)
+
     # Execute
+    start = time.monotonic()
     try:
         result = subprocess.run(
             cmd_parts,
@@ -61,6 +75,7 @@ def cmd_exec(args, identity: dict) -> None:
         exit_code = -1
         stdout = ""
         stderr = str(e)
+    elapsed_ms = (time.monotonic() - start) * 1000
 
     # Display output
     if stdout:
@@ -70,26 +85,70 @@ def cmd_exec(args, identity: dict) -> None:
     print(f"\nExit code: {exit_code}")
 
     # Write audit entry
-    _log_exec(case_dir, command_str, purpose, exit_code, stdout, stderr, identity)
-    print("(logged to audit trail)")
+    _log_exec(case_dir, command_str, purpose, exit_code, stdout, stderr,
+              examiner, evidence_id, elapsed_ms)
+    print(f"Evidence ID: {evidence_id}")
+
+
+def _next_evidence_id(case_dir: Path, examiner: str) -> str:
+    """Generate next evidence ID: cliexec-{examiner}-{date}-{seq}."""
+    from aiir_cli.case_io import _examiner_dir
+    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    audit_dir = _examiner_dir(case_dir) / "audit"
+    log_file = audit_dir / f"{_MCP_NAME}.jsonl"
+    max_seq = 0
+    if log_file.exists():
+        pattern = f"{_EVIDENCE_PREFIX}-{examiner}-{today}-"
+        try:
+            for line in log_file.read_text().strip().split("\n"):
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                    eid = entry.get("evidence_id", "")
+                    if eid.startswith(pattern):
+                        try:
+                            seq = int(eid[len(pattern):])
+                            max_seq = max(max_seq, seq)
+                        except ValueError:
+                            pass
+                except json.JSONDecodeError:
+                    continue
+        except Exception:
+            pass
+    return f"{_EVIDENCE_PREFIX}-{examiner}-{today}-{max_seq + 1:03d}"
 
 
 def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
-              stdout: str, stderr: str, identity: dict) -> None:
-    """Write execution record to audit trail."""
+              stdout: str, stderr: str, examiner: str,
+              evidence_id: str, elapsed_ms: float) -> None:
+    """Write execution record to audit trail using canonical schema."""
     from aiir_cli.case_io import _examiner_dir
     audit_dir = _examiner_dir(case_dir) / "audit"
     audit_dir.mkdir(parents=True, exist_ok=True)
-    log_file = audit_dir / "exec.jsonl"
+    log_file = audit_dir / f"{_MCP_NAME}.jsonl"
+
+    # Summarize output for audit (not full stdout/stderr)
+    stdout_summary = f"{len(stdout.splitlines())} lines"
+    if exit_code != 0 and stderr:
+        stdout_summary += f"; stderr: {stderr[:200]}"
+
     entry = {
         "ts": datetime.now(timezone.utc).isoformat(),
-        "command": command,
-        "purpose": purpose,
-        "exit_code": exit_code,
-        "stdout_lines": len(stdout.splitlines()),
-        "stderr_lines": len(stderr.splitlines()),
-        "examiner": identity.get("examiner", identity.get("analyst", "")),
-        "os_user": identity["os_user"],
+        "mcp": _MCP_NAME,
+        "tool": "exec",
+        "evidence_id": evidence_id,
+        "examiner": examiner,
+        "case_id": os.environ.get("AIIR_ACTIVE_CASE", ""),
+        "source": "cli_exec",
+        "params": {"command": command, "purpose": purpose},
+        "result_summary": {"exit_code": exit_code, "output": stdout_summary},
+        "elapsed_ms": round(elapsed_ms, 1),
     }
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        print(f"WARNING: Failed to write exec audit log: {log_file}", file=sys.stderr)

@@ -283,8 +283,13 @@ def write_approval_log(
     }
     if reason:
         entry["reason"] = reason
-    with open(log_file, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        print(f"WARNING: Failed to write approval log: {log_file}", file=sys.stderr)
 
 
 def load_approval_log(case_dir: Path) -> list[dict]:
@@ -477,17 +482,27 @@ def import_bundle(case_dir: Path, bundle: dict) -> dict:
     elif bundle.get("actions_md"):
         _atomic_write(import_dir / "actions.md", bundle["actions_md"])
     if "approvals" in bundle:
-        with open(import_dir / "approvals.jsonl", "w") as f:
-            for entry in bundle["approvals"]:
-                f.write(json.dumps(entry, default=str) + "\n")
+        try:
+            with open(import_dir / "approvals.jsonl", "w") as f:
+                for entry in bundle["approvals"]:
+                    f.write(json.dumps(entry, default=str) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+        except OSError:
+            print(f"WARNING: Failed to write imported approvals", file=sys.stderr)
     if "audit" in bundle:
         for mcp_name, entries in bundle["audit"].items():
             # Validate mcp_name to prevent path traversal
             if not mcp_name or ".." in mcp_name or "/" in mcp_name or "\\" in mcp_name:
                 continue
-            with open(import_dir / "audit" / f"{mcp_name}.jsonl", "w") as f:
-                for entry in entries:
-                    f.write(json.dumps(entry, default=str) + "\n")
+            try:
+                with open(import_dir / "audit" / f"{mcp_name}.jsonl", "w") as f:
+                    for entry in entries:
+                        f.write(json.dumps(entry, default=str) + "\n")
+                    f.flush()
+                    os.fsync(f.fileno())
+            except OSError:
+                print(f"WARNING: Failed to write imported audit for {mcp_name}", file=sys.stderr)
     if "evidence_manifest" in bundle:
         _atomic_write(import_dir / "evidence_manifest.json", json.dumps(bundle["evidence_manifest"], indent=2, default=str))
 
