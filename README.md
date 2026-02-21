@@ -1,6 +1,6 @@
 # AIIR
 
-AI-assisted incident response platform. CLI, installers, and architecture reference.
+Artificial Intelligence Incident Response platform. CLI and architecture reference.
 
 ## Platform Architecture
 

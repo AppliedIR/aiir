@@ -61,9 +61,10 @@ def _check_module(python_path: str, module: str) -> bool:
 def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     """Search for MCP servers installed in venvs under common directories.
 
-    Checks both:
-    - Shared venv at ``<base_dir>/.venv/`` (preferred, used by setup-sift.sh)
-    - Per-repo venvs at ``<base_dir>/<name>/.venv/`` (legacy layout)
+    Checks (in priority order):
+    1. Shared venv at ``<base_dir>/.venv/`` (direct monorepo root)
+    2. Monorepo venv at ``<base_dir>/sift-mcp/.venv/`` (setup-sift.sh default)
+    3. Per-repo venvs at ``<base_dir>/<name>/.venv/`` (legacy layout)
 
     Returns list of dicts with name, venv_path, python_path, available.
     """
@@ -79,19 +80,28 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
         if not base_dir.exists():
             continue
 
-        # Check shared venv first (setup-sift.sh installs all packages here)
-        shared_python = base_dir / ".venv" / "bin" / "python"
-        if shared_python.exists():
+        # Check for a shared venv (all MCPs installed in one place)
+        shared_python = None
+        shared_path = None
+        for candidate in [
+            base_dir / ".venv" / "bin" / "python",           # direct monorepo root
+            base_dir / "sift-mcp" / ".venv" / "bin" / "python",  # ~/aiir/sift-mcp/.venv/
+        ]:
+            if candidate.exists():
+                shared_python = candidate
+                shared_path = candidate.parent.parent
+                break
+
+        if shared_python:
             for name, info in MCP_SERVERS.items():
                 available = _check_module(str(shared_python), info["module"])
                 if available:
                     results.append({
                         "name": name,
-                        "venv_path": str(base_dir),
+                        "venv_path": str(shared_path),
                         "python_path": str(shared_python),
                         "available": True,
                     })
-            # If shared venv found, skip per-repo check for this base_dir
             continue
 
         # Fallback: per-repo venvs (legacy layout)

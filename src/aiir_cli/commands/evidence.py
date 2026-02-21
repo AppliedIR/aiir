@@ -101,6 +101,8 @@ def cmd_register_evidence(args, identity: dict) -> None:
 
     with open(reg_file, "w") as f:
         json.dump(registry, f, indent=2, default=str)
+        f.flush()
+        os.fsync(f.fileno())
 
     # Log access
     _log_evidence_action(case_dir, "register", str(evidence_path), identity, sha256=file_hash)
@@ -127,3 +129,5 @@ def _log_evidence_action(case_dir: Path, action: str, detail: str,
     entry.update(extra)
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
+        f.flush()
+        os.fsync(f.fileno())

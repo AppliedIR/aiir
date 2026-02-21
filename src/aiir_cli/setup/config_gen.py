@@ -71,7 +71,7 @@ def generate_gateway_yaml(
     remnux_config: dict | None = None,
     api_keys: dict | None = None,
 ) -> Path:
-    """Generate gateway.yaml for aiir-gateway.
+    """Generate gateway.yaml for sift-gateway.
 
     Args:
         mcps: List of detected MCP server dicts.

@@ -92,7 +92,7 @@ prompt() {
 echo ""
 echo -e "${BOLD}============================================================${NC}"
 echo -e "${BOLD}  AIIR CLI Installer${NC}"
-echo -e "${BOLD}  Applied Incident Response Platform — Human Interface${NC}"
+echo -e "${BOLD}  Artificial Intelligence Incident Response — Human Interface${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
 
