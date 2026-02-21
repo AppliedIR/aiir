@@ -11,8 +11,8 @@ AIIR is an LLM-agnostic forensic investigation platform built on the Model Conte
 ```mermaid
 graph TB
     subgraph human ["Human Tools"]
-        CC["LLM Client"]
-        CLI["aiir CLI"]
+        CC["LLM Client<br/>(human interface)"]
+        CLI["aiir CLI<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
@@ -68,35 +68,12 @@ graph TB
 
 ```mermaid
 graph LR
-    subgraph sift ["SIFT Workstation"]
-        CC["LLM Client<br/>(Claude Code, Cursor, etc.)"]
-        GW["aiir-gateway<br/>localhost:4508"]
-        FM[forensic-mcp]
-        SM[sift-mcp]
-        FR[forensic-rag-mcp]
-        WTR[windows-triage-mcp]
-        OC[opencti-mcp]
-        CASE[Case Directory]
-        CLI[aiir CLI]
-
-        CC -->|"streamable-http"| GW
-        GW -->|stdio| FM
-        GW -->|stdio| SM
-        GW -->|stdio| FR
-        GW -->|stdio| WTR
-        GW -->|stdio| OC
-        FM --> CASE
-        CLI --> CASE
+    subgraph human ["Human Tools"]
+        CC["LLM Client<br/>(human interface)"]
+        CLI["aiir CLI<br/>(human interface)"]
     end
-```
 
-#### SIFT + Windows Forensic Workstation
-
-```mermaid
-graph LR
     subgraph sift ["SIFT Workstation"]
-        CC["LLM Client"]
-        CLI["aiir CLI"]
         GW["aiir-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
@@ -105,34 +82,67 @@ graph LR
         OC[opencti-mcp]
         CASE[Case Directory]
 
-        CC -->|"streamable-http"| GW
         GW -->|stdio| FM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
         FM --> CASE
-        CLI --> CASE
+    end
+
+    CC -->|"streamable-http"| GW
+    CLI --> CASE
+```
+
+#### SIFT + Windows Forensic Workstation
+
+```mermaid
+graph LR
+    subgraph human ["Human Tools"]
+        CC["LLM Client<br/>(human interface)"]
+        CLI["aiir CLI<br/>(human interface)"]
+    end
+
+    subgraph sift ["SIFT Workstation"]
+        GW["aiir-gateway<br/>:4508"]
+        FM[forensic-mcp]
+        SM[sift-mcp]
+        FR[forensic-rag-mcp]
+        WTR[windows-triage-mcp]
+        OC[opencti-mcp]
+        CASE[Case Directory]
+
+        GW -->|stdio| FM
+        GW -->|stdio| SM
+        GW -->|stdio| FR
+        GW -->|stdio| WTR
+        GW -->|stdio| OC
+        FM --> CASE
     end
 
     subgraph winbox ["Windows Forensic Workstation"]
-        WT["wintools-mcp<br/>:4624"]
+        WAPI["wintools-mcp API<br/>:4624"]
+        WM["wintools-mcp<br/>Windows tool execution"]
+
+        WAPI --> WM
     end
 
-    CC -->|"streamable-http"| WT
+    CC -->|"streamable-http"| GW
+    CC -->|"streamable-http"| WAPI
+    CLI --> CASE
 ```
 
 #### Multi-Examiner Team
 
 ```mermaid
 graph LR
-    subgraph e1 ["Examiner 1 Machine"]
-        C1["LLM Client"]
-        CLI1["aiir CLI"]
+    subgraph e1 ["Examiner 1"]
+        C1["LLM Client<br/>(human interface)"]
+        CLI1["aiir CLI<br/>(human interface)"]
     end
-    subgraph e2 ["Examiner 2 Machine"]
-        C2["LLM Client"]
-        CLI2["aiir CLI"]
+    subgraph e2 ["Examiner 2"]
+        C2["LLM Client<br/>(human interface)"]
+        CLI2["aiir CLI<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Server"]
