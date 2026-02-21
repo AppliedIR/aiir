@@ -426,6 +426,34 @@ if ($startChoice -eq "1") {
 }
 
 # =============================================================================
+# Audit Trail Warning
+# =============================================================================
+
+Write-Header "IMPORTANT: Case Directory Access"
+
+Write-Host "============================================================" -ForegroundColor Yellow
+Write-Host "  WARNING: Audit trail requires access to the case directory" -ForegroundColor Yellow
+Write-Host "============================================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  wintools-mcp writes forensic audit entries to the case" -ForegroundColor Yellow
+Write-Host "  directory on your SIFT workstation. Without this, tool" -ForegroundColor Yellow
+Write-Host "  executions on Windows are NOT recorded in the audit trail." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  To enable:" -ForegroundColor White
+Write-Host "  1. Share the SIFT cases directory via SMB:"
+Write-Host "     (on SIFT) sudo net usershare add cases /path/to/cases"
+Write-Host ""
+Write-Host "  2. Map the share on this Windows machine:"
+Write-Host "     net use Z: \\SIFT_IP\cases"
+Write-Host ""
+Write-Host "  3. Set AIIR_CASE_DIR when starting a case:"
+Write-Host "     set AIIR_CASE_DIR=Z:\INC-2026-0001"
+Write-Host ""
+Write-Host "  Without this, wintools-mcp still works but produces no"
+Write-Host "  audit trail -- evidence IDs are generated but not logged." -ForegroundColor Yellow
+Write-Host ""
+
+# =============================================================================
 # Summary
 # =============================================================================
 
