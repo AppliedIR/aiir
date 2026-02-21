@@ -53,7 +53,7 @@ graph TB
     end
 
     subgraph sift ["SIFT Workstation"]
-        GW["aiir-gateway :4508<br/>(optional — for remote or multi-user access)"]
+        GW["aiir-gateway :4508"]
         FM[forensic-mcp<br/>Case management + discipline]
         SM[sift-mcp<br/>Linux tool execution]
         FR[forensic-rag-mcp<br/>Knowledge search]
@@ -77,27 +77,28 @@ graph TB
 
     FK["forensic-knowledge<br/>(shared YAML data package)"]
 
-    CC -->|"streamable-http<br/>(remote access)"| GW
+    CC -->|streamable-http| GW
     CC -->|"streamable-http"| WT
     FM --> FK
     SM --> FK
     WT --> FK
 ```
 
-When the LLM client runs directly on SIFT, it can connect to MCPs via stdio (no gateway needed). When the client is on a different machine, the gateway aggregates SIFT MCPs behind a single HTTP endpoint. wintools-mcp is an independent server on Windows — not managed by the gateway.
+LLM clients always connect via Streamable HTTP — to the gateway for SIFT tools, and directly to wintools-mcp for Windows tools. The gateway manages SIFT MCPs as stdio subprocesses internally. wintools-mcp is an independent server on Windows — not managed by the gateway.
 
 ### Deployment Topologies
 
 AIIR supports several deployment configurations. Choose the one that fits your environment.
 
-#### Solo Analyst on SIFT (stdio)
+#### Solo Analyst on SIFT
 
-The simplest setup. One analyst, one SIFT workstation. The LLM client runs directly on SIFT and connects to MCP servers via stdio. No gateway needed.
+The simplest setup. One analyst, one SIFT workstation. The gateway runs locally and the LLM client connects to it via Streamable HTTP on localhost.
 
 ```mermaid
 graph LR
     subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(Claude Code, Cursor, etc.)"]
+        GW["aiir-gateway<br/>localhost:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
@@ -106,17 +107,18 @@ graph LR
         CASE[Case Directory]
         CLI[aiir CLI]
 
-        CC -->|stdio| FM
-        CC -->|stdio| SM
-        CC -->|stdio| FR
-        CC -->|stdio| WTR
-        CC -->|stdio| OC
+        CC -->|streamable-http| GW
+        GW -->|stdio| FM
+        GW -->|stdio| SM
+        GW -->|stdio| FR
+        GW -->|stdio| WTR
+        GW -->|stdio| OC
         FM --> CASE
         CLI --> CASE
     end
 ```
 
-Setup: `aiir setup` (auto-detects locally installed MCPs and generates stdio config).
+Setup: `aiir setup client --sift=http://127.0.0.1:4508 -y`
 
 #### SIFT + Windows Forensic VM
 
