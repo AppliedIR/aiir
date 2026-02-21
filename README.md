@@ -11,8 +11,9 @@ AIIR is an LLM-agnostic forensic investigation platform built on the Model Conte
 ```mermaid
 graph TB
     subgraph sift ["SIFT Workstation"]
-        CC["LLM Client<br/>(Claude Code / Cursor / Claude Desktop /<br/>OpenWebUI / Goose / OpenCode / ...)"]
-        CLI["aiir CLI<br/>Human-only terminal tool"]
+        CC["LLM Client"]
+        CLI["aiir CLI"]
+        CC ~~~ CLI
         GW["aiir-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Case management + discipline"]
         SM["sift-mcp<br/>Linux tool execution"]
