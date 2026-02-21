@@ -46,7 +46,7 @@ graph TB
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
     CLI --> CASE
-    WM -->|"SMB audit trail"| CASE
+    WM -->|"SMB"| CASE
 ```
 
 ### Where Things Run
@@ -124,7 +124,7 @@ graph LR
     end
 
     CC -->|"streamable-http"| WAPI
-    WM -->|"SMB audit trail"| CASE
+    WM -->|"SMB"| CASE
 ```
 
 #### Optional External MCPs
@@ -182,7 +182,7 @@ graph LR
     CC -->|"HTTPS"| ZE
     OC -->|"HTTP(S)"| OCTI
     CLI -->|"NFS / SMB"| CASE
-    WM -->|"SMB audit trail"| CASE
+    WM -->|"SMB"| CASE
 ```
 
 #### Multi-Examiner Team
