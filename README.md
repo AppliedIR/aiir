@@ -6,7 +6,7 @@ AI-assisted incident response platform -- CLI, installers, and architecture refe
 
 AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others. The LLM client and the aiir CLI are the two human-facing tools -- they always run on the same machine (the SIFT workstation).
 
-### Component Map
+### Core Component Map
 
 ```mermaid
 graph TB
@@ -47,6 +47,28 @@ graph TB
     CC -->|"streamable-http"| WAPI
     CLI --> CASE
     WM -->|"SMB"| CASE
+```
+
+### Human-in-the-Loop Workflow
+
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. The CLI reads confirmation from `/dev/tty`, which the AI cannot control.
+
+```mermaid
+sequenceDiagram
+    participant AI as LLM + MCP Tools
+    participant Case as Case Directory
+    participant Human as aiir CLI (human)
+
+    AI->>Case: record_finding() -> DRAFT
+    AI->>Case: record_timeline_event() -> DRAFT
+    Note over Case: Staged for review
+
+    Human->>Case: aiir approve (interactive review)
+    Human-->>Case: Edit, add note, or approve as-is
+    Human->>Case: APPROVED or REJECTED
+
+    Note over Case: Only APPROVED items<br/>appear in reports
+    AI->>Case: generate_full_report()
 ```
 
 ### Where Things Run
@@ -127,7 +149,7 @@ graph LR
     WM -->|"SMB"| CASE
 ```
 
-#### Optional External MCPs
+#### With Optional External MCPs
 
 ```mermaid
 graph LR
@@ -217,28 +239,6 @@ graph LR
     CLI1 --> CASE
     MCPs2 --> CASE
     CLI2 --> CASE
-```
-
-### Human-in-the-Loop Workflow
-
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. The CLI reads confirmation from `/dev/tty`, which the AI cannot control.
-
-```mermaid
-sequenceDiagram
-    participant AI as LLM + MCP Tools
-    participant Case as Case Directory
-    participant Human as aiir CLI (human)
-
-    AI->>Case: record_finding() -> DRAFT
-    AI->>Case: record_timeline_event() -> DRAFT
-    Note over Case: Staged for review
-
-    Human->>Case: aiir approve (interactive review)
-    Human-->>Case: Edit, add note, or approve as-is
-    Human->>Case: APPROVED or REJECTED
-
-    Note over Case: Only APPROVED items<br/>appear in reports
-    AI->>Case: generate_full_report()
 ```
 
 ### Case Directory Structure
