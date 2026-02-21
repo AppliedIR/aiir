@@ -74,37 +74,55 @@ One SIFT workstation. The LLM client and aiir CLI both run on SIFT.
 
 ### SIFT + Windows
 
-SIFT workstation + Windows forensic VM. The LLM client and aiir CLI run on SIFT. Two separate HTTP connections to the MCP servers.
+SIFT workstation + Windows forensic VM. The LLM client and aiir CLI run on SIFT. wintools-mcp runs on the Windows box and accesses the case directory over SMB. The LLM client makes two separate HTTP connections: one to the gateway (SIFT tools) and one to wintools-mcp (Windows tools).
 
 ```
 ┌─────────────────────── SIFT Workstation ───────────────────────┐
 │                                                                │
 │  LLM Client ──streamable-http──► aiir-gateway :4508 ──► MCPs  │
-│       │                                                        │
-│       └──────streamable-http──► wintools-mcp :4624 (Windows)   │
 │                                                                │
 │  aiir CLI ──filesystem──► Case Directory                       │
 │                                                                │
 └────────────────────────────────────────────────────────────────┘
+
+┌───────────── Windows Forensic Workstation ─────────────────────┐
+│                                                                │
+│  wintools-mcp :4624                                            │
+│       │                                                        │
+│       └──SMB──► Case Directory (on SIFT)                       │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+
+LLM Client ──streamable-http──► wintools-mcp :4624
 ```
 
 ### Multi-examiner
 
-Multiple examiners share a case. Each examiner runs the LLM client and aiir CLI on their own machine. LLM clients connect to the gateway via API keys. CLIs access the shared case directory over NFS/SMB.
+Multiple examiners share a case. Each examiner runs their own full stack (LLM client, aiir CLI, aiir-gateway, and all MCPs) on their own SIFT workstation. The case directory lives on shared storage (NFS or SMB) so all examiners read and write the same case.
 
 ```
-┌─ Examiner 1 ──────────┐
-│ LLM Client ──(API key → steve)──► aiir-gateway :4508 ──► MCPs ──► Case Dir
-│ aiir CLI ──(NFS/SMB)───────────────────────────────────────────► Case Dir
-└────────────────────────┘
-
-┌─ Examiner 2 ──────────┐
-│ LLM Client ──(API key → jane)───► aiir-gateway :4508 ──► MCPs ──► Case Dir
-│ aiir CLI ──(NFS/SMB)───────────────────────────────────────────► Case Dir
-└────────────────────────┘
+┌─ Examiner 1 — SIFT Workstation ─┐
+│ LLM Client + aiir CLI            │
+│ aiir-gateway :4508 ──► MCPs      │
+│                                   │
+└───────────────────────────────────┘
+        │
+        ▼
+┌─ Shared Storage (NFS / SMB) ─────┐
+│ Case Directory                    │
+│   examiners/steve/                │
+│   examiners/jane/                 │
+└───────────────────────────────────┘
+        ▲
+        │
+┌─ Examiner 2 — SIFT Workstation ─┐
+│ LLM Client + aiir CLI            │
+│ aiir-gateway :4508 ──► MCPs      │
+│                                   │
+└───────────────────────────────────┘
 ```
 
-Each examiner writes to `examiners/{their-slug}/`. Reads merge all `examiners/*/` with scoped IDs. The shared case directory lives on the SIFT server and is exported via NFS or SMB.
+Each examiner writes to `examiners/{their-slug}/`. Reads merge all `examiners/*/` with scoped IDs. The shared case directory is exported via NFS or SMB so every examiner's stack sees the same state.
 
 ---
 
@@ -138,7 +156,7 @@ cases/INC-2026-0219/
 ## Protocol Stack
 
 ```
-LLM Client (Claude Code, Cursor, OpenWebUI, etc.)
+LLM Client
     │
     │  MCP Streamable HTTP (POST /mcp, SSE responses)
     │
