@@ -36,13 +36,15 @@ graph TB
     end
 
     subgraph winbox ["Windows Forensic Workstation (optional)"]
-        WT["wintools-mcp<br/>:4624"]
+        WAPI["wintools-mcp API<br/>:4624"]
+        WM["wintools-mcp<br/>Windows tool execution"]
         FK2["forensic-knowledge"]
-        WT --> FK2
+        WAPI --> WM
+        WM --> FK2
     end
 
     CC -->|"streamable-http"| GW
-    CC -->|"streamable-http"| WT
+    CC -->|"streamable-http"| WAPI
     CLI --> CASE
 ```
 
