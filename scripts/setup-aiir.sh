@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# setup-aiir.sh — AIIR CLI Installer
+# setup-aiir.sh -- AIIR CLI Installer
 #
 # Standalone installer for the aiir CLI, the human interface for the AIIR
 # platform. Handles approval workflows, evidence management, and forensic
@@ -85,6 +85,25 @@ prompt() {
     fi
 }
 
+# Portable resolve_path (works on macOS where resolve_path is unavailable)
+resolve_path() {
+    local target="$1"
+    # If the directory exists, resolve directly
+    if [[ -d "$target" ]]; then
+        (cd "$target" && pwd)
+    else
+        # Ensure parent exists, then resolve
+        local parent
+        parent="$(dirname "$target")"
+        mkdir -p "$parent" 2>/dev/null || true
+        if [[ -d "$parent" ]]; then
+            echo "$(cd "$parent" && pwd)/$(basename "$target")"
+        else
+            echo "$target"
+        fi
+    fi
+}
+
 # =============================================================================
 # Banner
 # =============================================================================
@@ -92,7 +111,7 @@ prompt() {
 echo ""
 echo -e "${BOLD}============================================================${NC}"
 echo -e "${BOLD}  AIIR CLI Installer${NC}"
-echo -e "${BOLD}  Artificial Intelligence Incident Response — Human Interface${NC}"
+echo -e "${BOLD}  Artificial Intelligence Incident Response -- Human Interface${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
 
@@ -170,11 +189,13 @@ else
     exit 1
 fi
 
-# Network
-if git ls-remote https://github.com/AppliedIR/aiir.git HEAD &>/dev/null 2>&1; then
+# Network (test with a public endpoint -- AppliedIR repos may be private)
+if curl -sf --max-time 10 "https://github.com" &>/dev/null; then
+    ok "Network access to GitHub"
+elif git ls-remote https://github.com/AppliedIR/aiir.git HEAD &>/dev/null 2>&1; then
     ok "Network access to GitHub"
 else
-    warn "Cannot reach GitHub — installation requires network access"
+    warn "Cannot reach GitHub -- installation requires network access"
     exit 1
 fi
 
@@ -190,12 +211,12 @@ if [[ -n "$INSTALL_DIR_ARG" ]]; then
 else
     INSTALL_DIR=$(prompt "Installation directory" "$HOME/aiir/aiir-cli")
 fi
-INSTALL_DIR=$(realpath -m "$INSTALL_DIR")
+INSTALL_DIR=$(resolve_path "$INSTALL_DIR")
 
 # Clone or update
 if [[ -d "$INSTALL_DIR/.git" ]]; then
     info "Existing repo found. Pulling latest..."
-    (cd "$INSTALL_DIR" && git pull --quiet) || warn "Could not update — continuing with existing code"
+    (cd "$INSTALL_DIR" && git pull --quiet) || warn "Could not update -- continuing with existing code"
     ok "Updated: $INSTALL_DIR"
 elif [[ -d "$INSTALL_DIR" ]] && [[ "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
     err "Directory $INSTALL_DIR exists and is not a git repo"
@@ -210,7 +231,7 @@ fi
 
 # Set up venv
 if [[ -n "$VENV_ARG" ]]; then
-    VENV_DIR=$(realpath -m "$VENV_ARG")
+    VENV_DIR=$(resolve_path "$VENV_ARG")
     if [[ ! -d "$VENV_DIR" ]]; then
         err "Specified venv does not exist: $VENV_DIR"
         exit 1
@@ -241,7 +262,7 @@ ok "aiir CLI installed"
 if "$VENV_PYTHON" -c "import aiir_cli" 2>/dev/null; then
     ok "aiir_cli importable"
 else
-    err "aiir_cli import failed — installation may be broken"
+    err "aiir_cli import failed -- installation may be broken"
     exit 1
 fi
 
@@ -292,7 +313,10 @@ fi
 EXAMINER=$(echo "$EXAMINER" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
 
 if [[ -z "$EXAMINER" ]]; then
-    EXAMINER=$(whoami | tr '[:upper:]' '[:lower:]')
+    EXAMINER=$(whoami | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')
+fi
+if [[ -z "$EXAMINER" ]]; then
+    EXAMINER="examiner"
 fi
 
 # Save to config
@@ -324,9 +348,15 @@ elif [[ -f "$HOME/.zshrc" ]]; then
     SHELL_RC="$HOME/.zshrc"
 fi
 
-if [[ -n "$SHELL_RC" ]] && ! grep -q "AIIR_EXAMINER" "$SHELL_RC" 2>/dev/null; then
-    echo "export AIIR_EXAMINER=\"$EXAMINER\"" >> "$SHELL_RC"
-    ok "Added AIIR_EXAMINER to $SHELL_RC"
+if [[ -n "$SHELL_RC" ]]; then
+    if grep -q "AIIR_EXAMINER" "$SHELL_RC" 2>/dev/null; then
+        sed -i.bak "s/^export AIIR_EXAMINER=.*$/export AIIR_EXAMINER=\"$EXAMINER\"/" "$SHELL_RC"
+        rm -f "$SHELL_RC.bak"
+        ok "Updated AIIR_EXAMINER in $SHELL_RC"
+    else
+        echo "export AIIR_EXAMINER=\"$EXAMINER\"" >> "$SHELL_RC"
+        ok "Added AIIR_EXAMINER to $SHELL_RC"
+    fi
 fi
 export AIIR_EXAMINER="$EXAMINER"
 
@@ -371,7 +401,7 @@ header "Installation Complete"
 if $VERIFY_OK; then
     ok "All checks passed"
 else
-    warn "Some checks had warnings — see output above"
+    warn "Some checks had warnings -- see output above"
 fi
 
 echo ""
