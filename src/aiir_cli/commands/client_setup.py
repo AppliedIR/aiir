@@ -54,10 +54,32 @@ def cmd_setup_client(args, identity: dict) -> None:
     servers: dict[str, dict] = {}
 
     if sift_url:
-        servers["aiir"] = {
-            "type": "streamable-http",
-            "url": _ensure_mcp_path(sift_url),
-        }
+        # Try to discover per-backend endpoints from the running gateway
+        backends_discovered = False
+        services = _discover_services(sift_url, None)
+        if services:
+            running = [s for s in services if s.get("started")]
+            if running:
+                backends_discovered = True
+                # Aggregate endpoint
+                servers["aiir"] = {
+                    "type": "streamable-http",
+                    "url": _ensure_mcp_path(sift_url),
+                }
+                # Per-backend endpoints
+                for s in running:
+                    name = s["name"]
+                    servers[name] = {
+                        "type": "streamable-http",
+                        "url": f"{sift_url.rstrip('/')}/mcp/{name}",
+                    }
+
+        if not backends_discovered:
+            # Gateway not reachable or no backends — fall back to aggregate
+            servers["aiir"] = {
+                "type": "streamable-http",
+                "url": _ensure_mcp_path(sift_url),
+            }
 
     if windows_url:
         servers["wintools-mcp"] = {
