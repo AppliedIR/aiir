@@ -372,6 +372,7 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
     added = 0
     updated = 0
     skipped = 0
+    protected = 0
 
     for item in incoming:
         item_id = item.get(id_field, "")
@@ -385,6 +386,9 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
             added += 1
         else:
             existing = local_by_id[item_id]
+            if existing.get("status") == "APPROVED":
+                protected += 1
+                continue
             inc_ts = item.get("modified_at", item.get("staged", ""))
             loc_ts = existing.get("modified_at", existing.get("staged", ""))
             if inc_ts > loc_ts:
@@ -396,4 +400,4 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
                 skipped += 1
 
     _atomic_write(local_file, json.dumps(local, indent=2, default=str))
-    return {"added": added, "updated": updated, "skipped": skipped}
+    return {"added": added, "updated": updated, "skipped": skipped, "protected": protected}

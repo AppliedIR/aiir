@@ -119,6 +119,17 @@ def cmd_register_evidence(args, identity: dict) -> None:
         print(f"File not found: {args.path}", file=sys.stderr)
         sys.exit(1)
 
+    # Validate path is within case directory
+    try:
+        resolved = evidence_path.resolve()
+        case_resolved = case_dir.resolve()
+        if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
+            print(f"Error: evidence path must be within the case directory: {case_dir}", file=sys.stderr)
+            sys.exit(1)
+    except OSError as e:
+        print(f"Failed to resolve evidence path: {e}", file=sys.stderr)
+        sys.exit(1)
+
     # Compute SHA256
     try:
         sha256 = hashlib.sha256()
