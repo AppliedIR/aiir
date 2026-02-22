@@ -1,4 +1,18 @@
-"""Evidence management commands: lock, unlock, register."""
+"""Evidence management commands: lock, unlock, register, list, verify, log.
+
+Subcommand group:
+  aiir evidence register <path> [--description]
+  aiir evidence list
+  aiir evidence verify
+  aiir evidence log [--path <filter>]
+  aiir evidence lock
+  aiir evidence unlock
+
+Legacy aliases (backward compat):
+  aiir register-evidence <path>
+  aiir lock-evidence
+  aiir unlock-evidence
+"""
 
 from __future__ import annotations
 
@@ -12,6 +26,26 @@ from pathlib import Path
 
 from aiir_cli.approval_auth import require_tty_confirmation
 from aiir_cli.case_io import get_case_dir
+
+
+def cmd_evidence(args, identity: dict) -> None:
+    """Handle evidence subcommands."""
+    action = getattr(args, "evidence_action", None)
+    if action == "register":
+        cmd_register_evidence(args, identity)
+    elif action == "list":
+        cmd_list_evidence(args, identity)
+    elif action == "verify":
+        cmd_verify_evidence(args, identity)
+    elif action == "log":
+        cmd_evidence_log(args, identity)
+    elif action == "lock":
+        cmd_lock_evidence(args, identity)
+    elif action == "unlock":
+        cmd_unlock_evidence(args, identity)
+    else:
+        print("Usage: aiir evidence {register|list|verify|log|lock|unlock}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_lock_evidence(args, identity: dict) -> None:
@@ -161,3 +195,146 @@ def _log_evidence_action(case_dir: Path, action: str, detail: str,
             os.fsync(f.fileno())
     except OSError as e:
         print(f"WARNING: failed to write evidence access log: {e}", file=sys.stderr)
+
+
+def cmd_list_evidence(args, identity: dict) -> None:
+    """List registered evidence files from evidence.json."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+    reg_file = case_dir / "evidence.json"
+
+    if not reg_file.exists():
+        print("No evidence registry found.")
+        return
+
+    try:
+        registry = json.loads(reg_file.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Failed to read evidence registry: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    files = registry.get("files", [])
+    if not files:
+        print("No evidence files registered.")
+        return
+
+    print(f"{'#':<4} {'SHA256':<20} {'Registered By':<15} Path")
+    print("-" * 80)
+    for i, entry in enumerate(files, 1):
+        sha = entry.get("sha256", "?")[:16] + "..."
+        by = entry.get("registered_by", "?")
+        path = entry.get("path", "?")
+        print(f"{i:<4} {sha:<20} {by:<15} {path}")
+        if entry.get("description"):
+            print(f"     Description: {entry['description']}")
+
+    print(f"\n{len(files)} evidence file(s) registered")
+
+
+def cmd_verify_evidence(args, identity: dict) -> None:
+    """Re-hash registered evidence files and report modifications."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+    reg_file = case_dir / "evidence.json"
+
+    if not reg_file.exists():
+        print("No evidence registry found.")
+        return
+
+    try:
+        registry = json.loads(reg_file.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Failed to read evidence registry: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    files = registry.get("files", [])
+    if not files:
+        print("No evidence files registered.")
+        return
+
+    verified = 0
+    modified = 0
+    missing = 0
+    errors = 0
+
+    print(f"{'Status':<12} {'Path'}")
+    print("-" * 70)
+
+    for entry in files:
+        path = Path(entry.get("path", ""))
+        expected_hash = entry.get("sha256", "")
+
+        if not path.exists():
+            print(f"{'MISSING':<12} {path}")
+            missing += 1
+            continue
+
+        try:
+            sha256 = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(8192), b""):
+                    sha256.update(chunk)
+            actual_hash = sha256.hexdigest()
+        except OSError as e:
+            print(f"{'ERROR':<12} {path} ({e})")
+            errors += 1
+            continue
+
+        if actual_hash == expected_hash:
+            print(f"{'OK':<12} {path}")
+            verified += 1
+        else:
+            print(f"{'MODIFIED':<12} {path}")
+            print(f"             Expected: {expected_hash}")
+            print(f"             Actual:   {actual_hash}")
+            modified += 1
+
+    print(f"\n{verified} verified, {modified} MODIFIED, {missing} missing, {errors} errors")
+    if modified:
+        print("ALERT: Evidence files have been modified since registration.")
+
+
+def cmd_evidence_log(args, identity: dict) -> None:
+    """Show evidence access log entries."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+    log_file = case_dir / "evidence_access.jsonl"
+
+    if not log_file.exists():
+        print("No evidence access log found.")
+        return
+
+    path_filter = getattr(args, "path_filter", None)
+
+    try:
+        log_text = log_file.read_text()
+    except OSError as e:
+        print(f"Failed to read evidence access log: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    entries = []
+    for line in log_text.strip().split("\n"):
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+            entries.append(entry)
+        except json.JSONDecodeError:
+            continue
+
+    if path_filter:
+        entries = [e for e in entries if path_filter in e.get("detail", "")]
+
+    if not entries:
+        print("No evidence access log entries found.")
+        return
+
+    print(f"{'Timestamp':<22} {'Action':<10} {'Examiner':<12} Detail")
+    print("-" * 80)
+    for e in entries:
+        ts = e.get("ts", "?")[:19]
+        action = e.get("action", "?")
+        examiner = e.get("examiner", "?")
+        detail = e.get("detail", "")
+        if len(detail) > 40:
+            detail = detail[:37] + "..."
+        print(f"{ts:<22} {action:<10} {examiner:<12} {detail}")
+
+    print(f"\n{len(entries)} entries")

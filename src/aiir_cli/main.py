@@ -18,12 +18,14 @@ from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.reject import cmd_reject
 from aiir_cli.commands.review import cmd_review
 from aiir_cli.commands.execute import cmd_exec
-from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
+from aiir_cli.commands.evidence import cmd_evidence, cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
 from aiir_cli.commands.config import cmd_config
 from aiir_cli.commands.todo import cmd_todo
 from aiir_cli.commands.setup import cmd_setup
 from aiir_cli.commands.sync import cmd_export, cmd_merge
 from aiir_cli.commands.migrate import cmd_migrate
+from aiir_cli.commands.report import cmd_report
+from aiir_cli.commands.audit_cmd import cmd_audit
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -160,6 +162,47 @@ def build_parser() -> argparse.ArgumentParser:
     p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current examiner")
     p_config.add_argument("--reset-pin", action="store_true", help="Reset approval PIN (requires current PIN)")
 
+    # report
+    p_report = sub.add_parser("report", help="Generate case reports")
+    p_report.add_argument("--full", action="store_true", help="Full case report (JSON)")
+    p_report.add_argument("--executive-summary", action="store_true", help="Executive summary")
+    p_report.add_argument("--timeline", dest="report_timeline", action="store_true", help="Timeline report")
+    p_report.add_argument("--from", dest="from_date", help="Start date filter (ISO format)")
+    p_report.add_argument("--to", dest="to_date", help="End date filter (ISO format)")
+    p_report.add_argument("--ioc", action="store_true", help="IOC report from approved findings")
+    p_report.add_argument("--findings", dest="report_findings", help="Finding IDs (comma-separated)")
+    p_report.add_argument("--status-brief", action="store_true", help="Quick status counts")
+    p_report.add_argument("--save", help="Save output to file (relative paths use case_dir/reports/)")
+
+    # evidence (subcommand group)
+    p_evidence = sub.add_parser("evidence", help="Evidence management")
+    evidence_sub = p_evidence.add_subparsers(dest="evidence_action", help="Evidence actions")
+
+    p_ev_register = evidence_sub.add_parser("register", help="Register evidence file (hash + chmod 444)")
+    p_ev_register.add_argument("path", help="Path to evidence file")
+    p_ev_register.add_argument("--description", default="", help="Description of evidence")
+
+    evidence_sub.add_parser("list", help="List registered evidence files")
+
+    evidence_sub.add_parser("verify", help="Re-hash registered evidence, report modifications")
+
+    p_ev_log = evidence_sub.add_parser("log", help="Show evidence access log")
+    p_ev_log.add_argument("--path", dest="path_filter", help="Filter by path substring")
+
+    evidence_sub.add_parser("lock", help="Set evidence directory to read-only")
+    evidence_sub.add_parser("unlock", help="Unlock evidence directory for new files")
+
+    # audit
+    p_audit = sub.add_parser("audit", help="View audit trail")
+    audit_sub = p_audit.add_subparsers(dest="audit_action", help="Audit actions")
+
+    p_audit_log = audit_sub.add_parser("log", help="Show audit log entries")
+    p_audit_log.add_argument("--limit", type=int, default=50, help="Limit entries shown")
+    p_audit_log.add_argument("--mcp", help="Filter by MCP name")
+    p_audit_log.add_argument("--tool", help="Filter by tool name")
+
+    audit_sub.add_parser("summary", help="Audit summary: counts per MCP and tool")
+
     return parser
 
 
@@ -190,6 +233,9 @@ def main() -> None:
         "export": cmd_export,
         "merge": cmd_merge,
         "case": _cmd_case,
+        "report": cmd_report,
+        "evidence": cmd_evidence,
+        "audit": cmd_audit,
     }
 
     handler = dispatch.get(args.command)
