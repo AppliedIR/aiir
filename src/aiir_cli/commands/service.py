@@ -105,6 +105,10 @@ def _service_status(args) -> None:
     if data is None:
         sys.exit(1)
 
+    if "error" in data:
+        print(f"ERROR: {data['error']}", file=sys.stderr)
+        sys.exit(1)
+
     services = data.get("services", [])
     if not services:
         print("No services found.")

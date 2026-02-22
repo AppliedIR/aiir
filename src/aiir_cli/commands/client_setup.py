@@ -331,9 +331,17 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
     """Write LibreChat mcpServers YAML snippet."""
     lines = ["# AIIR MCP servers — merge into your librechat.yaml", "mcpServers:"]
     for name, info in servers.items():
+        # Skip non-streamable-http entries (Claude Desktop npx bridge)
+        if "url" not in info:
+            continue
         lines.append(f"  {name}:")
         lines.append(f"    type: \"{info['type']}\"")
         lines.append(f"    url: \"{info['url']}\"")
+        headers = info.get("headers")
+        if headers:
+            lines.append("    headers:")
+            for hk, hv in headers.items():
+                lines.append(f"      {hk}: \"{hv}\"")
         lines.append("    timeout: 60000")
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_600(path, "\n".join(lines) + "\n")
@@ -417,8 +425,6 @@ def _cmd_setup_client_remote(args, identity: dict) -> None:
     Discovers running backends via the service management API, then builds
     per-backend MCP endpoint entries with bearer token auth.
     """
-    import yaml
-
     auto = getattr(args, "yes", False)
     client = _resolve_client(args, auto)
     examiner = _resolve_examiner(args, identity)
@@ -602,6 +608,6 @@ def _save_gateway_config(url: str, token: str | None) -> None:
 
     try:
         config_dir.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(yaml.dump(existing, default_flow_style=False))
+        _write_600(config_file, yaml.dump(existing, default_flow_style=False))
     except OSError as e:
         print(f"Warning: could not save gateway config: {e}", file=sys.stderr)
