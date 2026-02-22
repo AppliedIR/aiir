@@ -97,11 +97,14 @@ def get_examiner(case_dir: Path | None = None) -> str:
         return env_analyst
     if case_dir:
         meta = load_case_meta(case_dir)
-        exam = meta.get("examiner", "")
+        exam = meta.get("examiner", "").strip().lower()
         if exam:
+            _validate_examiner(exam)
             return exam
     import getpass
-    return getpass.getuser().lower()
+    fallback = getpass.getuser().strip().lower()
+    _validate_examiner(fallback)
+    return fallback
 
 
 def load_case_meta(case_dir: Path) -> dict:
@@ -213,13 +216,17 @@ def load_approval_log(case_dir: Path) -> list[dict]:
     if not log_file.exists():
         return []
     entries = []
+    corrupt_lines = 0
     for line in log_file.read_text().strip().split("\n"):
         if not line:
             continue
         try:
             entries.append(json.loads(line))
         except json.JSONDecodeError:
+            corrupt_lines += 1
             continue
+    if corrupt_lines:
+        print(f"Warning: {corrupt_lines} corrupt line(s) skipped in approvals.jsonl", file=sys.stderr)
     return entries
 
 
