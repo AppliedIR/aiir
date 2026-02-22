@@ -62,6 +62,7 @@ def cmd_reject(args, identity: dict) -> None:
         item["status"] = "REJECTED"
         item["rejected_at"] = now
         item["rejected_by"] = identity["examiner"]
+        item["modified_at"] = now
         if reason:
             item["rejection_reason"] = reason
         write_approval_log(

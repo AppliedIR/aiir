@@ -56,7 +56,18 @@ def _todo_list(case_dir, args) -> None:
 def _todo_add(case_dir, args, identity: dict) -> None:
     """Add a new TODO."""
     todos = load_todos(case_dir)
-    todo_id = f"TODO-{len(todos) + 1:03d}"
+    examiner = identity["examiner"]
+    prefix = f"TODO-{examiner}-"
+    max_seq = 0
+    for t in todos:
+        tid = t.get("todo_id", "")
+        if tid.startswith(prefix):
+            try:
+                seq = int(tid[len(prefix):])
+                max_seq = max(max_seq, seq)
+            except ValueError:
+                pass
+    todo_id = f"{prefix}{max_seq + 1:03d}"
 
     todo = {
         "todo_id": todo_id,

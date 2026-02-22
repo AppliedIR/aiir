@@ -214,8 +214,12 @@ def load_approval_log(case_dir: Path) -> list[dict]:
         return []
     entries = []
     for line in log_file.read_text().strip().split("\n"):
-        if line:
+        if not line:
+            continue
+        try:
             entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
     return entries
 
 

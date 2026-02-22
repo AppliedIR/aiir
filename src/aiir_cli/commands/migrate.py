@@ -79,7 +79,11 @@ def cmd_migrate(args, identity: dict) -> None:
         # Findings
         findings_file = edir / "findings.json"
         if findings_file.exists():
-            findings = json.loads(findings_file.read_text())
+            try:
+                findings = json.loads(findings_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"    WARNING: could not read {findings_file}: {e}", file=sys.stderr)
+                findings = []
             for f in findings:
                 old_id = f.get("id", "")
                 new_id = _re_id(old_id, "F", exam)
@@ -94,7 +98,11 @@ def cmd_migrate(args, identity: dict) -> None:
         # Timeline
         timeline_file = edir / "timeline.json"
         if timeline_file.exists():
-            timeline = json.loads(timeline_file.read_text())
+            try:
+                timeline = json.loads(timeline_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"    WARNING: could not read {timeline_file}: {e}", file=sys.stderr)
+                timeline = []
             for t in timeline:
                 old_id = t.get("id", "")
                 new_id = _re_id(old_id, "T", exam)
@@ -109,7 +117,11 @@ def cmd_migrate(args, identity: dict) -> None:
         # TODOs
         todos_file = edir / "todos.json"
         if todos_file.exists():
-            todos = json.loads(todos_file.read_text())
+            try:
+                todos = json.loads(todos_file.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                print(f"    WARNING: could not read {todos_file}: {e}", file=sys.stderr)
+                todos = []
             for t in todos:
                 old_id = t.get("todo_id", "")
                 new_id = _re_id(old_id, "TODO", exam)
@@ -171,6 +183,8 @@ def cmd_migrate(args, identity: dict) -> None:
         with open(case_dir / "actions.jsonl", "a", encoding="utf-8") as f:
             for entry in all_actions:
                 f.write(json.dumps(entry, default=str) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
 
     # Merge approvals
     if all_approvals:

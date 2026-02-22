@@ -345,8 +345,10 @@ def _case_activate(args, identity: dict) -> None:
     """Set active case for session."""
     import os
     from pathlib import Path
+    from aiir_cli.case_io import _validate_case_id
 
     case_id = args.case_id
+    _validate_case_id(case_id)
     cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
     case_dir = cases_dir / case_id
 
@@ -364,8 +366,6 @@ def _case_activate(args, identity: dict) -> None:
         print(f"Failed to set active case: {e}", file=sys.stderr)
         sys.exit(1)
 
-    os.environ["AIIR_CASE_DIR"] = str(case_dir)
-    os.environ["AIIR_ACTIVE_CASE"] = case_id
     print(f"Active case: {case_id}")
 
 
@@ -376,8 +376,10 @@ def _case_close(args, identity: dict) -> None:
     from pathlib import Path
 
     import yaml
+    from aiir_cli.case_io import _validate_case_id
 
     case_id = args.case_id
+    _validate_case_id(case_id)
     cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
     case_dir = cases_dir / case_id
 

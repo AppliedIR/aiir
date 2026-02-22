@@ -44,11 +44,11 @@ class TestTodoAdd:
                          assignee="", priority="medium", finding=None)
         cmd_todo(args, identity)
         output = capsys.readouterr().out
-        assert "TODO-001" in output
+        assert "TODO-analyst1-001" in output
 
         todos = load_todos(case_dir)
         assert len(todos) == 1
-        assert todos[0]["todo_id"] == "TODO-001"
+        assert todos[0]["todo_id"] == "TODO-analyst1-001"
         assert todos[0]["description"] == "Run volatility"
         assert todos[0]["created_by"] == "analyst1"
 
@@ -68,7 +68,7 @@ class TestTodoAdd:
                              assignee="", priority="medium", finding=None)
             cmd_todo(args, identity)
         todos = load_todos(case_dir)
-        assert [t["todo_id"] for t in todos] == ["TODO-001", "TODO-002", "TODO-003"]
+        assert [t["todo_id"] for t in todos] == ["TODO-analyst1-001", "TODO-analyst1-002", "TODO-analyst1-003"]
 
 
 class TestTodoComplete:
