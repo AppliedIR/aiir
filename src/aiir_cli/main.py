@@ -72,6 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_case_close.add_argument("case_id", help="Case ID to close")
     p_case_close.add_argument("--summary", default="", help="Closing summary")
 
+    case_sub.add_parser("list", help="List available cases")
+
     p_case_migrate = case_sub.add_parser("migrate", help="Migrate case from examiners/ to flat layout")
     p_case_migrate.add_argument("--examiner", help="Primary examiner slug")
     p_case_migrate.add_argument("--import-all", action="store_true", help="Re-ID and merge all examiners' data")
@@ -257,9 +259,62 @@ def _cmd_case(args, identity: dict) -> None:
         _case_close(args, identity)
     elif action == "migrate":
         cmd_migrate(args, identity)
+    elif action == "list":
+        _case_list(args, identity)
     else:
-        print("Usage: aiir case {init|activate|close|migrate}", file=sys.stderr)
+        print("Usage: aiir case {init|activate|close|list|migrate}", file=sys.stderr)
         sys.exit(1)
+
+
+def _case_list(args, identity: dict) -> None:
+    """List available cases from AIIR_CASES_DIR."""
+    import os
+    from pathlib import Path
+
+    import yaml
+
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    if not cases_dir.is_dir():
+        print(f"No cases directory found: {cases_dir}")
+        return
+
+    # Determine active case
+    active_case = None
+    active_file = Path(".aiir") / "active_case"
+    if active_file.exists():
+        try:
+            active_case = active_file.read_text().strip()
+        except OSError:
+            pass
+
+    cases = []
+    for entry in sorted(cases_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        meta_file = entry / "CASE.yaml"
+        if not meta_file.exists():
+            continue
+        try:
+            with open(meta_file) as f:
+                meta = yaml.safe_load(f) or {}
+        except (OSError, yaml.YAMLError):
+            meta = {}
+        cases.append({
+            "case_id": meta.get("case_id", entry.name),
+            "name": meta.get("name", ""),
+            "status": meta.get("status", "unknown"),
+            "dir_name": entry.name,
+        })
+
+    if not cases:
+        print("No cases found.")
+        return
+
+    print(f"{'Case ID':<25} {'Status':<10} Name")
+    print("-" * 65)
+    for c in cases:
+        marker = " (active)" if c["dir_name"] == active_case else ""
+        print(f"{c['case_id']:<25} {c['status']:<10} {c['name']}{marker}")
 
 
 def _case_init(args, identity: dict) -> None:

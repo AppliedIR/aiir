@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from aiir_cli.commands.migrate import cmd_migrate, _re_id
+from aiir_cli.commands.migrate import cmd_migrate, _re_id, _re_id_refs
 
 
 @pytest.fixture
@@ -709,6 +709,87 @@ class TestModifiedAtFallback:
 
         findings = json.loads((case_dir / "findings.json").read_text())
         assert findings[0]["modified_at"] == "2026-01-15T12:00:00Z"
+
+
+class TestActionReIdRefs:
+    """Actions.jsonl finding references are updated during migration."""
+
+    def test_action_finding_id_updated(self, tmp_path, monkeypatch, identity):
+        case_dir = tmp_path / "case1"
+        _make_old_case(case_dir, examiner="alice",
+                       findings=[
+                           {"id": "F-001", "status": "DRAFT", "title": "Test",
+                            "staged": "2026-01-10T12:00:00Z"},
+                       ],
+                       actions=[
+                           {"action": "discuss", "finding_id": "F-001",
+                            "ts": "2026-01-10T14:00:00Z"},
+                       ])
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_EXAMINER", "alice")
+        args = Namespace(case=None, examiner="alice", import_all=False)
+        cmd_migrate(args, identity)
+
+        entries = [json.loads(line)
+                   for line in (case_dir / "actions.jsonl").read_text().strip().split("\n")]
+        assert entries[0]["finding_id"] == "F-alice-001"
+
+    def test_action_related_findings_updated(self, tmp_path, monkeypatch, identity):
+        case_dir = tmp_path / "case1"
+        _make_old_case(case_dir, examiner="alice",
+                       findings=[
+                           {"id": "F-001", "status": "DRAFT", "title": "Test",
+                            "staged": "2026-01-10T12:00:00Z"},
+                           {"id": "F-002", "status": "DRAFT", "title": "Test2",
+                            "staged": "2026-01-10T12:00:00Z"},
+                       ],
+                       actions=[
+                           {"action": "correlate",
+                            "related_findings": ["F-001", "F-002"],
+                            "ts": "2026-01-10T14:00:00Z"},
+                       ])
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_EXAMINER", "alice")
+        args = Namespace(case=None, examiner="alice", import_all=False)
+        cmd_migrate(args, identity)
+
+        entries = [json.loads(line)
+                   for line in (case_dir / "actions.jsonl").read_text().strip().split("\n")]
+        assert entries[0]["related_findings"] == ["F-alice-001", "F-alice-002"]
+
+    def test_timeline_related_findings_updated(self, tmp_path, monkeypatch, identity):
+        case_dir = tmp_path / "case1"
+        _make_old_case(case_dir, examiner="alice",
+                       findings=[
+                           {"id": "F-001", "status": "DRAFT", "title": "Test",
+                            "staged": "2026-01-10T12:00:00Z"},
+                       ],
+                       timeline=[
+                           {"id": "T-001", "timestamp": "2026-01-10T08:00:00Z",
+                            "description": "Event", "staged": "2026-01-10T12:00:00Z",
+                            "related_findings": ["F-001"]},
+                       ])
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
+        monkeypatch.setenv("AIIR_EXAMINER", "alice")
+        args = Namespace(case=None, examiner="alice", import_all=False)
+        cmd_migrate(args, identity)
+
+        timeline = json.loads((case_dir / "timeline.json").read_text())
+        assert timeline[0]["related_findings"] == ["F-alice-001"]
+
+    def test_re_id_refs_helper(self):
+        id_map = {"F-001": "F-alice-001", "F-002": "F-alice-002"}
+        entry = {"finding_id": "F-001", "related_findings": ["F-001", "F-002"]}
+        _re_id_refs(entry, id_map)
+        assert entry["finding_id"] == "F-alice-001"
+        assert entry["related_findings"] == ["F-alice-001", "F-alice-002"]
+
+    def test_re_id_refs_no_match(self):
+        id_map = {"F-001": "F-alice-001"}
+        entry = {"finding_id": "F-999", "related_findings": ["F-999"]}
+        _re_id_refs(entry, id_map)
+        assert entry["finding_id"] == "F-999"  # Unchanged
+        assert entry["related_findings"] == ["F-999"]  # Unchanged
 
 
 class TestEvidenceCopy:

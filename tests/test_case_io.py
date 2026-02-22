@@ -2,9 +2,11 @@
 
 import json
 import os
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
+import yaml
 
 from aiir_cli.case_io import (
     compute_content_hash,
@@ -18,6 +20,7 @@ from aiir_cli.case_io import (
     verify_approval_integrity,
     write_approval_log,
 )
+from aiir_cli.main import _case_list
 
 
 @pytest.fixture
@@ -160,7 +163,7 @@ class TestIdentityLowercase:
         monkeypatch.setenv("AIIR_EXAMINER", "Jane.Doe")
         from aiir_cli.identity import get_examiner_identity
         identity = get_examiner_identity()
-        assert identity["examiner"] == "jane.doe"
+        assert identity["examiner"] == "jane-doe"
 
     def test_flag_override_lowercased(self, monkeypatch):
         monkeypatch.delenv("AIIR_EXAMINER", raising=False)
@@ -297,3 +300,97 @@ class TestImportBundle:
     def test_non_dict_returns_error(self, case_dir):
         result = import_bundle(case_dir, "not a dict")
         assert result["status"] == "error"
+
+
+class TestCaseList:
+    """Tests for aiir case list command."""
+
+    def test_list_shows_cases(self, tmp_path, monkeypatch, capsys):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        case1 = cases_dir / "INC-2026-001"
+        case1.mkdir()
+        with open(case1 / "CASE.yaml", "w") as f:
+            yaml.dump({"case_id": "INC-2026-001", "name": "Phishing", "status": "open"}, f)
+        case2 = cases_dir / "INC-2026-002"
+        case2.mkdir()
+        with open(case2 / "CASE.yaml", "w") as f:
+            yaml.dump({"case_id": "INC-2026-002", "name": "Ransomware", "status": "closed"}, f)
+
+        monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
+        monkeypatch.chdir(tmp_path)
+        args = Namespace(case=None)
+        identity = {"examiner": "tester", "os_user": "tester"}
+        _case_list(args, identity)
+
+        output = capsys.readouterr().out
+        assert "INC-2026-001" in output
+        assert "Phishing" in output
+        assert "open" in output
+        assert "INC-2026-002" in output
+        assert "Ransomware" in output
+        assert "closed" in output
+
+    def test_list_marks_active_case(self, tmp_path, monkeypatch, capsys):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        case1 = cases_dir / "INC-2026-001"
+        case1.mkdir()
+        with open(case1 / "CASE.yaml", "w") as f:
+            yaml.dump({"case_id": "INC-2026-001", "name": "Active Case", "status": "open"}, f)
+
+        # Set active case
+        aiir_dir = tmp_path / ".aiir"
+        aiir_dir.mkdir()
+        (aiir_dir / "active_case").write_text("INC-2026-001")
+
+        monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
+        monkeypatch.chdir(tmp_path)
+        args = Namespace(case=None)
+        identity = {"examiner": "tester", "os_user": "tester"}
+        _case_list(args, identity)
+
+        output = capsys.readouterr().out
+        assert "(active)" in output
+
+    def test_list_no_cases(self, tmp_path, monkeypatch, capsys):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+
+        monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
+        monkeypatch.chdir(tmp_path)
+        args = Namespace(case=None)
+        identity = {"examiner": "tester", "os_user": "tester"}
+        _case_list(args, identity)
+
+        output = capsys.readouterr().out
+        assert "No cases found" in output
+
+    def test_list_no_cases_dir(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path / "nonexistent"))
+        monkeypatch.chdir(tmp_path)
+        args = Namespace(case=None)
+        identity = {"examiner": "tester", "os_user": "tester"}
+        _case_list(args, identity)
+
+        output = capsys.readouterr().out
+        assert "No cases directory" in output
+
+    def test_list_skips_dirs_without_case_yaml(self, tmp_path, monkeypatch, capsys):
+        cases_dir = tmp_path / "cases"
+        cases_dir.mkdir()
+        (cases_dir / "not-a-case").mkdir()
+        case1 = cases_dir / "INC-2026-001"
+        case1.mkdir()
+        with open(case1 / "CASE.yaml", "w") as f:
+            yaml.dump({"case_id": "INC-2026-001", "name": "Real Case", "status": "open"}, f)
+
+        monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
+        monkeypatch.chdir(tmp_path)
+        args = Namespace(case=None)
+        identity = {"examiner": "tester", "os_user": "tester"}
+        _case_list(args, identity)
+
+        output = capsys.readouterr().out
+        assert "INC-2026-001" in output
+        assert "not-a-case" not in output

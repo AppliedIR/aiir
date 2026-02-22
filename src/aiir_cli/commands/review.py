@@ -369,19 +369,19 @@ def _show_evidence(case_dir: Path) -> None:
         print("  Evidence Access Log")
         print(f"{'=' * 60}")
         try:
-            log_text = access_log.read_text()
+            with open(access_log, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        print(f"  Warning: skipping corrupt log line", file=sys.stderr)
+                        continue
+                    print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}")
         except OSError as e:
             print(f"  Warning: could not read evidence access log: {e}", file=sys.stderr)
-            return
-        for line in log_text.strip().split("\n"):
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                print(f"  Warning: skipping corrupt log line", file=sys.stderr)
-                continue
-            print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}")
 
 
 def _show_audit(case_dir: Path, limit: int) -> None:
@@ -393,37 +393,38 @@ def _show_audit(case_dir: Path, limit: int) -> None:
     if audit_dir.is_dir():
         for jsonl_file in audit_dir.glob("*.jsonl"):
             try:
-                file_text = jsonl_file.read_text()
+                with open(jsonl_file, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entries.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
             except OSError as e:
                 print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
                 continue
-            for line in file_text.strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    entries.append(json.loads(line))
-                except json.JSONDecodeError:
-                    print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
 
     # Read approvals
     approvals_file = case_dir / "approvals.jsonl"
     if approvals_file.exists():
         try:
-            approvals_text = approvals_file.read_text()
+            with open(approvals_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        print(f"  Warning: skipping corrupt approval line", file=sys.stderr)
+                        continue
+                    entry["tool"] = "approval"
+                    entry["mcp"] = "aiir-cli"
+                    entries.append(entry)
         except OSError as e:
             print(f"  Warning: could not read {approvals_file}: {e}", file=sys.stderr)
-        else:
-            for line in approvals_text.strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    print(f"  Warning: skipping corrupt approval line", file=sys.stderr)
-                    continue
-                entry["tool"] = "approval"
-                entry["mcp"] = "aiir-cli"
-                entries.append(entry)
 
     entries.sort(key=lambda e: e.get("ts", ""))
     entries = entries[-limit:]

@@ -144,7 +144,15 @@ def _recent_failure_count(analyst: str) -> int:
 def _check_lockout(analyst: str) -> None:
     """Exit if analyst is locked out from too many failed attempts."""
     if _recent_failure_count(analyst) >= _MAX_PIN_ATTEMPTS:
-        print(f"Too many failed PIN attempts. Try again later.", file=sys.stderr)
+        import time
+        failures = _pin_failures.get(analyst, [])
+        if failures:
+            oldest_recent = min(t for t in failures if time.monotonic() - t < _LOCKOUT_SECONDS)
+            remaining = int(_LOCKOUT_SECONDS - (time.monotonic() - oldest_recent))
+            remaining = max(remaining, 1)
+        else:
+            remaining = _LOCKOUT_SECONDS
+        print(f"PIN locked. Too many failed attempts. Try again in {remaining} seconds.", file=sys.stderr)
         sys.exit(1)
 
 

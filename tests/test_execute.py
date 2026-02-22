@@ -36,6 +36,25 @@ class FakeArgs:
         self.case = case
 
 
+class TestExecEmptyCommand:
+    def test_empty_cmd_exits_with_guidance(self, case_dir, identity, monkeypatch, capsys):
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
+        args = FakeArgs(cmd=[], purpose="test")
+        with pytest.raises(SystemExit):
+            cmd_exec(args, identity)
+        captured = capsys.readouterr()
+        assert "No command provided" in captured.err
+        assert "--" in captured.err
+
+    def test_only_separator_exits_with_guidance(self, case_dir, identity, monkeypatch, capsys):
+        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
+        args = FakeArgs(cmd=["--"], purpose="test")
+        with pytest.raises(SystemExit):
+            cmd_exec(args, identity)
+        captured = capsys.readouterr()
+        assert "No command specified after" in captured.err
+
+
 class TestExec:
     def test_audit_written_on_exec(self, case_dir, identity, monkeypatch):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))

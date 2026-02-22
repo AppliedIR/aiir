@@ -35,38 +35,40 @@ def _load_audit_entries(case_dir: Path) -> list[dict]:
     if audit_dir.is_dir():
         for jsonl_file in sorted(audit_dir.glob("*.jsonl")):
             try:
-                file_text = jsonl_file.read_text()
+                with open(jsonl_file, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                            # Derive mcp name from filename if not present
+                            if "mcp" not in entry:
+                                entry["mcp"] = jsonl_file.stem
+                            entries.append(entry)
+                        except json.JSONDecodeError:
+                            corrupt_lines += 1
             except OSError as e:
                 print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
                 continue
-            for line in file_text.strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    # Derive mcp name from filename if not present
-                    if "mcp" not in entry:
-                        entry["mcp"] = jsonl_file.stem
-                    entries.append(entry)
-                except json.JSONDecodeError:
-                    corrupt_lines += 1
 
     approvals_file = case_dir / "approvals.jsonl"
     if approvals_file.exists():
         try:
-            approvals_text = approvals_file.read_text()
+            with open(approvals_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        entry.setdefault("tool", "approval")
+                        entry.setdefault("mcp", "aiir-cli")
+                        entries.append(entry)
+                    except json.JSONDecodeError:
+                        corrupt_lines += 1
         except OSError:
-            approvals_text = ""
-        for line in approvals_text.strip().split("\n"):
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-                entry.setdefault("tool", "approval")
-                entry.setdefault("mcp", "aiir-cli")
-                entries.append(entry)
-            except json.JSONDecodeError:
-                corrupt_lines += 1
+            pass
 
     if corrupt_lines:
         print(f"  Warning: {corrupt_lines} corrupt JSONL line(s) skipped in audit trail", file=sys.stderr)

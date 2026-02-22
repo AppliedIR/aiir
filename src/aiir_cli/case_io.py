@@ -217,14 +217,16 @@ def load_approval_log(case_dir: Path) -> list[dict]:
         return []
     entries = []
     corrupt_lines = 0
-    for line in log_file.read_text().strip().split("\n"):
-        if not line:
-            continue
-        try:
-            entries.append(json.loads(line))
-        except json.JSONDecodeError:
-            corrupt_lines += 1
-            continue
+    with open(log_file, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                corrupt_lines += 1
+                continue
     if corrupt_lines:
         print(f"Warning: {corrupt_lines} corrupt line(s) skipped in approvals.jsonl", file=sys.stderr)
     return entries

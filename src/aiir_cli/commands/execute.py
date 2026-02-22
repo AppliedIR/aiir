@@ -26,7 +26,7 @@ def cmd_exec(args, identity: dict) -> None:
     case_dir = get_case_dir(getattr(args, "case", None))
 
     if not args.cmd:
-        print("No command specified. Usage: aiir exec --purpose '...' -- <command>", file=sys.stderr)
+        print("No command provided. Usage: aiir exec --purpose \"reason\" -- <command> [args...]", file=sys.stderr)
         sys.exit(1)
 
     # Strip leading '--' if present
@@ -101,20 +101,22 @@ def _next_evidence_id(case_dir: Path, examiner: str) -> str:
     if log_file.exists():
         pattern = f"{_EVIDENCE_PREFIX}-{examiner}-{today}-"
         try:
-            for line in log_file.read_text().strip().split("\n"):
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                    eid = entry.get("evidence_id", "")
-                    if eid.startswith(pattern):
-                        try:
-                            seq = int(eid[len(pattern):])
-                            max_seq = max(max_seq, seq)
-                        except ValueError:
-                            pass
-                except json.JSONDecodeError:
-                    continue
+            with open(log_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        eid = entry.get("evidence_id", "")
+                        if eid.startswith(pattern):
+                            try:
+                                seq = int(eid[len(pattern):])
+                                max_seq = max(max_seq, seq)
+                            except ValueError:
+                                pass
+                    except json.JSONDecodeError:
+                        continue
         except OSError as e:
             import logging
             logging.debug("Could not read audit log for sequence: %s", e)

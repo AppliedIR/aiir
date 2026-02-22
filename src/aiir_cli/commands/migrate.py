@@ -137,18 +137,27 @@ def cmd_migrate(args, identity: dict) -> None:
         # Actions
         actions_file = edir / "actions.jsonl"
         if actions_file.exists():
-            for line in actions_file.read_text().strip().split("\n"):
-                if line:
+            with open(actions_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
                     try:
-                        all_actions.append(json.loads(line))
+                        entry = json.loads(line)
+                        # Update finding references in action entries
+                        _re_id_refs(entry, id_map)
+                        all_actions.append(entry)
                     except json.JSONDecodeError:
                         pass
 
         # Approvals
         approvals_file = edir / "approvals.jsonl"
         if approvals_file.exists():
-            for line in approvals_file.read_text().strip().split("\n"):
-                if line:
+            with open(approvals_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
                     try:
                         entry = json.loads(line)
                         # Update item_id reference
@@ -158,9 +167,14 @@ def cmd_migrate(args, identity: dict) -> None:
                     except json.JSONDecodeError:
                         pass
 
-    # --- Phase 2: Update TODO related_findings with final id_map ---
+    # --- Phase 2: Update cross-references with final id_map ---
     for t in all_todos:
         t["related_findings"] = [id_map.get(r, r) for r in t.get("related_findings", [])]
+    for t in all_timeline:
+        if "related_findings" in t:
+            t["related_findings"] = [id_map.get(r, r) for r in t["related_findings"]]
+    for entry in all_actions:
+        _re_id_refs(entry, id_map)
 
     # --- Phase 3: Write flat files to case root ---
     print(f"\nWriting flat case directory...")
@@ -269,3 +283,19 @@ def _re_id(old_id: str, prefix: str, examiner: str) -> str:
 
     # Fallback: just prefix with examiner
     return f"{prefix}-{examiner}-{old_id.split('-')[-1] if '-' in old_id else '001'}"
+
+
+def _re_id_refs(entry: dict, id_map: dict) -> None:
+    """Update old-format finding/timeline references in an action or log entry.
+
+    Scans common reference fields and replaces old IDs with new IDs
+    using the id_map built during migration.
+    """
+    for key in ("finding_id", "item_id", "evidence_id"):
+        val = entry.get(key, "")
+        if val and val in id_map:
+            entry[key] = id_map[val]
+    for key in ("related_findings", "finding_ids"):
+        refs = entry.get(key)
+        if isinstance(refs, list):
+            entry[key] = [id_map.get(r, r) for r in refs]

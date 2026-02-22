@@ -11,10 +11,26 @@ Always captures os_user. Explicit examiner identity resolved by priority:
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path
 
 import yaml
+
+_EXAMINER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
+
+
+def _sanitize_slug(raw: str) -> str:
+    """Sanitize a raw string into a valid examiner slug.
+
+    Lowercases, replaces invalid characters with hyphens, strips leading/trailing
+    hyphens, and truncates to 20 characters.
+    """
+    slug = re.sub(r"[^a-z0-9-]", "-", raw.lower()).strip("-")[:20]
+    if not slug:
+        return "unknown"
+    slug = slug.lstrip("-")
+    return slug if slug else "unknown"
 
 
 def get_examiner_identity(flag_override: str | None = None) -> dict:
@@ -33,7 +49,7 @@ def get_examiner_identity(flag_override: str | None = None) -> dict:
     os_user = os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
 
     def _result(examiner: str, source: str) -> dict:
-        examiner = examiner.lower().strip()
+        examiner = _sanitize_slug(examiner)
         if not examiner:
             # Safeguard: if the resolved value is empty, fall back to os_user
             print(
