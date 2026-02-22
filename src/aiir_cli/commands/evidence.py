@@ -103,15 +103,7 @@ def cmd_register_evidence(args, identity: dict) -> None:
         print(f"Warning: could not set evidence file to read-only: {e}", file=sys.stderr)
 
     # Record in evidence registry
-    from aiir_cli.case_io import _examiner_dir
-    try:
-        exam_dir = _examiner_dir(case_dir)
-        exam_dir.mkdir(parents=True, exist_ok=True)
-    except OSError as e:
-        print(f"Failed to create examiner directory: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    reg_file = exam_dir / "evidence.json"
+    reg_file = case_dir / "evidence.json"
     try:
         if reg_file.exists():
             registry = json.loads(reg_file.read_text())
@@ -153,11 +145,8 @@ def cmd_register_evidence(args, identity: dict) -> None:
 def _log_evidence_action(case_dir: Path, action: str, detail: str,
                          identity: dict, **extra) -> None:
     """Write evidence action to access log."""
-    from aiir_cli.case_io import _examiner_dir
     try:
-        exam_dir = _examiner_dir(case_dir)
-        exam_dir.mkdir(parents=True, exist_ok=True)
-        log_file = exam_dir / "evidence_access.jsonl"
+        log_file = case_dir / "evidence_access.jsonl"
         entry = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "action": action,

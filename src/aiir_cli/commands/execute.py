@@ -94,9 +94,8 @@ def cmd_exec(args, identity: dict) -> None:
 
 def _next_evidence_id(case_dir: Path, examiner: str) -> str:
     """Generate next evidence ID: cliexec-{examiner}-{date}-{seq}."""
-    from aiir_cli.case_io import _examiner_dir
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
-    audit_dir = _examiner_dir(case_dir) / "audit"
+    audit_dir = case_dir / "audit"
     log_file = audit_dir / f"{_MCP_NAME}.jsonl"
     max_seq = 0
     if log_file.exists():
@@ -126,8 +125,7 @@ def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
               stdout: str, stderr: str, examiner: str,
               evidence_id: str, elapsed_ms: float) -> None:
     """Write execution record to audit trail using canonical schema."""
-    from aiir_cli.case_io import _examiner_dir
-    audit_dir = _examiner_dir(case_dir) / "audit"
+    audit_dir = case_dir / "audit"
     audit_dir.mkdir(parents=True, exist_ok=True)
     log_file = audit_dir / f"{_MCP_NAME}.jsonl"
 

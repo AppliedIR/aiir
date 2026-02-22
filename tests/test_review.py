@@ -13,13 +13,14 @@ from aiir_cli.case_io import (
     save_findings,
     save_timeline,
     write_approval_log,
+    load_findings,
     verify_approval_integrity,
 )
 
 
 @pytest.fixture
 def case_dir(tmp_path, monkeypatch):
-    """Create a minimal case directory structure."""
+    """Create a minimal flat case directory structure."""
     case_id = "INC-2026-TEST"
     case_path = tmp_path / case_id
     case_path.mkdir()
@@ -27,13 +28,11 @@ def case_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AIIR_EXAMINER", "tester")
 
     meta = {"case_id": case_id, "name": "Test Case", "status": "open", "created": "2026-02-19",
-            "examiner": "tester", "team": ["tester"]}
+            "examiner": "tester"}
     with open(case_path / "CASE.yaml", "w") as f:
         yaml.dump(meta, f)
 
-    exam_dir = case_path / "examiners" / "tester"
-    exam_dir.mkdir(parents=True)
-    with open(exam_dir / "evidence.json", "w") as f:
+    with open(case_path / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
     monkeypatch.setenv("AIIR_CASE_DIR", str(case_path))
@@ -50,7 +49,7 @@ def identity():
 def sample_findings(case_dir):
     findings = [
         {
-            "id": "F-001",
+            "id": "F-tester-001",
             "status": "APPROVED",
             "title": "Lateral movement via PsExec",
             "confidence": "HIGH",
@@ -64,7 +63,7 @@ def sample_findings(case_dir):
             },
         },
         {
-            "id": "F-002",
+            "id": "F-tester-002",
             "status": "DRAFT",
             "title": "Suspicious scheduled task",
             "confidence": "MEDIUM",
@@ -74,7 +73,7 @@ def sample_findings(case_dir):
             "iocs": {"IPv4": ["172.16.0.99"]},
         },
         {
-            "id": "F-003",
+            "id": "F-tester-003",
             "status": "REJECTED",
             "title": "Potential data staging",
             "confidence": "LOW",
@@ -91,14 +90,14 @@ def sample_findings(case_dir):
 def sample_timeline(case_dir):
     events = [
         {
-            "id": "T-001",
+            "id": "T-tester-001",
             "status": "APPROVED",
             "timestamp": "2026-02-19T10:00:00Z",
             "description": "Initial access via phishing email",
             "evidence_ids": ["ev-001"],
         },
         {
-            "id": "T-002",
+            "id": "T-tester-002",
             "status": "DRAFT",
             "timestamp": "2026-02-19T11:00:00Z",
             "description": "Lateral movement detected",
@@ -114,7 +113,7 @@ class TestFindingsTable:
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "F-001" in output
+        assert "F-tester-001" in output
         assert "APPROVED" in output
         assert "HIGH" in output
         assert "Lateral movement" in output
@@ -134,7 +133,7 @@ class TestFindingsDetail:
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "F-001" in output
+        assert "F-tester-001" in output
         assert "Observation:" in output
         assert "Interpretation:" in output
         assert "Evidence:" in output
@@ -142,17 +141,17 @@ class TestFindingsDetail:
 
 class TestFindingsVerify:
     def test_verified_finding(self, case_dir, sample_findings, identity, capsys):
-        # Write approval record for F-001
-        write_approval_log(case_dir, "F-001", "APPROVED", identity, mode="interactive")
+        # Write approval record for F-tester-001
+        write_approval_log(case_dir, "F-tester-001", "APPROVED", identity, mode="interactive")
         args = Namespace(case=None, findings=True, detail=False, verify=True, iocs=False,
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
         output = capsys.readouterr().out
         assert "confirmed" in output
-        assert "F-001" in output
+        assert "F-tester-001" in output
 
     def test_unverified_finding(self, case_dir, sample_findings, capsys):
-        # F-001 is APPROVED but no approval record exists
+        # F-tester-001 is APPROVED but no approval record exists
         args = Namespace(case=None, findings=True, detail=False, verify=True, iocs=False,
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
@@ -160,7 +159,7 @@ class TestFindingsVerify:
         assert "NO APPROVAL RECORD" in output
 
     def test_draft_no_check(self, case_dir, capsys):
-        save_findings(case_dir, [{"id": "F-010", "status": "DRAFT", "title": "Test"}])
+        save_findings(case_dir, [{"id": "F-tester-010", "status": "DRAFT", "title": "Test"}])
         args = Namespace(case=None, findings=True, detail=False, verify=True, iocs=False,
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
@@ -170,24 +169,24 @@ class TestFindingsVerify:
 
 class TestVerifyIntegrity:
     def test_confirmed(self, case_dir, identity):
-        save_findings(case_dir, [{"id": "F-001", "status": "APPROVED", "title": "Test"}])
-        write_approval_log(case_dir, "F-001", "APPROVED", identity)
+        save_findings(case_dir, [{"id": "F-tester-001", "status": "APPROVED", "title": "Test"}])
+        write_approval_log(case_dir, "F-tester-001", "APPROVED", identity)
         results = verify_approval_integrity(case_dir)
         assert results[0]["verification"] == "confirmed"
 
     def test_no_record(self, case_dir):
-        save_findings(case_dir, [{"id": "F-001", "status": "APPROVED", "title": "Test"}])
+        save_findings(case_dir, [{"id": "F-tester-001", "status": "APPROVED", "title": "Test"}])
         results = verify_approval_integrity(case_dir)
         assert results[0]["verification"] == "no approval record"
 
     def test_mismatched_action(self, case_dir, identity):
-        save_findings(case_dir, [{"id": "F-001", "status": "APPROVED", "title": "Test"}])
-        write_approval_log(case_dir, "F-001", "REJECTED", identity)
+        save_findings(case_dir, [{"id": "F-tester-001", "status": "APPROVED", "title": "Test"}])
+        write_approval_log(case_dir, "F-tester-001", "REJECTED", identity)
         results = verify_approval_integrity(case_dir)
         assert results[0]["verification"] == "no approval record"
 
     def test_draft_unverified(self, case_dir):
-        save_findings(case_dir, [{"id": "F-001", "status": "DRAFT", "title": "Test"}])
+        save_findings(case_dir, [{"id": "F-tester-001", "status": "DRAFT", "title": "Test"}])
         results = verify_approval_integrity(case_dir)
         assert results[0]["verification"] == "draft"
 
@@ -237,7 +236,7 @@ class TestIOCExtraction:
         assert "evil.example.com" in collected["Domain"]
 
     def test_no_iocs(self, case_dir, capsys):
-        save_findings(case_dir, [{"id": "F-001", "status": "DRAFT", "title": "Nothing", "observation": "clean", "interpretation": "benign"}])
+        save_findings(case_dir, [{"id": "F-tester-001", "status": "DRAFT", "title": "Nothing", "observation": "clean", "interpretation": "benign"}])
         args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=True,
                          timeline=False, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
@@ -251,7 +250,7 @@ class TestTimeline:
                          timeline=True, audit=False, evidence=False, limit=50)
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "T-001" in output
+        assert "T-tester-001" in output
         assert "APPROVED" in output
 
     def test_timeline_detail(self, case_dir, sample_timeline, capsys):
@@ -289,8 +288,8 @@ class TestTimelineFiltering:
                          status="APPROVED", start=None, end=None, type=None)
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "T-001" in output
-        assert "T-002" not in output
+        assert "T-tester-001" in output
+        assert "T-tester-002" not in output
 
     def test_filter_by_date_range(self, case_dir, sample_timeline, capsys):
         args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
@@ -298,14 +297,14 @@ class TestTimelineFiltering:
                          status=None, start="2026-02-19T10:30:00Z", end=None, type=None)
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "T-002" in output
-        assert "T-001" not in output
+        assert "T-tester-002" in output
+        assert "T-tester-001" not in output
 
     def test_filter_by_event_type(self, case_dir, capsys):
         events = [
-            {"id": "T-010", "status": "DRAFT", "timestamp": "2026-02-19T10:00:00Z",
+            {"id": "T-tester-010", "status": "DRAFT", "timestamp": "2026-02-19T10:00:00Z",
              "description": "Process execution", "event_type": "execution"},
-            {"id": "T-011", "status": "DRAFT", "timestamp": "2026-02-19T11:00:00Z",
+            {"id": "T-tester-011", "status": "DRAFT", "timestamp": "2026-02-19T11:00:00Z",
              "description": "Registry change", "event_type": "registry"},
         ]
         save_timeline(case_dir, events)
@@ -314,8 +313,8 @@ class TestTimelineFiltering:
                          status=None, start=None, end=None, type="execution")
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "T-010" in output
-        assert "T-011" not in output
+        assert "T-tester-010" in output
+        assert "T-tester-011" not in output
 
     def test_no_results_after_filter(self, case_dir, sample_timeline, capsys):
         args = Namespace(case=None, findings=False, detail=False, verify=False, iocs=False,
@@ -328,18 +327,15 @@ class TestTimelineFiltering:
 
 class TestVerifyTampered:
     def test_tampered_finding_shown(self, case_dir, identity, capsys):
-        from aiir_cli.case_io import load_all_findings, load_findings
         # Save DRAFT
-        save_findings(case_dir, [{"id": "F-010", "title": "Test",
+        save_findings(case_dir, [{"id": "F-tester-010", "title": "Test",
                                   "observation": "original", "status": "DRAFT"}])
-        # Simulate approve: load merged, compute hash, save back
-        merged = load_all_findings(case_dir)
-        merged[0]["content_hash"] = compute_content_hash(merged[0])
-        local = load_findings(case_dir)
-        local[0]["status"] = "APPROVED"
-        local[0]["content_hash"] = merged[0]["content_hash"]
-        save_findings(case_dir, local)
-        write_approval_log(case_dir, "F-010", "APPROVED", identity)
+        # Simulate approve: load, compute hash, save back
+        findings = load_findings(case_dir)
+        findings[0]["content_hash"] = compute_content_hash(findings[0])
+        findings[0]["status"] = "APPROVED"
+        save_findings(case_dir, findings)
+        write_approval_log(case_dir, "F-tester-010", "APPROVED", identity)
 
         # Tamper
         findings = load_findings(case_dir)

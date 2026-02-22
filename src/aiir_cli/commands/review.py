@@ -19,14 +19,12 @@ import re
 import sys
 from pathlib import Path
 
-import yaml
-
 from aiir_cli.case_io import (
     get_case_dir,
-    load_all_findings,
-    load_all_timeline,
-    load_all_todos,
-    load_all_approvals,
+    load_findings,
+    load_timeline,
+    load_todos,
+    load_approval_log,
     load_case_meta,
     verify_approval_integrity,
 )
@@ -69,15 +67,14 @@ def cmd_review(args, identity: dict) -> None:
 def _show_summary(case_dir: Path) -> None:
     """Show case overview with status counts."""
     meta = load_case_meta(case_dir)
-    findings = load_all_findings(case_dir)
-    timeline = load_all_timeline(case_dir)
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
     evidence = _load_evidence(case_dir)
 
     print(f"Case: {meta.get('case_id', '?')}")
     print(f"Name: {meta.get('name', '')}")
     print(f"Status: {meta.get('status', 'unknown')}")
     print(f"Examiner: {meta.get('examiner', '?')}")
-    print(f"Team: {', '.join(meta.get('team', []))}")
     print(f"Created: {meta.get('created', '?')}")
     print()
 
@@ -92,7 +89,7 @@ def _show_summary(case_dir: Path) -> None:
 
     print(f"Evidence: {len(evidence)} registered files")
 
-    todos = load_all_todos(case_dir)
+    todos = load_todos(case_dir)
     open_t = sum(1 for t in todos if t.get("status") == "open")
     completed_t = sum(1 for t in todos if t.get("status") == "completed")
     print(f"TODOs: {len(todos)} total ({open_t} open, {completed_t} completed)")
@@ -100,7 +97,7 @@ def _show_summary(case_dir: Path) -> None:
 
 def _show_todos(case_dir: Path, open_only: bool = False) -> None:
     """Show TODO items in a table."""
-    todos = load_all_todos(case_dir)
+    todos = load_todos(case_dir)
     if open_only:
         todos = [t for t in todos if t.get("status") == "open"]
 
@@ -108,16 +105,15 @@ def _show_todos(case_dir: Path, open_only: bool = False) -> None:
         print("No TODOs found.")
         return
 
-    print(f"{'ID':<12} {'Status':<11} {'Priority':<9} {'Assignee':<12} {'Findings':<12} Description")
+    print(f"{'ID':<20} {'Status':<11} {'Priority':<9} {'Assignee':<12} Description")
     print("-" * 90)
     for t in todos:
         todo_id = t["todo_id"]
         status = t.get("status", "open")
         priority = t.get("priority", "medium")
         assignee = t.get("assignee", "") or "-"
-        findings = ",".join(t.get("related_findings", []))[:11] or "-"
         desc = t.get("description", "")[:35]
-        print(f"{todo_id:<12} {status:<11} {priority:<9} {assignee:<12} {findings:<12} {desc}")
+        print(f"{todo_id:<20} {status:<11} {priority:<9} {assignee:<12} {desc}")
 
     if any(t.get("notes") for t in todos):
         print()
@@ -128,13 +124,12 @@ def _show_todos(case_dir: Path, open_only: bool = False) -> None:
 
 def _show_findings_table(case_dir: Path) -> None:
     """Show findings as a summary table."""
-    findings = load_all_findings(case_dir)
+    findings = load_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
 
-    # Header
-    print(f"{'ID':<16} {'Status':<12} {'Confidence':<12} {'Examiner':<10} Title")
+    print(f"{'ID':<20} {'Status':<12} {'Confidence':<12} {'Examiner':<10} Title")
     print("-" * 80)
     for f in findings:
         fid = f.get("id", "?")
@@ -142,12 +137,12 @@ def _show_findings_table(case_dir: Path) -> None:
         confidence = f.get("confidence", "?")
         examiner = f.get("examiner", "?")
         title = f.get("title", "Untitled")
-        print(f"{fid:<16} {status:<12} {confidence:<12} {examiner:<10} {title}")
+        print(f"{fid:<20} {status:<12} {confidence:<12} {examiner:<10} {title}")
 
 
 def _show_findings_detail(case_dir: Path) -> None:
     """Show full findings with all fields."""
-    findings = load_all_findings(case_dir)
+    findings = load_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
@@ -181,14 +176,13 @@ def _show_findings_verify(case_dir: Path) -> None:
         print("No findings recorded.")
         return
 
-    print(f"{'ID':<8} {'Status':<12} {'Verification':<22} Title")
-    print("-" * 75)
+    print(f"{'ID':<20} {'Status':<12} {'Verification':<22} Title")
+    print("-" * 80)
     for f in results:
         fid = f.get("id", "?")
         status = f.get("status", "?")
         verification = f.get("verification", "?")
 
-        # Format verification with markers
         if verification == "confirmed":
             vdisplay = "confirmed"
         elif verification == "tampered":
@@ -199,7 +193,7 @@ def _show_findings_verify(case_dir: Path) -> None:
             vdisplay = "draft"
 
         title = f.get("title", "Untitled")
-        print(f"{fid:<8} {status:<12} {vdisplay:<22} {title}")
+        print(f"{fid:<20} {status:<12} {vdisplay:<22} {title}")
 
     # Summary
     confirmed = sum(1 for f in results if f["verification"] == "confirmed")
@@ -219,12 +213,11 @@ def _show_findings_verify(case_dir: Path) -> None:
 
 def _show_iocs(case_dir: Path) -> None:
     """Extract IOCs from findings, grouped by approval status."""
-    findings = load_all_findings(case_dir)
+    findings = load_findings(case_dir)
     if not findings:
         print("No findings recorded.")
         return
 
-    # Group findings by status
     groups = {"APPROVED": [], "DRAFT": [], "REJECTED": []}
     for f in findings:
         status = f.get("status", "DRAFT")
@@ -252,15 +245,10 @@ def _show_iocs(case_dir: Path) -> None:
 
 
 def _extract_iocs_from_findings(findings: list[dict]) -> dict[str, set[str]]:
-    """Extract IOCs from a list of findings.
-
-    Looks in the 'iocs' field (dict or list) and also scans
-    observation/interpretation text for common IOC patterns.
-    """
+    """Extract IOCs from a list of findings."""
     collected: dict[str, set[str]] = {}
 
     for f in findings:
-        # Structured IOC field
         iocs_field = f.get("iocs")
         if isinstance(iocs_field, dict):
             for ioc_type, values in iocs_field.items():
@@ -279,7 +267,6 @@ def _extract_iocs_from_findings(findings: list[dict]) -> dict[str, set[str]]:
                         collected[ioc_type] = set()
                     collected[ioc_type].add(str(ioc_value))
 
-        # Text-based IOC extraction from observation + interpretation
         text = f"{f.get('observation', '')} {f.get('interpretation', '')}"
         _extract_text_iocs(text, collected)
 
@@ -288,29 +275,23 @@ def _extract_iocs_from_findings(findings: list[dict]) -> dict[str, set[str]]:
 
 def _extract_text_iocs(text: str, collected: dict[str, set[str]]) -> None:
     """Extract common IOC patterns from free text."""
-    # IPv4 addresses (not 0.0.0.0 or 127.x.x.x or 255.x.x.x)
     ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b'
     for ip in re.findall(ipv4_pattern, text):
         if not ip.startswith(("0.", "127.", "255.")):
             collected.setdefault("IPv4", set()).add(ip)
 
-    # SHA256 hashes (64 hex chars)
     for h in re.findall(r'\b[a-fA-F0-9]{64}\b', text):
         collected.setdefault("SHA256", set()).add(h.lower())
 
-    # SHA1 hashes (40 hex chars, but not part of a longer hex string)
     for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])', text):
         collected.setdefault("SHA1", set()).add(h.lower())
 
-    # MD5 hashes (32 hex chars)
     for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])', text):
         collected.setdefault("MD5", set()).add(h.lower())
 
-    # Windows file paths
     for fp in re.findall(r'[A-Z]:\\(?:[^\s,;]+)', text):
         collected.setdefault("File", set()).add(fp)
 
-    # Domain names (basic pattern — must have at least one dot)
     for d in re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b', text):
         collected.setdefault("Domain", set()).add(d.lower())
 
@@ -324,7 +305,8 @@ def _show_timeline(
     event_type: str | None = None,
 ) -> None:
     """Show timeline events with optional filters."""
-    timeline = load_all_timeline(case_dir)
+    timeline = load_timeline(case_dir)
+    timeline.sort(key=lambda t: t.get("timestamp", ""))
     if status:
         timeline = [t for t in timeline if t.get("status") == status.upper()]
     if start:
@@ -351,8 +333,8 @@ def _show_timeline(
             if t.get("approved_at"):
                 print(f"  Approved:    {t['approved_at']}")
     else:
-        print(f"{'ID':<8} {'Status':<10} {'Timestamp':<22} Description")
-        print("-" * 75)
+        print(f"{'ID':<20} {'Status':<10} {'Timestamp':<22} Description")
+        print("-" * 80)
         for t in timeline:
             tid = t.get("id", "?")
             item_status = t.get("status", "?")
@@ -360,7 +342,7 @@ def _show_timeline(
             desc = t.get("description", "")
             if len(desc) > 40:
                 desc = desc[:37] + "..."
-            print(f"{tid:<8} {item_status:<10} {ts:<22} {desc}")
+            print(f"{tid:<20} {item_status:<10} {ts:<22} {desc}")
 
 
 def _show_evidence(case_dir: Path) -> None:
@@ -381,8 +363,7 @@ def _show_evidence(case_dir: Path) -> None:
         print(f"    Registered: {e.get('registered_at', '?')} by {e.get('registered_by', '?')}")
 
     # Show access log if exists
-    from aiir_cli.case_io import get_examiner, _examiner_dir
-    access_log = _examiner_dir(case_dir) / "evidence_access.jsonl"
+    access_log = case_dir / "evidence_access.jsonl"
     if access_log.exists():
         print(f"\n{'=' * 60}")
         print("  Evidence Access Log")
@@ -404,51 +385,45 @@ def _show_evidence(case_dir: Path) -> None:
 
 
 def _show_audit(case_dir: Path, limit: int) -> None:
-    """Show audit trail entries from all examiners/*/audit/."""
+    """Show audit trail entries from audit/."""
     entries = []
 
-    # Read from all examiners/*/audit/
-    examiners_root = case_dir / "examiners"
-    if examiners_root.is_dir():
-        for ex_dir in sorted(examiners_root.iterdir()):
-            if not ex_dir.is_dir() or ex_dir.name.startswith("."):
+    # Read from audit/
+    audit_dir = case_dir / "audit"
+    if audit_dir.is_dir():
+        for jsonl_file in audit_dir.glob("*.jsonl"):
+            try:
+                file_text = jsonl_file.read_text()
+            except OSError as e:
+                print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
                 continue
-            # Audit entries
-            audit_dir = ex_dir / "audit"
-            if audit_dir.is_dir():
-                for jsonl_file in audit_dir.glob("*.jsonl"):
-                    try:
-                        file_text = jsonl_file.read_text()
-                    except OSError as e:
-                        print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
-                        continue
-                    for line in file_text.strip().split("\n"):
-                        if not line:
-                            continue
-                        try:
-                            entries.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
-                            continue
-            # Approvals
-            approvals_file = ex_dir / "approvals.jsonl"
-            if approvals_file.exists():
-                try:
-                    approvals_text = approvals_file.read_text()
-                except OSError as e:
-                    print(f"  Warning: could not read {approvals_file}: {e}", file=sys.stderr)
+            for line in file_text.strip().split("\n"):
+                if not line:
                     continue
-                for line in approvals_text.strip().split("\n"):
-                    if not line:
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except json.JSONDecodeError:
-                        print(f"  Warning: skipping corrupt approval line in {ex_dir.name}", file=sys.stderr)
-                        continue
-                    entry["tool"] = "approval"
-                    entry["mcp"] = "aiir-cli"
-                    entries.append(entry)
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
+
+    # Read approvals
+    approvals_file = case_dir / "approvals.jsonl"
+    if approvals_file.exists():
+        try:
+            approvals_text = approvals_file.read_text()
+        except OSError as e:
+            print(f"  Warning: could not read {approvals_file}: {e}", file=sys.stderr)
+        else:
+            for line in approvals_text.strip().split("\n"):
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    print(f"  Warning: skipping corrupt approval line", file=sys.stderr)
+                    continue
+                entry["tool"] = "approval"
+                entry["mcp"] = "aiir-cli"
+                entries.append(entry)
 
     entries.sort(key=lambda e: e.get("ts", ""))
     entries = entries[-limit:]
@@ -471,8 +446,7 @@ def _show_audit(case_dir: Path, limit: int) -> None:
 
 
 def _load_evidence(case_dir: Path) -> list[dict]:
-    from aiir_cli.case_io import _examiner_dir
-    reg_file = _examiner_dir(case_dir) / "evidence.json"
+    reg_file = case_dir / "evidence.json"
     if not reg_file.exists():
         return []
     try:

@@ -18,9 +18,9 @@ def _mock_tty(response="y\n"):
 
 @pytest.fixture
 def case_dir(tmp_path, monkeypatch):
-    """Create a case directory with required structure."""
+    """Create a flat case directory with audit dir."""
     monkeypatch.setenv("AIIR_EXAMINER", "tester")
-    (tmp_path / "examiners" / "tester" / "audit").mkdir(parents=True)
+    (tmp_path / "audit").mkdir(parents=True)
     return tmp_path
 
 
@@ -42,7 +42,7 @@ class TestExec:
         args = FakeArgs(cmd=["echo", "hello"], purpose="test command")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
             cmd_exec(args, identity)
-        log_file = case_dir / "examiners" / "tester" / "audit" / "cli-exec.jsonl"
+        log_file = case_dir / "audit" / "cli-exec.jsonl"
         assert log_file.exists()
         entry = json.loads(log_file.read_text().strip())
         assert entry["mcp"] == "cli-exec"
@@ -59,7 +59,7 @@ class TestExec:
         args = FakeArgs(cmd=["echo", "hello"], purpose="test")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty("n\n")):
             cmd_exec(args, identity)
-        log_file = case_dir / "examiners" / "tester" / "audit" / "cli-exec.jsonl"
+        log_file = case_dir / "audit" / "cli-exec.jsonl"
         assert not log_file.exists()
 
     def test_evidence_id_sequence_increments(self, case_dir, identity, monkeypatch):
@@ -70,7 +70,7 @@ class TestExec:
         args2 = FakeArgs(cmd=["echo", "two"], purpose="second")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
             cmd_exec(args2, identity)
-        log_file = case_dir / "examiners" / "tester" / "audit" / "cli-exec.jsonl"
+        log_file = case_dir / "audit" / "cli-exec.jsonl"
         lines = [json.loads(l) for l in log_file.read_text().strip().split("\n")]
         assert len(lines) == 2
         assert lines[0]["evidence_id"].endswith("-001")
@@ -81,7 +81,7 @@ class TestExec:
         args = FakeArgs(cmd=["echo", "hello"], purpose="test")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
             cmd_exec(args, identity)
-        log_file = case_dir / "examiners" / "tester" / "audit" / "cli-exec.jsonl"
+        log_file = case_dir / "audit" / "cli-exec.jsonl"
         entry = json.loads(log_file.read_text().strip())
         assert entry["result_summary"]["exit_code"] == 0
         assert "lines" in entry["result_summary"]["output"]

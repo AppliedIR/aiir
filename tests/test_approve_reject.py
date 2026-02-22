@@ -19,20 +19,19 @@ from aiir_cli.case_io import (
 
 @pytest.fixture
 def case_dir(tmp_path, monkeypatch):
-    """Create a minimal case directory structure."""
+    """Create a minimal flat case directory structure."""
     case_id = "INC-2026-TEST"
     case_path = tmp_path / case_id
     case_path.mkdir()
-    (case_path / "examiners" / "tester").mkdir(parents=True)
 
     meta = {"case_id": case_id, "name": "Test", "status": "open"}
     with open(case_path / "CASE.yaml", "w") as f:
         yaml.dump(meta, f)
 
-    with open(case_path / "examiners" / "tester" / "evidence.json", "w") as f:
+    with open(case_path / "evidence.json", "w") as f:
         json.dump({"files": []}, f)
 
-    with open(case_path / "examiners" / "tester" / "todos.json", "w") as f:
+    with open(case_path / "todos.json", "w") as f:
         json.dump([], f)
 
     monkeypatch.setenv("AIIR_EXAMINER", "tester")
@@ -55,7 +54,7 @@ def staged_finding(case_dir):
     """Stage a DRAFT finding."""
     findings = [
         {
-            "id": "F-001",
+            "id": "F-tester-001",
             "status": "DRAFT",
             "title": "Suspicious process",
             "confidence": "MEDIUM",
@@ -77,7 +76,7 @@ def staged_timeline(case_dir):
     """Stage a DRAFT timeline event."""
     events = [
         {
-            "id": "T-001",
+            "id": "T-tester-001",
             "status": "DRAFT",
             "timestamp": "2026-02-19T10:00:00Z",
             "description": "First lateral movement",
@@ -100,7 +99,7 @@ class TestApproveSpecific:
     def test_approve_finding(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["F-001"], identity, config_path)
+            _approve_specific(case_dir, ["F-tester-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
         assert findings[0]["approved_by"] == "analyst1"
@@ -108,7 +107,7 @@ class TestApproveSpecific:
     def test_approve_timeline_event(self, case_dir, identity, staged_timeline, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["T-001"], identity, config_path)
+            _approve_specific(case_dir, ["T-tester-001"], identity, config_path)
         timeline = load_timeline(case_dir)
         assert timeline[0]["status"] == "APPROVED"
 
@@ -120,18 +119,18 @@ class TestApproveSpecific:
     def test_approve_already_approved(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["F-001"], identity, config_path)
-        _approve_specific(case_dir, ["F-001"], identity, config_path)
+            _approve_specific(case_dir, ["F-tester-001"], identity, config_path)
+        _approve_specific(case_dir, ["F-tester-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
 
     def test_approval_log_written(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["F-001"], identity, config_path)
+            _approve_specific(case_dir, ["F-tester-001"], identity, config_path)
         log = load_approval_log(case_dir)
         assert len(log) == 1
-        assert log[0]["item_id"] == "tester/F-001"
+        assert log[0]["item_id"] == "F-tester-001"
         assert log[0]["action"] == "APPROVED"
         assert log[0]["examiner"] == "analyst1"
         assert log[0]["mode"] == "interactive"
@@ -141,14 +140,14 @@ class TestApproveSpecific:
         mock_tty.readline.return_value = "n\n"
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
             with pytest.raises(SystemExit):
-                _approve_specific(case_dir, ["F-001"], identity, config_path)
+                _approve_specific(case_dir, ["F-tester-001"], identity, config_path)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "DRAFT"
 
     def test_approve_with_note(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["F-001"], identity, config_path,
+            _approve_specific(case_dir, ["F-tester-001"], identity, config_path,
                               note="Correct finding, classify as generic.")
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
@@ -158,7 +157,7 @@ class TestApproveSpecific:
     def test_approve_with_interpretation_override(self, case_dir, identity, staged_finding, config_path):
         mock_tty = _mock_tty_confirm()
         with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
-            _approve_specific(case_dir, ["F-001"], identity, config_path,
+            _approve_specific(case_dir, ["F-tester-001"], identity, config_path,
                               interpretation="Process masquerading confirmed")
         findings = load_findings(case_dir)
         assert findings[0]["interpretation"] == "Process masquerading confirmed"
@@ -235,7 +234,7 @@ class TestApproveInteractive:
         assert len(todos) == 1
         assert todos[0]["description"] == "Verify with net logs"
         assert todos[0]["assignee"] == "jane"
-        assert todos[0]["related_findings"] == ["tester/F-001"]
+        assert todos[0]["related_findings"] == ["F-tester-001"]
 
     def test_by_filter(self, case_dir, identity, staged_finding, staged_timeline, capsys):
         """Filter by creator — only jane's items shown."""
@@ -246,7 +245,7 @@ class TestApproveInteractive:
             with patch("aiir_cli.commands.approve.Path.home", return_value=case_dir.parent):
                 with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                     cmd_approve(args, identity)
-        # Only T-001 (by jane) approved, F-001 (by steve) stays DRAFT
+        # Only T-tester-001 (by jane) approved, F-tester-001 (by steve) stays DRAFT
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "DRAFT"
         timeline = load_timeline(case_dir)
@@ -269,7 +268,7 @@ class TestApproveInteractive:
 class TestReject:
     def test_reject_finding(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
-        args = Namespace(ids=["F-001"], reason="Insufficient evidence", case=None, analyst=None)
+        args = Namespace(ids=["F-tester-001"], reason="Insufficient evidence", case=None, analyst=None)
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
             with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
@@ -281,7 +280,7 @@ class TestReject:
 
     def test_reject_writes_log(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
-        args = Namespace(ids=["F-001"], reason="Bad data", case=None, analyst=None)
+        args = Namespace(ids=["F-tester-001"], reason="Bad data", case=None, analyst=None)
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
             with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
@@ -299,7 +298,7 @@ class TestReject:
 
     def test_reject_no_reason(self, case_dir, identity, staged_finding):
         mock_tty = _mock_tty_confirm()
-        args = Namespace(ids=["F-001"], reason="", case=None, analyst=None)
+        args = Namespace(ids=["F-tester-001"], reason="", case=None, analyst=None)
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
             with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
@@ -317,7 +316,7 @@ class TestReject:
             # Simulate an MCP write happening during the confirmation prompt
             findings = load_findings(case_dir)
             findings.append({
-                "id": "F-002",
+                "id": "F-tester-002",
                 "status": "DRAFT",
                 "title": "Concurrent finding",
                 "staged": "2026-02-19T13:00:00Z",
@@ -326,15 +325,15 @@ class TestReject:
             save_findings(case_dir, findings)
             return original_confirm(config_path, analyst)
 
-        args = Namespace(ids=["F-001"], reason="bad", case=None, analyst=None)
+        args = Namespace(ids=["F-tester-001"], reason="bad", case=None, analyst=None)
         with patch("aiir_cli.commands.reject.require_confirmation", side_effect=confirm_and_add_finding):
             with patch("aiir_cli.approval_auth.open", return_value=mock_tty):
                 cmd_reject(args, identity)
 
-        # F-001 should be REJECTED, F-002 should survive as DRAFT
+        # F-tester-001 should be REJECTED, F-tester-002 should survive as DRAFT
         findings = load_findings(case_dir)
         assert len(findings) == 2
-        f001 = next(f for f in findings if f["id"] == "F-001")
-        f002 = next(f for f in findings if f["id"] == "F-002")
+        f001 = next(f for f in findings if f["id"] == "F-tester-001")
+        f002 = next(f for f in findings if f["id"] == "F-tester-002")
         assert f001["status"] == "REJECTED"
         assert f002["status"] == "DRAFT"

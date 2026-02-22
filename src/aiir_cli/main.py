@@ -22,7 +22,8 @@ from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_unlock_evidence, c
 from aiir_cli.commands.config import cmd_config
 from aiir_cli.commands.todo import cmd_todo
 from aiir_cli.commands.setup import cmd_setup
-from aiir_cli.commands.sync import cmd_sync
+from aiir_cli.commands.sync import cmd_export, cmd_merge
+from aiir_cli.commands.migrate import cmd_migrate
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,16 +55,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_reject.add_argument("--examiner", dest="examiner_override", help="Override examiner identity")
     p_reject.add_argument("--analyst", dest="examiner_override", help="(deprecated, use --examiner)")
 
-    # case (init + join)
-    p_case = sub.add_parser("case", help="Case management: init, join")
+    # case (init, activate, close, migrate)
+    p_case = sub.add_parser("case", help="Case management")
     case_sub = p_case.add_subparsers(dest="case_action", help="Case actions")
+
     p_case_init = case_sub.add_parser("init", help="Initialize a new case")
     p_case_init.add_argument("name", help="Case name")
     p_case_init.add_argument("--description", default="", help="Case description")
-    p_case_init.add_argument("--collaborative", "-c", action="store_true", help="Create in collaborative mode")
-    p_case_join = case_sub.add_parser("join", help="Join an existing case as a new examiner")
-    p_case_join.add_argument("--case-id", required=True, help="Case ID to join")
-    p_case_join.add_argument("--examiner", help="Examiner slug (defaults to current identity)")
+
+    p_case_activate = case_sub.add_parser("activate", help="Set active case for session")
+    p_case_activate.add_argument("case_id", help="Case ID to activate")
+
+    p_case_close = case_sub.add_parser("close", help="Close a case")
+    p_case_close.add_argument("case_id", help="Case ID to close")
+    p_case_close.add_argument("--summary", default="", help="Closing summary")
+
+    p_case_migrate = case_sub.add_parser("migrate", help="Migrate case from examiners/ to flat layout")
+    p_case_migrate.add_argument("--examiner", help="Primary examiner slug")
+    p_case_migrate.add_argument("--import-all", action="store_true", help="Re-ID and merge all examiners' data")
 
     # review
     p_review = sub.add_parser("review", help="Review case status and audit trail")
@@ -99,9 +108,6 @@ def build_parser() -> argparse.ArgumentParser:
     # todo
     p_todo = sub.add_parser("todo", help="Manage investigation TODOs")
     todo_sub = p_todo.add_subparsers(dest="todo_action", help="TODO actions")
-
-    # todo (no action = list)
-    # Default (no subcommand) shows open list — handled by argparse dest=None
     p_todo.add_argument("--all", action="store_true", help="Show all TODOs including completed")
     p_todo.add_argument("--assignee", default="", help="Filter by assignee")
 
@@ -112,10 +118,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_todo_add.add_argument("--finding", action="append", help="Related finding ID (repeatable)")
 
     p_todo_complete = todo_sub.add_parser("complete", help="Mark TODO as completed")
-    p_todo_complete.add_argument("todo_id", help="TODO ID (e.g., TODO-001)")
+    p_todo_complete.add_argument("todo_id", help="TODO ID")
 
     p_todo_update = todo_sub.add_parser("update", help="Update a TODO")
-    p_todo_update.add_argument("todo_id", help="TODO ID (e.g., TODO-001)")
+    p_todo_update.add_argument("todo_id", help="TODO ID")
     p_todo_update.add_argument("--note", help="Add a note")
     p_todo_update.add_argument("--assignee", help="Reassign")
     p_todo_update.add_argument("--priority", choices=["high", "medium", "low"], help="Change priority")
@@ -137,13 +143,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_client.add_argument("--no-mslearn", action="store_true", help="Exclude Microsoft Learn MCP")
     p_client.add_argument("-y", "--yes", action="store_true", help="Accept defaults, no prompts")
 
-    # sync
-    p_sync = sub.add_parser("sync", help="Multi-examiner sync: export/import contribution bundles")
-    sync_sub = p_sync.add_subparsers(dest="sync_action", help="Sync actions")
-    p_sync_export = sync_sub.add_parser("export", help="Export contributions to bundle file")
-    p_sync_export.add_argument("--file", required=True, help="Output file path")
-    p_sync_import = sync_sub.add_parser("import", help="Import contributions from bundle file")
-    p_sync_import.add_argument("--file", required=True, help="Input file path")
+    # export
+    p_export = sub.add_parser("export", help="Export findings + timeline as JSON")
+    p_export.add_argument("--file", required=True, help="Output file path")
+    p_export.add_argument("--since", default="", help="Only export records modified after this ISO timestamp")
+
+    # merge
+    p_merge = sub.add_parser("merge", help="Merge incoming JSON into local findings + timeline")
+    p_merge.add_argument("--file", required=True, help="Input file path")
 
     # config
     p_config = sub.add_parser("config", help="Configure AIIR settings")
@@ -165,7 +172,6 @@ def main() -> None:
         sys.exit(0)
 
     # Identity check on every command
-    # Support both --examiner and --analyst (deprecated) overrides
     flag_override = getattr(args, "examiner_override", None) or getattr(args, "analyst", None)
     identity = get_examiner_identity(flag_override)
     warn_if_unconfigured(identity)
@@ -181,7 +187,8 @@ def main() -> None:
         "config": cmd_config,
         "todo": cmd_todo,
         "setup": cmd_setup,
-        "sync": cmd_sync,
+        "export": cmd_export,
+        "merge": cmd_merge,
         "case": _cmd_case,
     }
 
@@ -194,14 +201,18 @@ def main() -> None:
 
 
 def _cmd_case(args, identity: dict) -> None:
-    """Handle case subcommands: init, join."""
+    """Handle case subcommands."""
     action = getattr(args, "case_action", None)
     if action == "init":
         _case_init(args, identity)
-    elif action == "join":
-        _case_join(args, identity)
+    elif action == "activate":
+        _case_activate(args, identity)
+    elif action == "close":
+        _case_close(args, identity)
+    elif action == "migrate":
+        cmd_migrate(args, identity)
     else:
-        print("Usage: aiir case {init|join}", file=sys.stderr)
+        print("Usage: aiir case {init|activate|close|migrate}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -228,41 +239,22 @@ def _case_init(args, identity: dict) -> None:
         print("Cannot initialize case: examiner identity is empty.", file=sys.stderr)
         sys.exit(1)
 
-    collaborative = getattr(args, "collaborative", False)
-    mode = "collaborative" if collaborative else "solo"
-
-    # Create directory structure. If any step fails, report what was partially created.
-    created_dirs: list[Path] = []
+    # Create flat directory structure
     try:
         case_dir.mkdir(parents=True)
-        created_dirs.append(case_dir)
-        for subdir in ("evidence", "extracted", "reports"):
-            d = case_dir / subdir
-            d.mkdir()
-            created_dirs.append(d)
-
-        exam_dir = case_dir / "examiners" / examiner
-        exam_dir.mkdir(parents=True)
-        created_dirs.append(exam_dir)
-        audit_dir = exam_dir / "audit"
-        audit_dir.mkdir()
-        created_dirs.append(audit_dir)
+        for subdir in ("evidence", "extractions", "reports", "audit"):
+            (case_dir / subdir).mkdir()
     except OSError as e:
         print(f"Failed to create case directories: {e}", file=sys.stderr)
-        if created_dirs:
-            print(f"  Partially created directories: {', '.join(str(d) for d in created_dirs)}", file=sys.stderr)
         sys.exit(1)
 
     case_meta = {
         "case_id": case_id,
         "name": args.name,
         "description": getattr(args, "description", ""),
-        "mode": mode,
         "status": "open",
         "examiner": examiner,
-        "team": [examiner],
         "created": ts.isoformat(),
-        "created_by": examiner,
     }
 
     try:
@@ -272,22 +264,20 @@ def _case_init(args, identity: dict) -> None:
             os.fsync(f.fileno())
     except (OSError, yaml.YAMLError) as e:
         print(f"Failed to write CASE.yaml: {e}", file=sys.stderr)
-        print(f"  Directories were created at: {case_dir}", file=sys.stderr)
         sys.exit(1)
 
     try:
         for fname in ("findings.json", "timeline.json", "todos.json"):
-            with open(exam_dir / fname, "w") as f:
+            with open(case_dir / fname, "w") as f:
                 f.write("[]")
                 f.flush()
                 os.fsync(f.fileno())
-        with open(exam_dir / "evidence.json", "w") as f:
+        with open(case_dir / "evidence.json", "w") as f:
             json.dump({"files": []}, f)
             f.flush()
             os.fsync(f.fileno())
     except OSError as e:
         print(f"Failed to write initial case files: {e}", file=sys.stderr)
-        print(f"  Case directory partially initialized at: {case_dir}", file=sys.stderr)
         sys.exit(1)
 
     # Set active case pointer
@@ -297,30 +287,51 @@ def _case_init(args, identity: dict) -> None:
         with open(aiir_dir / "active_case", "w") as f:
             f.write(case_id)
     except OSError as e:
-        # Non-fatal: case was created successfully, just can't set active pointer
         print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
 
     print(f"Case initialized: {case_id}")
     print(f"  Name: {args.name}")
-    print(f"  Mode: {mode}")
     print(f"  Examiner: {examiner}")
     print(f"  Path: {case_dir}")
 
 
-def _case_join(args, identity: dict) -> None:
-    """Join an existing case as a new examiner."""
-    import json
+def _case_activate(args, identity: dict) -> None:
+    """Set active case for session."""
     import os
+    from pathlib import Path
+
+    case_id = args.case_id
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    case_dir = cases_dir / case_id
+
+    if not case_dir.exists():
+        print(f"Case not found: {case_id}", file=sys.stderr)
+        sys.exit(1)
+
+    # Set active case pointer
+    try:
+        aiir_dir = Path(".aiir")
+        aiir_dir.mkdir(exist_ok=True)
+        with open(aiir_dir / "active_case", "w") as f:
+            f.write(case_id)
+    except OSError as e:
+        print(f"Failed to set active case: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    os.environ["AIIR_CASE_DIR"] = str(case_dir)
+    os.environ["AIIR_ACTIVE_CASE"] = case_id
+    print(f"Active case: {case_id}")
+
+
+def _case_close(args, identity: dict) -> None:
+    """Close a case."""
+    import os
+    from datetime import datetime, timezone
     from pathlib import Path
 
     import yaml
 
     case_id = args.case_id
-    examiner = getattr(args, "examiner", None) or identity["examiner"]
-    if not examiner:
-        print("Cannot join case: examiner identity is empty.", file=sys.stderr)
-        sys.exit(1)
-
     cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
     case_dir = cases_dir / case_id
 
@@ -329,60 +340,25 @@ def _case_join(args, identity: dict) -> None:
         sys.exit(1)
 
     meta_file = case_dir / "CASE.yaml"
-    try:
-        with open(meta_file) as f:
-            meta = yaml.safe_load(f) or {}
-    except OSError as e:
-        print(f"Failed to read CASE.yaml: {e}", file=sys.stderr)
-        sys.exit(1)
-    except yaml.YAMLError as e:
-        print(f"CASE.yaml is corrupt or invalid YAML: {e}", file=sys.stderr)
-        sys.exit(1)
+    with open(meta_file) as f:
+        meta = yaml.safe_load(f) or {}
 
-    exam_dir = case_dir / "examiners" / examiner
-    if exam_dir.exists():
-        print(f"Examiner '{examiner}' already has a directory in case {case_id}")
-    else:
-        try:
-            exam_dir.mkdir(parents=True)
-            (exam_dir / "audit").mkdir()
-            for fname in ("findings.json", "timeline.json", "todos.json"):
-                with open(exam_dir / fname, "w") as f:
-                    f.write("[]")
-                    f.flush()
-                    os.fsync(f.fileno())
-            with open(exam_dir / "evidence.json", "w") as f:
-                json.dump({"files": []}, f)
-                f.flush()
-                os.fsync(f.fileno())
-        except OSError as e:
-            print(f"Failed to create examiner directory: {e}", file=sys.stderr)
-            sys.exit(1)
+    if meta.get("status") == "closed":
+        print(f"Case {case_id} is already closed.")
+        return
 
-    # Add to team list
-    if examiner not in meta.get("team", []):
-        meta.setdefault("team", []).append(examiner)
-        try:
-            with open(meta_file, "w") as f:
-                yaml.dump(meta, f, default_flow_style=False)
-                f.flush()
-                os.fsync(f.fileno())
-        except (OSError, yaml.YAMLError) as e:
-            print(f"Failed to update team list in CASE.yaml: {e}", file=sys.stderr)
-            sys.exit(1)
+    meta["status"] = "closed"
+    meta["closed"] = datetime.now(timezone.utc).isoformat()
+    summary = getattr(args, "summary", "")
+    if summary:
+        meta["close_summary"] = summary
 
-    # Set active case pointer
-    try:
-        aiir_dir = Path(".aiir")
-        aiir_dir.mkdir(exist_ok=True)
-        with open(aiir_dir / "active_case", "w") as f:
-            f.write(case_id)
-    except OSError as e:
-        # Non-fatal: join succeeded, just can't set active pointer
-        print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
+    with open(meta_file, "w") as f:
+        yaml.dump(meta, f, default_flow_style=False)
+        f.flush()
+        os.fsync(f.fileno())
 
-    print(f"Joined case {case_id} as examiner '{examiner}'")
-    print(f"  Team: {', '.join(meta.get('team', []))}")
+    print(f"Case {case_id} closed.")
 
 
 if __name__ == "__main__":

@@ -12,11 +12,10 @@ from aiir_cli.commands.evidence import cmd_lock_evidence, cmd_register_evidence
 
 @pytest.fixture
 def case_dir(tmp_path, monkeypatch):
-    """Create case dir with evidence directory and local store."""
+    """Create flat case dir with evidence directory."""
     monkeypatch.setenv("AIIR_EXAMINER", "tester")
     (tmp_path / "evidence").mkdir()
-    (tmp_path / "examiners" / "tester").mkdir(parents=True)
-    (tmp_path / "examiners" / "tester" / "evidence.json").write_text('{"files": []}')
+    (tmp_path / "evidence.json").write_text('{"files": []}')
     return tmp_path
 
 
@@ -50,7 +49,7 @@ class TestRegisterEvidence:
         ev_file.write_bytes(b"malware content")
         args = FakeArgs(path=str(ev_file), description="Test malware")
         cmd_register_evidence(args, identity)
-        reg = json.loads((case_dir / "examiners" / "tester" / "evidence.json").read_text())
+        reg = json.loads((case_dir / "evidence.json").read_text())
         assert len(reg["files"]) == 1
         assert reg["files"][0]["sha256"]
         assert reg["files"][0]["description"] == "Test malware"
