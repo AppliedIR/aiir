@@ -289,14 +289,14 @@ if $AUTO_YES; then
     info "Skipping interactive setup (-y). Run 'aiir setup' to configure later."
 else
     echo "The setup wizard discovers installed MCPs and configures your LLM client."
-    echo "You can run it now or later with: aiir setup"
+    echo "You can run it now or later with: aiir setup client"
     echo ""
     read -rp "$(echo -e "${BOLD}Run setup wizard now?${NC} [Y/n]: ")" RUN_SETUP
     RUN_SETUP="${RUN_SETUP:-y}"
     if [[ "${RUN_SETUP,,}" == "y" ]]; then
-        "$AIIR_CMD" setup || warn "Setup wizard encountered an issue. Run 'aiir setup' to retry."
+        "$AIIR_CMD" setup client || warn "Setup wizard encountered an issue. Run 'aiir setup client' to retry."
     else
-        info "Skipped. Run 'aiir setup' when ready."
+        info "Skipped. Run 'aiir setup client' when ready."
     fi
 fi
 

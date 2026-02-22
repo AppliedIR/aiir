@@ -56,24 +56,31 @@ def cmd_setup_client(args, identity: dict) -> None:
     if sift_url:
         # Try to discover per-backend endpoints from the running gateway
         backends_discovered = False
-        services = _discover_services(sift_url, None)
+        local_token = _read_local_token()
+        services = _discover_services(sift_url, local_token)
         if services:
             running = [s for s in services if s.get("started")]
             if running:
                 backends_discovered = True
                 for s in running:
                     name = s["name"]
-                    servers[name] = {
+                    entry: dict = {
                         "type": "streamable-http",
                         "url": f"{sift_url.rstrip('/')}/mcp/{name}",
                     }
+                    if local_token:
+                        entry["headers"] = {"Authorization": f"Bearer {local_token}"}
+                    servers[name] = entry
 
         if not backends_discovered:
             # Gateway not reachable or no backends — fall back to aggregate
-            servers["aiir"] = {
+            entry = {
                 "type": "streamable-http",
                 "url": _ensure_mcp_path(sift_url),
             }
+            if local_token:
+                entry["headers"] = {"Authorization": f"Bearer {local_token}"}
+            servers["aiir"] = entry
 
     if windows_url:
         servers["wintools-mcp"] = {
@@ -368,6 +375,7 @@ def _copy_agents_md(target: Path) -> None:
     # Search common locations for AGENTS.md
     candidates = [
         Path.cwd() / "AGENTS.md",
+        Path.home() / ".aiir" / "src" / "sift-mcp" / "AGENTS.md",
         Path.home() / "aiir" / "sift-mcp" / "AGENTS.md",
         Path.home() / "aiir" / "forensic-mcp" / "AGENTS.md",
         Path("/opt/aiir/sift-mcp") / "AGENTS.md",
@@ -387,6 +395,30 @@ def _copy_agents_md(target: Path) -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _read_local_token() -> str | None:
+    """Read the first api_key from ~/.aiir/gateway.yaml.
+
+    The api_keys format in gateway.yaml is a dict keyed by token string:
+        api_keys:
+          aiir_gw_abc123...:
+            examiner: "default"
+            role: "lead"
+    So next(iter(api_keys)) returns the token string itself.
+    """
+    config_path = Path.home() / ".aiir" / "gateway.yaml"
+    if not config_path.is_file():
+        return None
+    try:
+        import yaml
+        config = yaml.safe_load(config_path.read_text()) or {}
+        api_keys = config.get("api_keys", {})
+        if isinstance(api_keys, dict) and api_keys:
+            return next(iter(api_keys))
+        return None
+    except Exception:
+        return None
+
 
 def _normalise_url(raw: str, default_port: int) -> str:
     """Turn ``IP:port`` or bare ``IP`` into ``http://IP:port``."""
@@ -418,7 +450,7 @@ def _probe_health(base_url: str) -> bool:
         import urllib.request
         url = f"{base_url.rstrip('/')}/health"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=2) as resp:
+        with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.status == 200
     except OSError as e:
         # Network/connection errors (includes URLError, socket.error)

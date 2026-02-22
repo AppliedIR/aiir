@@ -172,3 +172,73 @@ class TestCmdService:
         args = argparse.Namespace(service_action="start", gateway=None, token=None, backend_name="b1")
         cmd_service(args, {"examiner": "test"})
         mock_action.assert_called_once_with(args, "start")
+
+
+class TestBulkServiceAction:
+    @patch("aiir_cli.commands.service._api_request")
+    @patch("aiir_cli.commands.service._resolve_gateway")
+    def test_stop_all_backends(self, mock_resolve, mock_api, capsys):
+        mock_resolve.return_value = ("http://localhost:4508", "tok")
+        mock_api.side_effect = [
+            # First call: GET /api/v1/services
+            {"services": [
+                {"name": "forensic-mcp", "started": True},
+                {"name": "sift-mcp", "started": True},
+            ]},
+            # Per-backend POST calls
+            {"status": "stopped", "name": "forensic-mcp"},
+            {"status": "stopped", "name": "sift-mcp"},
+        ]
+        args = argparse.Namespace(gateway=None, token=None, backend_name=None)
+        _service_action(args, "stop")
+        out = capsys.readouterr().out
+        assert "forensic-mcp: stopped" in out
+        assert "sift-mcp: stopped" in out
+
+    @patch("aiir_cli.commands.service._api_request")
+    @patch("aiir_cli.commands.service._resolve_gateway")
+    def test_start_all_backends(self, mock_resolve, mock_api, capsys):
+        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_api.side_effect = [
+            {"services": [{"name": "forensic-mcp"}, {"name": "sift-mcp"}]},
+            {"status": "started"},
+            {"status": "started"},
+        ]
+        args = argparse.Namespace(gateway=None, token=None, backend_name=None)
+        _service_action(args, "start")
+        out = capsys.readouterr().out
+        assert "forensic-mcp: started" in out
+        assert "sift-mcp: started" in out
+
+    @patch("aiir_cli.commands.service._api_request")
+    @patch("aiir_cli.commands.service._resolve_gateway")
+    def test_bulk_no_services_found(self, mock_resolve, mock_api, capsys):
+        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_api.return_value = {"services": []}
+        args = argparse.Namespace(gateway=None, token=None, backend_name=None)
+        _service_action(args, "stop")
+        out = capsys.readouterr().out
+        assert "No services found" in out
+
+    @patch("aiir_cli.commands.service._api_request")
+    @patch("aiir_cli.commands.service._resolve_gateway")
+    def test_bulk_partial_failure_exits(self, mock_resolve, mock_api, capsys):
+        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_api.side_effect = [
+            {"services": [{"name": "forensic-mcp"}, {"name": "sift-mcp"}]},
+            {"status": "stopped"},
+            {"error": "already stopped"},
+        ]
+        args = argparse.Namespace(gateway=None, token=None, backend_name=None)
+        with pytest.raises(SystemExit):
+            _service_action(args, "stop")
+
+    @patch("aiir_cli.commands.service._api_request")
+    @patch("aiir_cli.commands.service._resolve_gateway")
+    def test_single_backend_still_works(self, mock_resolve, mock_api, capsys):
+        mock_resolve.return_value = ("http://localhost:4508", "tok")
+        mock_api.return_value = {"status": "restarted", "name": "forensic-mcp"}
+        args = argparse.Namespace(gateway=None, token=None, backend_name="forensic-mcp")
+        _service_action(args, "restart")
+        out = capsys.readouterr().out
+        assert "forensic-mcp: restarted" in out

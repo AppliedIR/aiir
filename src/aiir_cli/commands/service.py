@@ -126,14 +126,35 @@ def _service_status(args) -> None:
 def _service_action(args, action: str) -> None:
     """POST /api/v1/services/{name}/{action}."""
     url, token = _resolve_gateway(args)
-    name = args.backend_name
-    data = _api_request(f"{url}/api/v1/services/{name}/{action}", token, method="POST")
-    if data is None:
-        sys.exit(1)
+    name = getattr(args, "backend_name", None)
 
-    status = data.get("status", "unknown")
-    if "error" in data:
-        print(f"ERROR: {data['error']}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"{name}: {status}")
+    if name:
+        # Single backend
+        data = _api_request(f"{url}/api/v1/services/{name}/{action}", token, method="POST")
+        if data is None:
+            sys.exit(1)
+        if "error" in data:
+            print(f"ERROR: {data['error']}", file=sys.stderr)
+            sys.exit(1)
+        print(f"{name}: {data.get('status', 'unknown')}")
+    else:
+        # All backends: fetch list, then operate on each
+        svc_data = _api_request(f"{url}/api/v1/services", token)
+        if svc_data is None:
+            sys.exit(1)
+        services = svc_data.get("services", [])
+        if not services:
+            print("No services found.")
+            return
+        errors = 0
+        for s in services:
+            sname = s["name"]
+            data = _api_request(f"{url}/api/v1/services/{sname}/{action}", token, method="POST")
+            if data and "error" not in data:
+                print(f"{sname}: {data.get('status', 'unknown')}")
+            else:
+                err = data.get("error", "unknown error") if data else "no response"
+                print(f"{sname}: FAILED ({err})", file=sys.stderr)
+                errors += 1
+        if errors:
+            sys.exit(1)

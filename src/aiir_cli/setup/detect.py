@@ -79,12 +79,26 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     Returns list of dicts with name, venv_path, python_path, available.
     """
     if search_dirs is None:
-        search_dirs = [
+        search_dirs = []
+        # Check manifest.json for custom venv path
+        manifest_path = Path.home() / ".aiir" / "manifest.json"
+        if manifest_path.is_file():
+            try:
+                import json
+                manifest = json.loads(manifest_path.read_text())
+                venv_path = manifest.get("venv")
+                if venv_path:
+                    venv_parent = Path(venv_path).parent
+                    if venv_parent not in search_dirs:
+                        search_dirs.append(venv_parent)
+            except Exception:
+                pass
+        search_dirs.extend([
             Path.home() / ".aiir",
             Path("/opt/aiir"),
             Path.home() / "air-design",
             Path.home() / "aiir",
-        ]
+        ])
 
     results = []
     for base_dir in search_dirs:

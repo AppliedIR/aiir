@@ -217,13 +217,16 @@ def build_parser() -> argparse.ArgumentParser:
     service_sub.add_parser("status", help="Show status of all backend services")
 
     p_svc_start = service_sub.add_parser("start", help="Start a backend service")
-    p_svc_start.add_argument("backend_name", help="Backend name to start")
+    p_svc_start.add_argument("backend_name", nargs="?", default=None,
+                             help="Backend name to start (omit for all)")
 
     p_svc_stop = service_sub.add_parser("stop", help="Stop a backend service")
-    p_svc_stop.add_argument("backend_name", help="Backend name to stop")
+    p_svc_stop.add_argument("backend_name", nargs="?", default=None,
+                            help="Backend name to stop (omit for all)")
 
     p_svc_restart = service_sub.add_parser("restart", help="Restart a backend service")
-    p_svc_restart.add_argument("backend_name", help="Backend name to restart")
+    p_svc_restart.add_argument("backend_name", nargs="?", default=None,
+                               help="Backend name to restart (omit for all)")
 
     return parser
 

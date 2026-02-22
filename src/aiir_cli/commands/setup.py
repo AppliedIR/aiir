@@ -37,6 +37,9 @@ def cmd_setup(args, identity: dict) -> None:
         cmd_setup_client(args, identity)
         return
 
+    print("WARNING: 'aiir setup' is deprecated. Use 'aiir setup client' instead.",
+          file=sys.stderr)
+
     force = getattr(args, "force_reprompt", False)
     non_interactive = getattr(args, "non_interactive", False)
 

@@ -17,6 +17,7 @@ from aiir_cli.commands.client_setup import (
     _merge_and_write,
     _normalise_url,
     _probe_health_with_auth,
+    _read_local_token,
     _save_gateway_config,
     _wizard_client,
     cmd_setup_client,
@@ -423,3 +424,103 @@ class TestSaveGatewayConfig:
         config = yaml.safe_load((config_dir / "config.yaml").read_text())
         assert config["other_key"] == "value"
         assert config["gateway_url"] == "https://sift:4508"
+
+
+class TestReadLocalToken:
+    def test_reads_token_from_gateway_yaml(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir()
+        import yaml
+        gateway_config = {
+            "api_keys": {
+                "aiir_gw_abc123xyz": {"examiner": "default", "role": "lead"},
+            },
+        }
+        (config_dir / "gateway.yaml").write_text(yaml.dump(gateway_config))
+        assert _read_local_token() == "aiir_gw_abc123xyz"
+
+    def test_no_gateway_yaml_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        assert _read_local_token() is None
+
+    def test_empty_api_keys_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir()
+        import yaml
+        (config_dir / "gateway.yaml").write_text(yaml.dump({"api_keys": {}}))
+        assert _read_local_token() is None
+
+    def test_no_api_keys_key_returns_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir()
+        import yaml
+        (config_dir / "gateway.yaml").write_text(yaml.dump({"gateway": {"port": 4508}}))
+        assert _read_local_token() is None
+
+
+class TestLocalModeTokenThreading:
+    def _make_args(self, **kwargs):
+        import argparse
+        defaults = {
+            "client": "claude-code",
+            "sift": "http://127.0.0.1:4508",
+            "windows": None,
+            "remnux": None,
+            "examiner": "testuser",
+            "no_zeltser": True,
+            "no_mslearn": True,
+            "yes": True,
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._read_local_token")
+    def test_local_mode_injects_token(self, mock_token, mock_discover, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_token.return_value = "aiir_gw_secret123"
+        mock_discover.return_value = [
+            {"name": "forensic-mcp", "started": True},
+            {"name": "sift-mcp", "started": True},
+        ]
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        for name in ("forensic-mcp", "sift-mcp"):
+            entry = data["mcpServers"][name]
+            assert entry["headers"]["Authorization"] == "Bearer aiir_gw_secret123"
+
+        # Verify token was passed to discover
+        mock_discover.assert_called_once_with("http://127.0.0.1:4508", "aiir_gw_secret123")
+
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._read_local_token")
+    def test_local_mode_no_token_no_headers(self, mock_token, mock_discover, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_token.return_value = None
+        mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        assert "headers" not in data["mcpServers"]["forensic-mcp"]
+
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._read_local_token")
+    def test_local_mode_fallback_aggregate_gets_token(self, mock_token, mock_discover, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_token.return_value = "aiir_gw_tok"
+        mock_discover.return_value = None  # Discovery failed
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        entry = data["mcpServers"]["aiir"]
+        assert entry["headers"]["Authorization"] == "Bearer aiir_gw_tok"
