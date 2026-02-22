@@ -80,6 +80,7 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     """
     if search_dirs is None:
         search_dirs = [
+            Path.home() / ".aiir",
             Path("/opt/aiir"),
             Path.home() / "air-design",
             Path.home() / "aiir",
@@ -94,6 +95,7 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
         shared_python = None
         shared_path = None
         for candidate in [
+            base_dir / "venv" / "bin" / "python",            # ~/.aiir/venv/ (new installer)
             base_dir / ".venv" / "bin" / "python",           # direct monorepo root
             base_dir / "sift-mcp" / ".venv" / "bin" / "python",  # ~/aiir/sift-mcp/.venv/
         ]:
