@@ -23,7 +23,7 @@ graph TB
         WTR["windows-triage-mcp<br/>Baseline validation"]
         OC["opencti-mcp<br/>Threat intelligence"]
         FK["forensic-knowledge<br/>(shared YAML data package)"]
-        CASE["Case Directory<br/>examiners/{slug}/"]
+        CASE["Case Directory"]
 
         GW -->|stdio| FM
         GW -->|stdio| SM
@@ -68,7 +68,7 @@ sequenceDiagram
     Human->>Case: APPROVED or REJECTED
 
     Note over Case: Only APPROVED items<br/>appear in reports
-    AI->>Case: generate_full_report()
+    Human->>Case: aiir report --full
 ```
 
 ### Where Things Run
@@ -76,7 +76,7 @@ sequenceDiagram
 | Component | Runs on | Port | Purpose |
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
-| forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline, reports |
+| forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline (15 tools + 14 resources) |
 | sift-mcp | SIFT | (via gateway) | Catalog-gated forensic tool execution on Linux/SIFT |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
@@ -216,9 +216,12 @@ graph LR
         CLI1["aiir CLI<br/>(human interface)"]
         GW1["sift-gateway<br/>:4508"]
         MCPs1["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+        CASE1["Case Directory"]
 
         CC1 -->|"streamable-http"| GW1
         GW1 -->|stdio| MCPs1
+        MCPs1 --> CASE1
+        CLI1 --> CASE1
     end
 
     subgraph e2 ["Examiner 2 — SIFT Workstation"]
@@ -226,44 +229,36 @@ graph LR
         CLI2["aiir CLI<br/>(human interface)"]
         GW2["sift-gateway<br/>:4508"]
         MCPs2["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+        CASE2["Case Directory"]
 
         CC2 -->|"streamable-http"| GW2
         GW2 -->|stdio| MCPs2
+        MCPs2 --> CASE2
+        CLI2 --> CASE2
     end
 
-    subgraph shared ["Shared Storage (NFS / SMB)"]
-        CASE["Case Directory<br/>examiners/steve/<br/>examiners/jane/"]
-    end
-
-    MCPs1 --> CASE
-    CLI1 --> CASE
-    MCPs2 --> CASE
-    CLI2 --> CASE
+    CASE1 <-->|"export / merge"| CASE2
 ```
 
 ### Case Directory Structure
 
 ```
 cases/INC-2026-0219/
-├── CASE.yaml                    # Case metadata (name, mode, team)
+├── CASE.yaml                    # Case metadata (name, status, examiner)
 ├── evidence/                    # Original evidence (read-only after registration)
-├── extracted/                   # Extracted artifacts
+├── extractions/                 # Extracted artifacts
 ├── reports/                     # Generated reports
-└── examiners/
-    ├── steve/                   # Examiner "steve"
-    │   ├── findings.json        # Findings (DRAFT -> APPROVED/REJECTED)
-    │   ├── timeline.json        # Timeline events
-    │   ├── todos.json           # Investigation TODOs
-    │   ├── evidence.json        # Evidence registry
-    │   ├── actions.jsonl        # Investigative actions (append-only)
-    │   ├── evidence_access.jsonl # Chain-of-custody log
-    │   ├── approvals.jsonl      # Approval audit trail
-    │   └── audit/
-    │       ├── forensic-mcp.jsonl
-    │       ├── sift-mcp.jsonl
-    │       └── ...
-    └── jane/                    # Examiner "jane" (same structure)
-        └── ...
+├── findings.json                # F-alice-001, F-alice-002, ...
+├── timeline.json                # T-alice-001, ...
+├── todos.json                   # TODO-alice-001, ...
+├── evidence.json                # Evidence registry
+├── actions.jsonl                # Investigative actions (append-only)
+├── evidence_access.jsonl        # Chain-of-custody log
+├── approvals.jsonl              # Approval audit trail
+└── audit/
+    ├── forensic-mcp.jsonl
+    ├── sift-mcp.jsonl
+    └── ...
 ```
 
 ## Quick Start
@@ -309,19 +304,20 @@ When choosing an LLM client, we recommend constrained clients that are limited t
 ### case
 
 ```bash
-aiir case init "Ransomware Investigation"                # Solo case
-aiir case init "Team Investigation" --collaborative      # Multi-examiner case
-aiir case join --case-id INC-2026-02191200               # Join existing case
+aiir case init "Ransomware Investigation"                # Create a new case
+aiir case close                                          # Close the active case
+aiir case activate INC-2026-02191200                     # Set active case
+aiir case migrate                                        # Migrate to flat layout (see below)
 ```
 
 ### approve
 
 ```bash
 aiir approve                                             # Interactive review of all DRAFT items
-aiir approve F-001 F-002 T-001                           # Approve specific IDs
-aiir approve F-001 --edit                                # Edit in $EDITOR before approving
-aiir approve F-001 --note "Malware family unconfirmed"   # Approve with examiner note
-aiir approve --by jane                                   # Review only jane's findings
+aiir approve F-alice-001 F-alice-002 T-alice-001         # Approve specific IDs
+aiir approve F-alice-001 --edit                          # Edit in $EDITOR before approving
+aiir approve F-alice-001 --note "Malware family unconfirmed"  # Approve with examiner note
+aiir approve --by jane                                   # Filter to IDs with jane's examiner prefix
 aiir approve --findings-only                             # Skip timeline events
 aiir approve --timeline-only                             # Skip findings
 ```
@@ -329,8 +325,8 @@ aiir approve --timeline-only                             # Skip findings
 ### reject
 
 ```bash
-aiir reject F-003 --reason "Insufficient evidence for attribution"
-aiir reject F-003 T-002 --reason "Contradicted by memory analysis"
+aiir reject F-alice-003 --reason "Insufficient evidence for attribution"
+aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 ```
 
 ### review
@@ -347,7 +343,7 @@ aiir review --timeline --start 2026-01-01 --end 2026-01-31   # Filter by date ra
 aiir review --timeline --type execution    # Filter by event type
 aiir review --evidence                     # Evidence registry and access log
 aiir review --audit --limit 100            # Audit trail (last N entries)
-aiir review --todos --open                 # Open TODOs across all examiners
+aiir review --todos --open                 # Open TODOs
 ```
 
 ### todo
@@ -355,9 +351,9 @@ aiir review --todos --open                 # Open TODOs across all examiners
 ```bash
 aiir todo                                                          # List open TODOs
 aiir todo --all                                                    # Include completed
-aiir todo add "Run volatility on server-04" --assignee jane --priority high --finding F-003
-aiir todo complete TODO-001
-aiir todo update TODO-002 --note "Waiting on third party" --priority low
+aiir todo add "Run volatility on server-04" --assignee jane --priority high --finding F-alice-003
+aiir todo complete TODO-alice-001
+aiir todo update TODO-alice-002 --note "Waiting on third party" --priority low
 ```
 
 ### exec
@@ -374,13 +370,46 @@ Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`.
 aiir register-evidence /path/to/image.E01 --description "Disk image from workstation"
 aiir lock-evidence                         # All files chmod 444, directory chmod 555
 aiir unlock-evidence                       # Directory chmod 755, files remain 444
+
+aiir evidence register /path/to/image.E01 --description "Disk image"
+aiir evidence list
+aiir evidence verify
+aiir evidence log [--path <filter>]
+aiir evidence lock
+aiir evidence unlock
 ```
 
 ### sync
 
 ```bash
-aiir sync export --file steve-bundle.json  # Export your contributions
-aiir sync import --file jane-bundle.json   # Import another examiner's bundle
+aiir sync export --file steve-findings.json      # Export findings for sharing
+aiir sync import --file jane-findings.json        # Merge another examiner's findings
+```
+
+### report
+
+```bash
+aiir report --full [--save <path>]
+aiir report --executive-summary [--save <path>]
+aiir report --timeline [--from <date> --to <date>] [--save <path>]
+aiir report --ioc [--save <path>]
+aiir report --findings F-alice-001,F-alice-002 [--save <path>]
+aiir report --status-brief [--save <path>]
+```
+
+### audit
+
+```bash
+aiir audit log [--limit 100] [--mcp sift-mcp] [--tool run_command]
+aiir audit summary
+```
+
+### case migrate
+
+```bash
+aiir case migrate                                      # Migrate primary examiner data to flat layout
+aiir case migrate --examiner alice                     # Specify examiner
+aiir case migrate --import-all                         # Merge all examiners' data
 ```
 
 ### config
@@ -425,7 +454,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 
 | Priority | Source | Example |
 |----------|--------|---------|
-| 1 | `--examiner` flag | `aiir approve --examiner jane.doe F-001` |
+| 1 | `--examiner` flag | `aiir approve --examiner jane.doe F-jane-001` |
 | 2 | `AIIR_EXAMINER` env var | `export AIIR_EXAMINER=jane.doe` |
 | 3 | `~/.aiir/config.yaml` | `examiner: jane.doe` |
 | 4 | `AIIR_ANALYST` env var | Deprecated fallback |
@@ -436,7 +465,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 | Repo | Purpose |
 |------|---------|
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: all SIFT components (forensic-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti) |
-| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (22 catalog entries) |
+| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
 ## Evidence Handling
