@@ -4,7 +4,7 @@ Artificial Intelligence Incident Response platform. CLI and architecture referen
 
 ## Platform Architecture
 
-AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, OpenWebUI, Goose, OpenCode, and others. The LLM client and the aiir CLI are the two human-facing tools. They always run on the same machine, which can be the SIFT workstation or a separate computer.
+AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, Cherry Studio, LibreChat, Goose, and others. The LLM client and the aiir CLI are the two human-facing tools. They always run on the same machine, which can be the SIFT workstation or a separate computer.
 
 ### Core Component Map
 
@@ -85,9 +85,25 @@ sequenceDiagram
 | aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence |
 | forensic-knowledge | anywhere | -- | Pip-installable YAML data package (tools, artifacts, discipline) |
 
+The gateway exposes each backend as a separate MCP endpoint. Clients can connect to the aggregate endpoint or to individual backends:
+
+```
+http://localhost:4508/mcp              # Aggregate (all tools)
+http://localhost:4508/mcp/forensic-mcp
+http://localhost:4508/mcp/sift-mcp
+http://localhost:4508/mcp/windows-triage-mcp
+http://localhost:4508/mcp/forensic-rag-mcp
+http://localhost:4508/mcp/opencti-mcp
+```
+
 ### Deployment Topologies
 
-#### Solo Analyst on SIFT
+Two primary deployment paths:
+
+- **Path 1 — Co-located (classroom / quickstart).** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. Good for training, single-analyst work, and getting started.
+- **Path 2 — Remote orchestrator (preferred for production).** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. Run `sift-install.sh --remote` to generate TLS certificates and bind the gateway to all interfaces.
+
+#### Solo Analyst on SIFT (Path 1)
 
 ```mermaid
 graph LR
@@ -149,7 +165,7 @@ graph LR
     WM -->|"SMB"| CASE
 ```
 
-#### With Optional External MCPs
+#### Remote Orchestrator with Optional External MCPs (Path 2)
 
 ```mermaid
 graph LR
@@ -266,11 +282,16 @@ cases/INC-2026-0219/
 ### SIFT Workstation
 
 ```bash
+# One-command quickstart (SIFT workstation)
+curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
+
+# Or step by step
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./scripts/setup-sift.sh
+./sift-install.sh          # Install MCP servers + gateway
+./aiir-install.sh          # Install aiir CLI + configure client
 ```
 
-The interactive SIFT installer handles all platform components (MCPs, gateway, forensic-knowledge), the aiir CLI, and LLM client configuration.
+The quickstart installs all core components, starts the gateway, and runs the aiir setup wizard. For tier selection (quick, recommended, custom) or remote access, run `sift-install.sh` directly.
 
 ### Windows Forensic Workstation (optional)
 
@@ -354,6 +375,15 @@ aiir todo --all                                                    # Include com
 aiir todo add "Run volatility on server-04" --assignee jane --priority high --finding F-alice-003
 aiir todo complete TODO-alice-001
 aiir todo update TODO-alice-002 --note "Waiting on third party" --priority low
+```
+
+### service
+
+```bash
+aiir service status                    # Show running backends + health
+aiir service start forensic-rag        # Start a backend
+aiir service stop windows-triage       # Stop a backend
+aiir service restart sift-mcp          # Restart a backend
 ```
 
 ### exec
@@ -440,11 +470,22 @@ aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT
 aiir setup client --no-zeltser -y                                          # Exclude optional MCPs
 ```
 
+For remote orchestrator setups (Path 2), use the `--remote` flag:
+
+```bash
+aiir setup client --remote                                                 # Interactive remote wizard
+aiir setup client --remote --client=claude-code --token=TOKEN              # Claude Code on remote machine
+aiir setup client --remote --client=claude-desktop --token=TOKEN           # Claude Desktop (uses mcp-remote bridge)
+```
+
+Remote mode prompts for the gateway URL, bearer token, and optional Windows VM address. Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge for Streamable HTTP support.
+
 | Client | Config file | Extras |
 |--------|-------------|--------|
 | Claude Code | `.mcp.json` | Copies `AGENTS.md` as `CLAUDE.md` |
-| Claude Desktop | `~/.config/claude/claude_desktop_config.json` | -- |
+| Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
+| Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |
 | LibreChat | `librechat_mcp.yaml` | Merge into `librechat.yaml` |
 | Other | `aiir-mcp-config.json` | Manual integration |
 
