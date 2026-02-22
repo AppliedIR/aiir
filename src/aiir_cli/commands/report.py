@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,16 @@ from aiir_cli.case_io import (
 def cmd_report(args, identity: dict) -> None:
     """Generate case reports."""
     case_dir = get_case_dir(getattr(args, "case", None))
+
+    # Detect multiple report flags — only one allowed at a time
+    flags = []
+    for flag in ("full", "executive_summary", "report_timeline", "ioc", "report_findings", "status_brief"):
+        val = getattr(args, flag, None)
+        if val:
+            flags.append(flag)
+    if len(flags) > 1:
+        print("Error: specify only one report type at a time.", file=sys.stderr)
+        sys.exit(1)
 
     if getattr(args, "full", False):
         _report_full(case_dir, args)
@@ -54,8 +65,17 @@ def _save_output(case_dir: Path, save_path: str | None, content: str) -> None:
     out = Path(save_path)
     if not out.is_absolute():
         reports_dir = case_dir / "reports"
-        reports_dir.mkdir(exist_ok=True)
         out = reports_dir / save_path
+    # Validate resolved path stays within case_dir
+    try:
+        resolved = out.resolve()
+        case_resolved = case_dir.resolve()
+        if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
+            print(f"Error: save path must be within the case directory: {case_dir}", file=sys.stderr)
+            sys.exit(1)
+    except OSError as e:
+        print(f"Failed to resolve save path: {e}", file=sys.stderr)
+        sys.exit(1)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, "w") as f:
@@ -78,7 +98,6 @@ def _status_counts(items: list[dict]) -> dict[str, int]:
 
 def _extract_all_iocs(findings: list[dict]) -> dict[str, list[str]]:
     """Extract IOCs from findings, returning type -> sorted unique values."""
-    import re
     collected: dict[str, set[str]] = {}
 
     for f in findings:

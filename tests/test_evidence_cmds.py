@@ -127,7 +127,9 @@ class TestVerifyEvidence:
         ev_file.chmod(stat.S_IRUSR | stat.S_IWUSR)
         ev_file.write_bytes(b"tampered data")
 
-        cmd_verify_evidence(FakeArgs(), identity)
+        with pytest.raises(SystemExit) as exc_info:
+            cmd_verify_evidence(FakeArgs(), identity)
+        assert exc_info.value.code == 2
         output = capsys.readouterr().out
         assert "MODIFIED" in output
         assert "ALERT" in output

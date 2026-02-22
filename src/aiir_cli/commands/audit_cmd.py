@@ -29,6 +29,7 @@ def cmd_audit(args, identity: dict) -> None:
 def _load_audit_entries(case_dir: Path) -> list[dict]:
     """Load all audit entries from audit/*.jsonl and approvals.jsonl."""
     entries: list[dict] = []
+    corrupt_lines = 0
 
     audit_dir = case_dir / "audit"
     if audit_dir.is_dir():
@@ -48,7 +49,7 @@ def _load_audit_entries(case_dir: Path) -> list[dict]:
                         entry["mcp"] = jsonl_file.stem
                     entries.append(entry)
                 except json.JSONDecodeError:
-                    pass
+                    corrupt_lines += 1
 
     approvals_file = case_dir / "approvals.jsonl"
     if approvals_file.exists():
@@ -65,7 +66,10 @@ def _load_audit_entries(case_dir: Path) -> list[dict]:
                 entry.setdefault("mcp", "aiir-cli")
                 entries.append(entry)
             except json.JSONDecodeError:
-                pass
+                corrupt_lines += 1
+
+    if corrupt_lines:
+        print(f"  Warning: {corrupt_lines} corrupt JSONL line(s) skipped in audit trail", file=sys.stderr)
 
     entries.sort(key=lambda e: e.get("ts", ""))
     return entries
@@ -79,6 +83,9 @@ def _audit_log(args) -> None:
     mcp_filter = getattr(args, "mcp", None)
     tool_filter = getattr(args, "tool", None)
     limit = getattr(args, "limit", 50) or 50
+    if limit < 1:
+        print("Error: --limit must be a positive integer.", file=sys.stderr)
+        sys.exit(1)
 
     if mcp_filter:
         entries = [e for e in entries if e.get("mcp", "") == mcp_filter]

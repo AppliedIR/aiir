@@ -336,10 +336,20 @@ class TestReportNoFlag:
             cmd_report(_make_args(), identity)
 
 
-class TestReportSaveAbsolutePath:
-    def test_save_absolute_path(self, case_dir, sample_findings, identity, capsys, tmp_path):
+class TestReportSavePathSecurity:
+    def test_save_absolute_path_outside_case_rejected(self, case_dir, sample_findings, identity, tmp_path):
         abs_path = str(tmp_path / "absolute-report.json")
-        cmd_report(_make_args(full=True, save=abs_path), identity)
-        assert Path(abs_path).exists()
-        data = json.loads(Path(abs_path).read_text())
+        with pytest.raises(SystemExit):
+            cmd_report(_make_args(full=True, save=abs_path), identity)
+        assert not Path(abs_path).exists()
+
+    def test_save_path_traversal_rejected(self, case_dir, sample_findings, identity):
+        with pytest.raises(SystemExit):
+            cmd_report(_make_args(full=True, save="../../../etc/evil"), identity)
+
+    def test_save_within_case_works(self, case_dir, sample_findings, identity, capsys):
+        cmd_report(_make_args(full=True, save="my-report.json"), identity)
+        saved = case_dir / "reports" / "my-report.json"
+        assert saved.exists()
+        data = json.loads(saved.read_text())
         assert data["report_type"] == "full"

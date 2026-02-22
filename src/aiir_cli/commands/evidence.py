@@ -107,7 +107,7 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
 
     _log_evidence_action(case_dir, "unlock", "Unlocked evidence directory", identity)
     print("Evidence directory unlocked (755). Files remain read-only.")
-    print("Use 'aiir register-evidence <path>' after adding new files.")
+    print("Use 'aiir evidence register <path>' after adding new files.")
 
 
 def cmd_register_evidence(args, identity: dict) -> None:
@@ -290,6 +290,7 @@ def cmd_verify_evidence(args, identity: dict) -> None:
     print(f"\n{verified} verified, {modified} MODIFIED, {missing} missing, {errors} errors")
     if modified:
         print("ALERT: Evidence files have been modified since registration.")
+        sys.exit(2)
 
 
 def cmd_evidence_log(args, identity: dict) -> None:
