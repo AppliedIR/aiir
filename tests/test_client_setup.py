@@ -335,10 +335,8 @@ class TestRemoteSetup:
         assert config_path.is_file()
         data = json.loads(config_path.read_text())
 
-        # Aggregate endpoint
-        assert "aiir" in data["mcpServers"]
-        assert data["mcpServers"]["aiir"]["url"] == "https://sift.example.com:4508/mcp"
-        assert data["mcpServers"]["aiir"]["headers"]["Authorization"] == "Bearer aiir_gw_abc123"
+        # No aggregate — per-backend entries cover everything
+        assert "aiir" not in data["mcpServers"]
 
         # Per-backend endpoints
         assert "forensic-mcp" in data["mcpServers"]

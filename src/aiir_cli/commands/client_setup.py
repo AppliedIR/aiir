@@ -61,12 +61,6 @@ def cmd_setup_client(args, identity: dict) -> None:
             running = [s for s in services if s.get("started")]
             if running:
                 backends_discovered = True
-                # Aggregate endpoint
-                servers["aiir"] = {
-                    "type": "streamable-http",
-                    "url": _ensure_mcp_path(sift_url),
-                }
-                # Per-backend endpoints
                 for s in running:
                     name = s["name"]
                     servers[name] = {
@@ -495,11 +489,6 @@ def _cmd_setup_client_remote(args, identity: dict) -> None:
 
     # 5. Build endpoint entries
     servers: dict[str, dict] = {}
-
-    # Aggregate endpoint
-    servers["aiir"] = _format_server_entry(
-        client, f"{gateway_url}/mcp", token,
-    )
 
     # Per-backend endpoints
     for s in running:
