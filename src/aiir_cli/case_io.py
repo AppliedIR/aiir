@@ -330,13 +330,18 @@ def export_bundle(case_dir: Path, since: str = "") -> dict:
     }
 
 
-def import_bundle(case_dir: Path, bundle: dict) -> dict:
+def import_bundle(case_dir: Path, bundle: dict | list) -> dict:
     """Merge incoming bundle into local findings + timeline.
 
-    Uses last-write-wins based on modified_at.
+    Accepts both wrapper format ({"findings": [...], "timeline": [...]}) and
+    bare array format (forensic-mcp export). Uses last-write-wins based on
+    modified_at.
     """
+    # Bare array → treat as findings-only (forensic-mcp export format)
+    if isinstance(bundle, list):
+        bundle = {"findings": bundle}
     if not isinstance(bundle, dict):
-        return {"status": "error", "message": "Bundle must be a JSON object"}
+        return {"status": "error", "message": "Bundle must be a JSON object or array"}
 
     findings_result = {"added": 0, "updated": 0, "skipped": 0}
     timeline_result = {"added": 0, "updated": 0, "skipped": 0}

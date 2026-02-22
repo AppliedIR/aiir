@@ -134,6 +134,20 @@ class TestPathTraversal:
         assert result["status"] == "merged"
         assert result["findings"]["added"] == 1
 
+    def test_import_bundle_bare_array(self, case_dir, monkeypatch):
+        """import_bundle accepts bare array (forensic-mcp export format)."""
+        import yaml
+        monkeypatch.setenv("AIIR_EXAMINER", "tester")
+        meta_file = case_dir / "CASE.yaml"
+        meta_file.write_text(yaml.dump({"case_id": "INC-001"}))
+        bare_array = [
+            {"id": "F-bob-001", "title": "Bob's finding", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"},
+        ]
+        result = import_bundle(case_dir, bare_array)
+        assert result["status"] == "merged"
+        assert result["findings"]["added"] == 1
+        assert result["timeline"]["added"] == 0
+
     def test_import_bundle_invalid_type(self, case_dir):
         result = import_bundle(case_dir, "not a dict")
         assert result["status"] == "error"
