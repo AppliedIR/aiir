@@ -36,6 +36,10 @@ _MSLEARN_MCP = {
 
 def cmd_setup_client(args, identity: dict) -> None:
     """Generate LLM client configuration for AIIR endpoints."""
+    if getattr(args, "remote", False):
+        _cmd_setup_client_remote(args, identity)
+        return
+
     auto = getattr(args, "yes", False)
 
     # 1. Resolve parameters from switches (or interactive wizard)
@@ -401,3 +405,203 @@ def _probe_health(base_url: str) -> bool:
         import logging
         logging.debug("Health probe unexpected error for %s: %s", base_url, e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Remote setup mode
+# ---------------------------------------------------------------------------
+
+def _cmd_setup_client_remote(args, identity: dict) -> None:
+    """Generate client config pointing at a remote AIIR gateway.
+
+    Discovers running backends via the service management API, then builds
+    per-backend MCP endpoint entries with bearer token auth.
+    """
+    import yaml
+
+    auto = getattr(args, "yes", False)
+    client = _resolve_client(args, auto)
+    examiner = _resolve_examiner(args, identity)
+
+    # 1. Resolve gateway URL
+    gateway_url = getattr(args, "sift", None)
+    if not gateway_url:
+        if auto:
+            print("ERROR: --sift is required with --remote -y", file=sys.stderr)
+            sys.exit(1)
+        gateway_url = _prompt("Gateway URL (e.g., https://sift.example.com:4508)", "")
+    if not gateway_url:
+        print("ERROR: Gateway URL is required for remote setup.", file=sys.stderr)
+        sys.exit(1)
+    gateway_url = gateway_url.rstrip("/")
+
+    # 2. Resolve bearer token
+    token = getattr(args, "token", None)
+    if not token:
+        if auto:
+            print("ERROR: --token is required with --remote -y", file=sys.stderr)
+            sys.exit(1)
+        token = _prompt("Bearer token", "")
+
+    # 3. Test connectivity
+    print(f"\nConnecting to {gateway_url} ...")
+    health = _probe_health_with_auth(gateway_url, token)
+    if health is None:
+        print(f"ERROR: Cannot reach gateway at {gateway_url}", file=sys.stderr)
+        sys.exit(1)
+    print(f"  Gateway status: {health.get('status', 'unknown')}")
+
+    # 4. Discover backends via service management API
+    services = _discover_services(gateway_url, token)
+    if services is None:
+        print("ERROR: Failed to discover services from gateway.", file=sys.stderr)
+        sys.exit(1)
+
+    running = [s for s in services if s.get("started")]
+    if not running:
+        print("WARNING: No running backends found on gateway.", file=sys.stderr)
+
+    print(f"  Backends: {len(running)} running")
+    for s in running:
+        print(f"    {s['name']}")
+
+    # 5. Build endpoint entries
+    servers: dict[str, dict] = {}
+
+    # Aggregate endpoint
+    servers["aiir"] = _format_server_entry(
+        client, f"{gateway_url}/mcp", token,
+    )
+
+    # Per-backend endpoints
+    for s in running:
+        name = s["name"]
+        servers[name] = _format_server_entry(
+            client, f"{gateway_url}/mcp/{name}", token,
+        )
+
+    # 6. Windows / internet MCPs (same as local)
+    windows_url = _resolve_windows(args, auto)
+    if windows_url:
+        servers["wintools-mcp"] = {
+            "type": "streamable-http",
+            "url": _ensure_mcp_path(windows_url),
+        }
+
+    include_zeltser, include_mslearn = _resolve_internet_mcps(args, auto)
+    if include_zeltser:
+        servers[_ZELTSER_MCP["name"]] = {
+            "type": _ZELTSER_MCP["type"],
+            "url": _ZELTSER_MCP["url"],
+        }
+    if include_mslearn:
+        servers[_MSLEARN_MCP["name"]] = {
+            "type": _MSLEARN_MCP["type"],
+            "url": _MSLEARN_MCP["url"],
+        }
+
+    if not servers:
+        print("No endpoints configured — nothing to write.", file=sys.stderr)
+        return
+
+    # 7. Generate config
+    try:
+        _generate_config(client, servers, examiner)
+    except OSError as e:
+        print(f"Failed to write client configuration: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # 8. Save gateway config for `aiir service` commands
+    _save_gateway_config(gateway_url, token)
+
+    print(f"\n  Remote setup complete. Examiner: {examiner}")
+
+
+def _format_server_entry(client: str, url: str, token: str | None) -> dict:
+    """Format a server entry appropriate for the target client.
+
+    Claude Desktop needs mcp-remote bridge (npx subprocess) because it
+    doesn't support streamable-http natively. Other clients use native
+    streamable-http with Authorization header.
+    """
+    if client == "claude-desktop" and token:
+        return {
+            "command": "npx",
+            "args": ["-y", "mcp-remote", url,
+                     "--header", "Authorization:${AUTH_HEADER}"],
+            "env": {"AUTH_HEADER": f"Bearer {token}"},
+        }
+
+    entry: dict = {
+        "type": "streamable-http",
+        "url": url,
+    }
+    if token:
+        entry["headers"] = {"Authorization": f"Bearer {token}"}
+    return entry
+
+
+def _probe_health_with_auth(base_url: str, token: str | None) -> dict | None:
+    """Probe /health with optional bearer token. Returns parsed dict or None."""
+    import urllib.request
+
+    try:
+        url = f"{base_url.rstrip('/')}/health"
+        req = urllib.request.Request(url, method="GET")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                import json as _json
+                return _json.loads(resp.read())
+    except OSError:
+        pass
+    except Exception:
+        pass
+    return None
+
+
+def _discover_services(base_url: str, token: str | None) -> list | None:
+    """GET /api/v1/services and return the services list, or None on failure."""
+    import urllib.request
+
+    try:
+        url = f"{base_url.rstrip('/')}/api/v1/services"
+        req = urllib.request.Request(url, method="GET")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if resp.status == 200:
+                import json as _json
+                data = _json.loads(resp.read())
+                return data.get("services", [])
+    except OSError:
+        pass
+    except Exception:
+        pass
+    return None
+
+
+def _save_gateway_config(url: str, token: str | None) -> None:
+    """Save gateway URL and token to ~/.aiir/config.yaml."""
+    import yaml
+
+    config_dir = Path.home() / ".aiir"
+    config_file = config_dir / "config.yaml"
+
+    existing = {}
+    if config_file.is_file():
+        try:
+            existing = yaml.safe_load(config_file.read_text()) or {}
+        except Exception:
+            pass
+
+    existing["gateway_url"] = url
+    if token:
+        existing["gateway_token"] = token
+
+    try:
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_file.write_text(yaml.dump(existing, default_flow_style=False))
+    except OSError as e:
+        print(f"Warning: could not save gateway config: {e}", file=sys.stderr)

@@ -26,6 +26,7 @@ from aiir_cli.commands.sync import cmd_export, cmd_merge
 from aiir_cli.commands.migrate import cmd_migrate
 from aiir_cli.commands.report import cmd_report
 from aiir_cli.commands.audit_cmd import cmd_audit
+from aiir_cli.commands.service import cmd_service
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -146,6 +147,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_client.add_argument("--no-zeltser", action="store_true", help="Exclude Zeltser IR Writing MCP")
     p_client.add_argument("--no-mslearn", action="store_true", help="Exclude Microsoft Learn MCP")
     p_client.add_argument("-y", "--yes", action="store_true", help="Accept defaults, no prompts")
+    p_client.add_argument("--remote", action="store_true", help="Remote setup mode (gateway on another host)")
+    p_client.add_argument("--token", help="Bearer token for gateway authentication")
 
     # export
     p_export = sub.add_parser("export", help="Export findings + timeline as JSON")
@@ -205,6 +208,23 @@ def build_parser() -> argparse.ArgumentParser:
 
     audit_sub.add_parser("summary", help="Audit summary: counts per MCP and tool")
 
+    # service
+    p_service = sub.add_parser("service", help="Manage gateway backend services")
+    p_service.add_argument("--gateway", help="Gateway URL (overrides config)")
+    p_service.add_argument("--token", help="Bearer token (overrides config)")
+    service_sub = p_service.add_subparsers(dest="service_action")
+
+    service_sub.add_parser("status", help="Show status of all backend services")
+
+    p_svc_start = service_sub.add_parser("start", help="Start a backend service")
+    p_svc_start.add_argument("backend_name", help="Backend name to start")
+
+    p_svc_stop = service_sub.add_parser("stop", help="Stop a backend service")
+    p_svc_stop.add_argument("backend_name", help="Backend name to stop")
+
+    p_svc_restart = service_sub.add_parser("restart", help="Restart a backend service")
+    p_svc_restart.add_argument("backend_name", help="Backend name to restart")
+
     return parser
 
 
@@ -238,6 +258,7 @@ def main() -> None:
         "report": cmd_report,
         "evidence": cmd_evidence,
         "audit": cmd_audit,
+        "service": cmd_service,
     }
 
     handler = dispatch.get(args.command)

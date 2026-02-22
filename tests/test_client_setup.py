@@ -10,9 +10,14 @@ import pytest
 from aiir_cli.commands.client_setup import (
     _MSLEARN_MCP,
     _ZELTSER_MCP,
+    _cmd_setup_client_remote,
+    _discover_services,
     _ensure_mcp_path,
+    _format_server_entry,
     _merge_and_write,
     _normalise_url,
+    _probe_health_with_auth,
+    _save_gateway_config,
     _wizard_client,
     cmd_setup_client,
 )
@@ -267,3 +272,156 @@ class TestWizardClient:
         """Empty input uses prompt default '1', which maps to claude-code."""
         monkeypatch.setattr("builtins.input", lambda _: "")
         assert _wizard_client() == "claude-code"
+
+
+class TestFormatServerEntry:
+    def test_claude_code_with_token(self):
+        entry = _format_server_entry("claude-code", "https://sift:4508/mcp", "tok123")
+        assert entry["type"] == "streamable-http"
+        assert entry["url"] == "https://sift:4508/mcp"
+        assert entry["headers"]["Authorization"] == "Bearer tok123"
+
+    def test_claude_desktop_uses_mcp_remote(self):
+        entry = _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
+        assert entry["command"] == "npx"
+        assert "mcp-remote" in entry["args"]
+        assert "https://sift:4508/mcp" in entry["args"]
+        assert entry["env"]["AUTH_HEADER"] == "Bearer tok123"
+
+    def test_no_token(self):
+        entry = _format_server_entry("claude-code", "https://sift:4508/mcp", None)
+        assert entry["type"] == "streamable-http"
+        assert "headers" not in entry
+
+    def test_cursor_with_token(self):
+        entry = _format_server_entry("cursor", "https://sift:4508/mcp", "tok")
+        assert entry["type"] == "streamable-http"
+        assert entry["headers"]["Authorization"] == "Bearer tok"
+
+
+class TestRemoteSetup:
+    def _make_args(self, **kwargs):
+        import argparse
+        defaults = {
+            "client": "claude-code",
+            "sift": "https://sift.example.com:4508",
+            "windows": None,
+            "remnux": None,
+            "examiner": "testuser",
+            "no_zeltser": True,
+            "no_mslearn": True,
+            "yes": True,
+            "remote": True,
+            "token": "aiir_gw_abc123",
+        }
+        defaults.update(kwargs)
+        return argparse.Namespace(**defaults)
+
+    @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._save_gateway_config")
+    def test_remote_generates_per_backend_urls(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_probe.return_value = {"status": "ok"}
+        mock_discover.return_value = [
+            {"name": "forensic-mcp", "started": True, "type": "stdio"},
+            {"name": "sift-mcp", "started": True, "type": "stdio"},
+        ]
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        _cmd_setup_client_remote(args, identity)
+
+        config_path = tmp_path / ".mcp.json"
+        assert config_path.is_file()
+        data = json.loads(config_path.read_text())
+
+        # Aggregate endpoint
+        assert "aiir" in data["mcpServers"]
+        assert data["mcpServers"]["aiir"]["url"] == "https://sift.example.com:4508/mcp"
+        assert data["mcpServers"]["aiir"]["headers"]["Authorization"] == "Bearer aiir_gw_abc123"
+
+        # Per-backend endpoints
+        assert "forensic-mcp" in data["mcpServers"]
+        assert data["mcpServers"]["forensic-mcp"]["url"] == "https://sift.example.com:4508/mcp/forensic-mcp"
+        assert "sift-mcp" in data["mcpServers"]
+        assert data["mcpServers"]["sift-mcp"]["url"] == "https://sift.example.com:4508/mcp/sift-mcp"
+
+    @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._save_gateway_config")
+    def test_remote_bearer_token_in_headers(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_probe.return_value = {"status": "ok"}
+        mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
+        args = self._make_args(token="secret_token_xyz")
+        identity = {"examiner": "testuser"}
+        _cmd_setup_client_remote(args, identity)
+
+        data = json.loads((tmp_path / ".mcp.json").read_text())
+        for name, entry in data["mcpServers"].items():
+            if "headers" in entry:
+                assert entry["headers"]["Authorization"] == "Bearer secret_token_xyz"
+
+    @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
+    def test_remote_unreachable_gateway_exits(self, mock_probe, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_probe.return_value = None
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        with pytest.raises(SystemExit):
+            _cmd_setup_client_remote(args, identity)
+
+    @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._save_gateway_config")
+    def test_remote_saves_gateway_config(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        mock_probe.return_value = {"status": "ok"}
+        mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        _cmd_setup_client_remote(args, identity)
+        mock_save.assert_called_once_with("https://sift.example.com:4508", "aiir_gw_abc123")
+
+    @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
+    @patch("aiir_cli.commands.client_setup._discover_services")
+    @patch("aiir_cli.commands.client_setup._save_gateway_config")
+    def test_remote_claude_desktop_uses_mcp_remote(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        mock_probe.return_value = {"status": "ok"}
+        mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
+        args = self._make_args(client="claude-desktop")
+        identity = {"examiner": "testuser"}
+        _cmd_setup_client_remote(args, identity)
+
+        config_path = tmp_path / ".config" / "claude" / "claude_desktop_config.json"
+        assert config_path.is_file()
+        data = json.loads(config_path.read_text())
+        # Claude Desktop entries use mcp-remote bridge
+        entry = data["mcpServers"]["forensic-mcp"]
+        assert entry["command"] == "npx"
+        assert "mcp-remote" in entry["args"]
+
+
+class TestSaveGatewayConfig:
+    def test_saves_to_config_yaml(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        # Patch Path.home() to use tmp_path
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        _save_gateway_config("https://sift:4508", "tok123")
+        import yaml
+        config = yaml.safe_load((tmp_path / ".aiir" / "config.yaml").read_text())
+        assert config["gateway_url"] == "https://sift:4508"
+        assert config["gateway_token"] == "tok123"
+
+    def test_preserves_existing_keys(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir()
+        import yaml
+        (config_dir / "config.yaml").write_text(yaml.dump({"other_key": "value"}))
+        _save_gateway_config("https://sift:4508", "tok")
+        config = yaml.safe_load((config_dir / "config.yaml").read_text())
+        assert config["other_key"] == "value"
+        assert config["gateway_url"] == "https://sift:4508"

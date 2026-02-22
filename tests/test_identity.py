@@ -19,7 +19,8 @@ def test_flag_override_takes_priority():
 def test_env_var_second_priority():
     with patch.dict(os.environ, {"AIIR_EXAMINER": "env_examiner"}):
         identity = get_examiner_identity()
-        assert identity["examiner"] == "env_examiner"
+        # _sanitize_slug replaces underscores with hyphens
+        assert identity["examiner"] == "env-examiner"
         assert identity["examiner_source"] == "env"
 
 
@@ -29,7 +30,8 @@ def test_deprecated_env_var():
         os.environ["AIIR_ANALYST"] = "env_analyst"
         try:
             identity = get_examiner_identity()
-            assert identity["examiner"] == "env_analyst"
+            # _sanitize_slug replaces underscores with hyphens
+            assert identity["examiner"] == "env-analyst"
             assert identity["examiner_source"] == "env"
         finally:
             os.environ.pop("AIIR_ANALYST", None)
