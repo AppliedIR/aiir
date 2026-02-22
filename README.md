@@ -100,7 +100,7 @@ http://localhost:4508/mcp/opencti-mcp
 
 Two primary deployment paths:
 
-- **Path 1 — Co-located (classroom / quickstart).** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. Good for training, single-analyst work, and getting started.
+- **Path 1 — Co-located (testing / quickstart).** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. Good for training, single-analyst work, and getting started.
 - **Path 2 — Remote orchestrator (preferred for production).** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. Run `sift-install.sh --remote` to generate TLS certificates and bind the gateway to all interfaces.
 
 #### Solo Analyst on SIFT (Path 1)
