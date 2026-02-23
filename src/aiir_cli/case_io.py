@@ -112,8 +112,11 @@ def load_case_meta(case_dir: Path) -> dict:
     meta_file = case_dir / "CASE.yaml"
     if not meta_file.exists():
         return {}
-    with open(meta_file) as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(meta_file) as f:
+            return yaml.safe_load(f) or {}
+    except (yaml.YAMLError, OSError):
+        return {}
 
 
 # --- Data I/O (case root) ---
@@ -381,15 +384,23 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
     skipped = 0
     protected = 0
 
+    # Protected fields that cannot be smuggled via merge
+    _MERGE_PROTECTED_FIELDS = {"id", "status", "staged", "modified_at", "created_by", "examiner"}
+
     for item in incoming:
         item_id = item.get(id_field, "")
         if not item_id:
             skipped += 1
             continue
 
+        # Strip approval/integrity fields — merged items always enter as DRAFT
+        cleaned = {k: v for k, v in item.items() if k not in _MERGE_PROTECTED_FIELDS}
+        cleaned["status"] = "DRAFT"
+        cleaned[id_field] = item_id  # Restore id after stripping
+
         if item_id not in local_by_id:
-            local.append(item)
-            local_by_id[item_id] = item
+            local.append(cleaned)
+            local_by_id[item_id] = cleaned
             added += 1
         else:
             existing = local_by_id[item_id]
@@ -400,8 +411,8 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
             loc_ts = existing.get("modified_at", existing.get("staged", ""))
             if inc_ts > loc_ts:
                 idx = next(i for i, x in enumerate(local) if x.get(id_field) == item_id)
-                local[idx] = item
-                local_by_id[item_id] = item
+                local[idx] = cleaned
+                local_by_id[item_id] = cleaned
                 updated += 1
             else:
                 skipped += 1

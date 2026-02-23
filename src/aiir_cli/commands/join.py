@@ -224,7 +224,7 @@ def _join_code_urllib(gateway_url, token, args):
 def _write_config(gateway_url: str, gateway_token: str) -> None:
     """Write gateway credentials to ~/.aiir/config.yaml."""
     config_dir = Path.home() / ".aiir"
-    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     config_path = config_dir / "config.yaml"
 
     # Load existing config to preserve other fields
@@ -239,7 +239,8 @@ def _write_config(gateway_url: str, gateway_token: str) -> None:
     config["gateway_url"] = gateway_url
     config["gateway_token"] = gateway_token
 
-    with open(config_path, "w") as f:
+    fd = os.open(str(config_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         yaml.dump(config, f, default_flow_style=False)
 
 

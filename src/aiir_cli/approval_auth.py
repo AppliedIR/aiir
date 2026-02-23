@@ -92,8 +92,11 @@ def verify_pin(config_path: Path, analyst: str, pin: str) -> bool:
     entry = pins.get(analyst)
     if not entry:
         return False
-    stored_hash = entry["hash"]
-    salt = bytes.fromhex(entry["salt"])
+    try:
+        stored_hash = entry["hash"]
+        salt = bytes.fromhex(entry["salt"])
+    except (KeyError, ValueError):
+        return False
     computed = hashlib.pbkdf2_hmac("sha256", pin.encode(), salt, PBKDF2_ITERATIONS).hex()
     return secrets.compare_digest(computed, stored_hash)
 
@@ -208,14 +211,18 @@ def _getpass_prompt(prompt: str) -> str:
     On Windows (no termios), falls back to getpass.getpass().
     """
     if not _HAS_TERMIOS:
-        import getpass
-        return getpass.getpass(prompt)
+        raise RuntimeError(
+            "PIN entry requires a terminal with termios support. "
+            "Cannot read PIN without /dev/tty."
+        )
 
     try:
         tty_in = open("/dev/tty", "r")
     except OSError:
-        import getpass
-        return getpass.getpass(prompt)
+        raise RuntimeError(
+            "PIN entry requires /dev/tty. Cannot read PIN in this environment. "
+            "Ensure you are running from an interactive terminal."
+        )
     try:
         fd = tty_in.fileno()
         sys.stderr.write(prompt)
@@ -254,8 +261,11 @@ def _load_config(config_path: Path) -> dict:
     """Load YAML config file."""
     if not config_path.exists():
         return {}
-    with open(config_path) as f:
-        return yaml.safe_load(f) or {}
+    try:
+        with open(config_path) as f:
+            return yaml.safe_load(f) or {}
+    except (yaml.YAMLError, OSError):
+        return {}
 
 
 def _save_config(config_path: Path, config: dict) -> None:
