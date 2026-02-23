@@ -283,7 +283,8 @@ class TestFormatServerEntry:
         assert entry["headers"]["Authorization"] == "Bearer tok123"
 
     def test_claude_desktop_uses_mcp_remote(self):
-        entry = _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
+        with patch("aiir_cli.commands.client_setup.shutil.which", return_value="/usr/bin/npx"):
+            entry = _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
         assert entry["command"] == "npx"
         assert "mcp-remote" in entry["args"]
         assert "https://sift:4508/mcp" in entry["args"]
@@ -293,6 +294,12 @@ class TestFormatServerEntry:
         entry = _format_server_entry("claude-code", "https://sift:4508/mcp", None)
         assert entry["type"] == "streamable-http"
         assert "headers" not in entry
+
+    def test_claude_desktop_requires_npx(self):
+        """Verify SystemExit raised when npx is not installed."""
+        with patch("aiir_cli.commands.client_setup.shutil.which", return_value=None):
+            with pytest.raises(SystemExit, match="npx"):
+                _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
 
     def test_cursor_with_token(self):
         entry = _format_server_entry("cursor", "https://sift:4508/mcp", "tok")
@@ -382,10 +389,11 @@ class TestRemoteSetup:
         _cmd_setup_client_remote(args, identity)
         mock_save.assert_called_once_with("https://sift.example.com:4508", "aiir_gw_abc123")
 
+    @patch("aiir_cli.commands.client_setup.shutil.which", return_value="/usr/bin/npx")
     @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._save_gateway_config")
-    def test_remote_claude_desktop_uses_mcp_remote(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+    def test_remote_claude_desktop_uses_mcp_remote(self, mock_save, mock_discover, mock_probe, mock_which, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path))
         mock_probe.return_value = {"status": "ok"}

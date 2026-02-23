@@ -574,6 +574,11 @@ def _format_server_entry(client: str, url: str, token: str | None) -> dict:
     streamable-http with Authorization header.
     """
     if client == "claude-desktop" and token:
+        if not shutil.which("npx"):
+            raise SystemExit(
+                "Claude Desktop requires npx (Node.js) for mcp-remote bridge.\n"
+                "Install Node.js: https://nodejs.org/ or: sudo apt install nodejs npm"
+            )
         return {
             "command": "npx",
             "args": ["-y", "mcp-remote", url,
