@@ -252,9 +252,10 @@ def _wizard_client() -> str:
     print("Which LLM client will connect to your AIIR endpoints?\n")
     print("  1. Claude Code      CLI agent (writes .mcp.json + CLAUDE.md)")
     print("  2. Claude Desktop   Desktop app (writes claude_desktop_config.json)")
-    print("  3. Cursor           IDE (writes .cursor/mcp.json + .cursorrules)")
+    print("  3. Cursor           IDE (writes .cursor/mcp.json + .cursor/rules/)")
     print("  4. LibreChat        Web UI (writes librechat_mcp.yaml)")
-    print("  5. Other / manual   Raw JSON config for any MCP client")
+    print("  5. ChatGPT Desktop  Manual setup (prints instructions)")
+    print("  6. Other / manual   Raw JSON config for any MCP client")
 
     choice = _prompt("\nChoose", "1")
     return {
@@ -262,7 +263,8 @@ def _wizard_client() -> str:
         "2": "claude-desktop",
         "3": "cursor",
         "4": "librechat",
-        "5": "other",
+        "5": "chatgpt",
+        "6": "other",
     }.get(choice, "other")
 
 
@@ -306,11 +308,25 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         output = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
         _merge_and_write(output, config)
         print(f"  Generated: {output}")
+        agents_md = _find_agents_md()
+        print("")
+        print("  To enable forensic discipline guidance:")
+        print("    1. Open Claude Desktop")
+        print("    2. Create a new Project (or open an existing one)")
+        print("    3. Click 'Set project instructions'")
+        if agents_md:
+            print(f"    4. Paste the contents of: {agents_md}")
+        else:
+            print("    4. Paste the contents of AGENTS.md from the sift-mcp repo")
+        print("")
+        print("  The MCP servers also provide instructions automatically via")
+        print("  the MCP protocol. Project instructions provide additional")
+        print("  context for your investigation workflow.")
 
     elif client == "cursor":
         output = Path.cwd() / ".cursor" / "mcp.json"
         _merge_and_write(output, config)
-        _copy_agents_md(Path.cwd() / ".cursorrules")
+        _write_cursor_rules()
         print(f"  Generated: {output}")
 
     elif client == "librechat":
@@ -318,6 +334,27 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         _write_librechat_yaml(output, servers)
         print(f"  Generated: {output}")
         print("  Merge into your librechat.yaml under the mcpServers key.")
+
+    elif client == "chatgpt":
+        print("\n  ChatGPT Desktop setup (manual):\n")
+        print("    1. Open ChatGPT Desktop → Settings → Developer")
+        print("    2. Enable Developer Mode")
+        print("    3. Add MCP connector for each backend:")
+        for name, info in servers.items():
+            url = info.get("url", "")
+            if url:
+                print(f"       {name}: {url}")
+        # Show token if present in any entry
+        sample = next(iter(servers.values()), {})
+        token = (sample.get("headers") or {}).get("Authorization", "")
+        if token:
+            print(f"    4. Add Authorization header: {token}")
+        print("")
+        print("    5. Go to Settings → Personalization → Custom Instructions")
+        print("    6. Paste the forensic discipline summary (note: 1500 char limit)")
+        print("")
+        print("  Note: ChatGPT has a 1500-character limit on custom instructions.")
+        print("  The MCP servers provide full discipline via the protocol.")
 
     else:
         # Manual / other — just dump JSON
@@ -366,30 +403,73 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
             for hk, hv in headers.items():
                 lines.append(f"      {hk}: \"{hv}\"")
         lines.append("    timeout: 60000")
+        lines.append("    serverInstructions: true")
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_600(path, "\n".join(lines) + "\n")
 
 
+_AGENTS_MD_CANDIDATES = [
+    lambda: Path.cwd() / "AGENTS.md",
+    lambda: Path.home() / ".aiir" / "src" / "sift-mcp" / "AGENTS.md",
+    lambda: Path.home() / "aiir" / "sift-mcp" / "AGENTS.md",
+    lambda: Path.home() / "aiir" / "forensic-mcp" / "AGENTS.md",
+    lambda: Path("/opt/aiir/sift-mcp") / "AGENTS.md",
+    lambda: Path("/opt/aiir") / "AGENTS.md",
+]
+
+
+def _find_agents_md() -> Path | None:
+    """Find AGENTS.md from known locations. Returns path or None."""
+    for candidate_fn in _AGENTS_MD_CANDIDATES:
+        src = candidate_fn()
+        if src.is_file():
+            return src
+    return None
+
+
 def _copy_agents_md(target: Path) -> None:
     """Copy AGENTS.md from sift-mcp monorepo as the client instruction file."""
-    # Search common locations for AGENTS.md
-    candidates = [
-        Path.cwd() / "AGENTS.md",
-        Path.home() / ".aiir" / "src" / "sift-mcp" / "AGENTS.md",
-        Path.home() / "aiir" / "sift-mcp" / "AGENTS.md",
-        Path.home() / "aiir" / "forensic-mcp" / "AGENTS.md",
-        Path("/opt/aiir/sift-mcp") / "AGENTS.md",
-        Path("/opt/aiir") / "AGENTS.md",
-    ]
-    for src in candidates:
-        if src.is_file():
-            try:
-                shutil.copy2(src, target)
-                print(f"  Copied:    {src.name} → {target.name}")
-            except OSError as e:
-                print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
-            return
-    print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
+    src = _find_agents_md()
+    if src:
+        try:
+            shutil.copy2(src, target)
+            print(f"  Copied:    {src.name} → {target.name}")
+        except OSError as e:
+            print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
+    else:
+        print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
+
+
+def _write_cursor_rules() -> None:
+    """Write .cursor/rules/aiir.mdc (modern) + .cursorrules (legacy fallback)."""
+    src = _find_agents_md()
+    if not src:
+        print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
+        return
+
+    content = src.read_text()
+
+    # Modern Cursor (v0.47+): .cursor/rules/aiir.mdc with YAML frontmatter
+    rules_dir = Path.cwd() / ".cursor" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+    mdc_path = rules_dir / "aiir.mdc"
+    mdc_content = (
+        "---\n"
+        "description: AIIR forensic investigation rules\n"
+        "alwaysApply: true\n"
+        "---\n"
+        f"{content}\n"
+    )
+    mdc_path.write_text(mdc_content)
+    print(f"  Generated: {mdc_path}")
+
+    # Legacy fallback: .cursorrules
+    legacy = Path.cwd() / ".cursorrules"
+    try:
+        shutil.copy2(src, legacy)
+        print(f"  Copied:    {src.name} → {legacy.name}")
+    except OSError as e:
+        print(f"  Warning: failed to copy {src} to {legacy}: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
