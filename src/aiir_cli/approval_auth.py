@@ -208,7 +208,7 @@ def _clear_failures(analyst: str) -> None:
 def _getpass_prompt(prompt: str) -> str:
     """Read PIN from /dev/tty with masked input (shows * per keystroke).
 
-    On Windows (no termios), falls back to getpass.getpass().
+    Raises RuntimeError if /dev/tty or termios is unavailable.
     """
     if not _HAS_TERMIOS:
         raise RuntimeError(

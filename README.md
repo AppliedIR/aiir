@@ -82,13 +82,13 @@ sequenceDiagram
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
 | forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline (15 tools + 14 resources) |
-| sift-mcp | SIFT | (via gateway) | Catalog-gated forensic tool execution on Linux/SIFT |
+| sift-mcp | SIFT | (via gateway) | Authenticated, denylist-protected forensic tool execution on Linux/SIFT |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI |
 | wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows |
 | aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence. Remote examiners access via SSH. |
-| forensic-knowledge | anywhere | -- | Pip-installable YAML data package (tools, artifacts, discipline) |
+| forensic-knowledge | anywhere | -- | Shared YAML data package (tools, artifacts, discipline) |
 
 The gateway exposes each backend as a separate MCP endpoint. Clients can connect to the aggregate endpoint or to individual backends:
 
@@ -299,6 +299,7 @@ Or step by step:
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./sift-install.sh          # Install MCP servers + gateway
+cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
 ./aiir-install.sh          # Install aiir CLI + configure client
 ```
 
@@ -467,6 +468,15 @@ aiir config --show                         # Show current configuration
 aiir config --setup-pin                    # Set approval PIN (PBKDF2-hashed)
 aiir config --reset-pin                    # Reset PIN (requires current)
 ```
+
+### join
+
+```bash
+aiir join SIFT_URL CODE                                          # Join from remote machine using join code
+aiir join SIFT_URL CODE --wintools                               # Join as wintools machine (registers backend)
+```
+
+Exchange a one-time join code for gateway credentials. Run on the remote machine (analyst laptop or Windows forensic workstation). The join code is generated on SIFT via `aiir setup join-code`. Credentials are saved to `~/.aiir/config.yaml` with restricted permissions (0600).
 
 ### setup
 
