@@ -56,7 +56,7 @@ In Path 1 (co-located), the LLM client also runs on SIFT and no SSH is needed. I
 
 ### Human-in-the-Loop Workflow
 
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. The CLI reads confirmation from `/dev/tty`, which the AI cannot control.
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. Approvals require a PIN to prevent AI from overriding human review.
 
 ```mermaid
 sequenceDiagram
@@ -342,7 +342,7 @@ When choosing an LLM client, we recommend constrained clients that are limited t
 
 ### case
 
-```bash
+```
 aiir case init "Ransomware Investigation"                # Create a new case
 aiir case close                                          # Close the active case
 aiir case activate INC-2026-02191200                     # Set active case
@@ -480,7 +480,7 @@ Exchange a one-time join code for gateway credentials. Run on the remote machine
 
 ### setup
 
-```bash
+```
 aiir setup                                 # Interactive (detect MCPs, configure, generate)
 aiir setup --non-interactive               # Detect + generate configs
 aiir setup test                            # Test MCP server connectivity
