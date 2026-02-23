@@ -4,18 +4,18 @@ Artificial Intelligence Incident Response platform. CLI and architecture referen
 
 ## Platform Architecture
 
-AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, Cherry Studio, LibreChat, Goose, and others. The LLM client and the aiir CLI are the two human-facing tools. They always run on the same machine, which can be the SIFT workstation or a separate computer.
+AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, Cherry Studio, LibreChat, Goose, and others. The LLM client and the aiir CLI are the two human-facing tools. The aiir CLI always runs on the SIFT workstation — it requires direct filesystem access to the case directory. When the LLM client runs on a separate machine (Path 2), the examiner must have SSH access to SIFT for all CLI operations (approve, review, report, etc.).
 
 ### Core Component Map
 
 ```mermaid
 graph TB
-    subgraph human ["Human Tools"]
+    subgraph analyst ["Analyst Machine (Path 2)"]
         CC["LLM Client<br/>(human interface)"]
-        CLI["aiir CLI<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
+        CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Case management + discipline"]
         SM["sift-mcp<br/>Linux tool execution"]
@@ -33,6 +33,7 @@ graph TB
         FM --> FK
         SM --> FK
         FM --> CASE
+        CLI --> CASE
     end
 
     subgraph winbox ["Windows Forensic Workstation (optional)"]
@@ -45,9 +46,11 @@ graph TB
 
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
-    CLI --> CASE
+    analyst -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
 ```
+
+In Path 1 (co-located), the LLM client also runs on SIFT and no SSH is needed. In Path 2, the examiner SSHs into SIFT for all CLI operations.
 
 ### Human-in-the-Loop Workflow
 
@@ -82,7 +85,7 @@ sequenceDiagram
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI |
 | wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows |
-| aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence |
+| aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence. Remote examiners access via SSH. |
 | forensic-knowledge | anywhere | -- | Pip-installable YAML data package (tools, artifacts, discipline) |
 
 The gateway exposes each backend as a separate MCP endpoint. Clients can connect to the aggregate endpoint or to individual backends:
@@ -101,7 +104,7 @@ http://localhost:4508/mcp/opencti-mcp
 Two primary deployment paths:
 
 - **Path 1 — Co-located (testing / quickstart).** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. Good for training, single-analyst work, and getting started.
-- **Path 2 — Remote orchestrator (preferred for production).** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. Run `sift-install.sh --remote` to generate TLS certificates and bind the gateway to all interfaces.
+- **Path 2 — Remote orchestrator (preferred for production).** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. The examiner must have SSH access to SIFT for all CLI operations (approve, review, report, evidence, etc.). Run `sift-install.sh --remote` to generate TLS certificates and bind the gateway to all interfaces.
 
 #### Solo Analyst on SIFT (Path 1)
 
@@ -171,10 +174,10 @@ graph LR
 graph LR
     subgraph analyst ["Analyst Machine"]
         CC["LLM Client<br/>(human interface)"]
-        CLI["aiir CLI<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
+        CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         SM[sift-mcp]
@@ -192,6 +195,7 @@ graph LR
         FM --> FK
         SM --> FK
         FM --> CASE
+        CLI --> CASE
     end
 
     subgraph winbox ["Windows Forensic Workstation"]
@@ -219,7 +223,7 @@ graph LR
     CC -->|"HTTPS"| ML
     CC -->|"HTTPS"| ZE
     OC -->|"HTTP(S)"| OCTI
-    CLI -->|"NFS / SMB"| CASE
+    analyst -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
 ```
 
