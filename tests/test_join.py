@@ -59,6 +59,41 @@ class TestWriteConfig:
         assert config["gateway_url"] == "https://10.0.0.5:4508"
 
 
+class TestWintoolsJoinNoGatewayToken:
+    """Verify _write_config is NOT called when gateway_token is absent (wintools join)."""
+
+    def test_write_config_not_called_without_gateway_token(self, tmp_path, monkeypatch):
+        """Wintools join response omits gateway_token — _write_config must be skipped."""
+        args = MagicMock()
+        args.sift = "10.0.0.5:4508"
+        args.code = "ABCD-EFGH"
+        args.wintools = False
+        args.ca_cert = None
+        args.skip_setup = True
+
+        json_data = {
+            "gateway_url": "https://10.0.0.5:4508",
+            "backends": ["forensic-mcp", "sift-mcp", "wintools-mcp"],
+            "examiner": "win-forensics",
+            "wintools_registered": True,
+            "restart_required": True,
+        }
+
+        mock_requests = _make_mock_requests(200, json_data)
+        write_config_mock = MagicMock()
+
+        with patch.dict(sys.modules, {"requests": mock_requests}), \
+             patch("aiir_cli.commands.join._detect_wintools", return_value=False), \
+             patch("aiir_cli.commands.join._find_ca_cert", return_value=None), \
+             patch("aiir_cli.commands.join._write_config", write_config_mock):
+            import importlib
+            import aiir_cli.commands.join as join_mod
+            importlib.reload(join_mod)
+            join_mod.cmd_join(args, {"examiner": "tester"})
+
+        write_config_mock.assert_not_called()
+
+
 class TestUrlNormalization:
     def _run_join(self, sift_url, json_data=None):
         """Helper to run cmd_join with mocked requests and return the POST URL."""

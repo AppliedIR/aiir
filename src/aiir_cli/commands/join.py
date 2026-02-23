@@ -73,7 +73,8 @@ def cmd_join(args, identity: dict) -> None:
         sys.exit(1)
 
     data = resp.json()
-    _write_config(data["gateway_url"], data["gateway_token"])
+    if data.get("gateway_token"):
+        _write_config(data["gateway_url"], data["gateway_token"])
 
     print(f"Joined gateway at {data['gateway_url']}")
     print(f"Backends available: {', '.join(data.get('backends', []))}")
@@ -171,9 +172,15 @@ def _join_urllib(sift_url, code, wintools_url, wintools_token, verify, args):
         print(f"Connection failed: {e}", file=sys.stderr)
         sys.exit(1)
 
-    _write_config(data["gateway_url"], data["gateway_token"])
+    if data.get("gateway_token"):
+        _write_config(data["gateway_url"], data["gateway_token"])
     print(f"Joined gateway at {data['gateway_url']}")
     print(f"Backends available: {', '.join(data.get('backends', []))}")
+
+    if data.get("wintools_registered"):
+        print("Windows wintools-mcp registered with gateway")
+        if data.get("restart_required"):
+            print("Note: gateway restart may be needed to activate the wintools backend")
 
     if not getattr(args, "skip_setup", False):
         print()
@@ -274,10 +281,13 @@ def _get_local_gateway_token() -> str | None:
 
 
 def _detect_wintools() -> bool:
-    """Detect if wintools-mcp is running on this machine."""
-    # Check for wintools config or running process
-    wintools_config = Path.home() / ".aiir" / "wintools.yaml"
-    return wintools_config.exists()
+    """Detect if wintools-mcp is installed on this machine.
+
+    Always returns False — use --wintools flag explicitly.
+    Auto-detection removed because the wintools installer writes config to
+    $InstallDir/config.yaml, not ~/.aiir/wintools.yaml.
+    """
+    return False
 
 
 def _get_wintools_credentials() -> tuple[str | None, str | None]:
