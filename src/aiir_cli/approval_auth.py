@@ -1,19 +1,19 @@
-"""Approval authentication: /dev/tty confirmation and optional PIN.
+"""Approval authentication: mandatory PIN for approve/reject.
 
-/dev/tty is the controlling terminal — separate from stdin.
-AI running `air approve` through Bash cannot answer it.
-
-Optional PIN uses getpass (reads from /dev/tty, no echo) to block
+PIN uses getpass (reads from /dev/tty, no echo) to block
 both AI-via-Bash AND expect-style terminal automation.
+A PIN must be configured before approvals are allowed.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import secrets
 import sys
 import tempfile
+import time
 try:
     import termios
     import tty
@@ -27,36 +27,39 @@ import yaml
 
 PBKDF2_ITERATIONS = 600_000
 _MAX_PIN_ATTEMPTS = 3
-_LOCKOUT_SECONDS = 60
-_pin_failures: dict[str, list[float]] = {}  # analyst -> list of failure timestamps
+_LOCKOUT_SECONDS = 900  # 15 minutes
+_LOCKOUT_FILE = Path.home() / ".aiir" / ".pin_lockout"
 
 
 def require_confirmation(config_path: Path, analyst: str) -> str:
-    """Require human confirmation. Returns mode used: 'pin' or 'interactive'.
+    """Require PIN confirmation. Returns 'pin'.
 
-    If PIN is configured for analyst, prompts for PIN via getpass.
-    Otherwise, prompts y/N via /dev/tty.
+    PIN must be configured for the analyst. If not, prints setup
+    instructions and exits.
 
-    Raises SystemExit on failure or cancellation.
+    Raises SystemExit on failure, lockout, or missing PIN.
     """
-    if has_pin(config_path, analyst):
-        _check_lockout(analyst)
-        pin = _getpass_prompt("Enter PIN to confirm: ")
-        if not verify_pin(config_path, analyst, pin):
-            _record_failure(analyst)
-            remaining = _MAX_PIN_ATTEMPTS - _recent_failure_count(analyst)
-            if remaining <= 0:
-                print(f"Too many failed attempts. Locked out for {_LOCKOUT_SECONDS}s.", file=sys.stderr)
-            else:
-                print(f"Incorrect PIN. {remaining} attempt(s) remaining.", file=sys.stderr)
-            sys.exit(1)
-        _clear_failures(analyst)
-        return "pin"
-    else:
-        if not require_tty_confirmation("Confirm? [y/N]: "):
-            print("Cancelled.", file=sys.stderr)
-            sys.exit(1)
-        return "interactive"
+    if not has_pin(config_path, analyst):
+        print(
+            "No approval PIN configured. Set one with:\n"
+            "  aiir config --setup-pin\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    _check_lockout(analyst)
+    pin = _getpass_prompt("Enter PIN to confirm: ")
+    if not verify_pin(config_path, analyst, pin):
+        _record_failure(analyst)
+        remaining = _MAX_PIN_ATTEMPTS - _recent_failure_count(analyst)
+        if remaining <= 0:
+            print(f"Too many failed attempts. Locked out for {_LOCKOUT_SECONDS}s.",
+                  file=sys.stderr)
+        else:
+            print(f"Incorrect PIN. {remaining} attempt(s) remaining.",
+                  file=sys.stderr)
+        sys.exit(1)
+    _clear_failures(analyst)
+    return "pin"
 
 
 def require_tty_confirmation(prompt: str) -> bool:
@@ -133,22 +136,50 @@ def reset_pin(config_path: Path, analyst: str) -> None:
     setup_pin(config_path, analyst)
 
 
+def _load_failures() -> dict[str, list[float]]:
+    """Load failure timestamps from disk. Returns {} on missing/corrupt file."""
+    try:
+        data = json.loads(_LOCKOUT_FILE.read_text())
+        if isinstance(data, dict):
+            return data
+    except (OSError, json.JSONDecodeError, ValueError):
+        pass
+    return {}
+
+
+def _save_failures(data: dict[str, list[float]]) -> None:
+    """Write failure timestamps to disk with 0o600 permissions."""
+    _LOCKOUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=str(_LOCKOUT_FILE.parent), suffix=".tmp")
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        os.replace(tmp_path, str(_LOCKOUT_FILE))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+
 def _recent_failure_count(analyst: str) -> int:
     """Count failures within the lockout window."""
-    import time
-    now = time.monotonic()
-    failures = _pin_failures.get(analyst, [])
+    now = time.time()
+    failures = _load_failures().get(analyst, [])
     return sum(1 for t in failures if now - t < _LOCKOUT_SECONDS)
 
 
 def _check_lockout(analyst: str) -> None:
     """Exit if analyst is locked out from too many failed attempts."""
     if _recent_failure_count(analyst) >= _MAX_PIN_ATTEMPTS:
-        import time
-        failures = _pin_failures.get(analyst, [])
-        if failures:
-            oldest_recent = min(t for t in failures if time.monotonic() - t < _LOCKOUT_SECONDS)
-            remaining = int(_LOCKOUT_SECONDS - (time.monotonic() - oldest_recent))
+        now = time.time()
+        failures = _load_failures().get(analyst, [])
+        recent = [t for t in failures if now - t < _LOCKOUT_SECONDS]
+        if recent:
+            oldest_recent = min(recent)
+            remaining = int(_LOCKOUT_SECONDS - (now - oldest_recent))
             remaining = max(remaining, 1)
         else:
             remaining = _LOCKOUT_SECONDS
@@ -157,14 +188,18 @@ def _check_lockout(analyst: str) -> None:
 
 
 def _record_failure(analyst: str) -> None:
-    """Record a failed PIN attempt."""
-    import time
-    _pin_failures.setdefault(analyst, []).append(time.monotonic())
+    """Record a failed PIN attempt to disk."""
+    data = _load_failures()
+    data.setdefault(analyst, []).append(time.time())
+    _save_failures(data)
 
 
 def _clear_failures(analyst: str) -> None:
     """Clear failures on successful authentication."""
-    _pin_failures.pop(analyst, None)
+    data = _load_failures()
+    if analyst in data:
+        del data[analyst]
+        _save_failures(data)
 
 
 def _getpass_prompt(prompt: str) -> str:

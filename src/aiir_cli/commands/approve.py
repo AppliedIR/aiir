@@ -1,6 +1,6 @@
 """Approve staged findings and timeline events.
 
-Every approval requires human confirmation via /dev/tty (or PIN).
+Every approval requires PIN confirmation via /dev/tty.
 This blocks AI-via-Bash from approving without human involvement.
 
 Interactive review options per item:
@@ -145,6 +145,9 @@ def _interactive_review(
 
     print(f"Reviewing {len(all_items)} DRAFT item(s)...\n")
 
+    # Authenticate before review so examiner doesn't lose work on PIN failure
+    mode = require_confirmation(config_path, identity["examiner"])
+
     # Collect dispositions
     dispositions: dict[str, tuple] = {}  # id -> (action, extra_data)
     todos_to_create: list[dict] = []
@@ -223,8 +226,6 @@ def _interactive_review(
             _create_todos(case_dir, todos_to_create, identity)
         print("Nothing to commit.")
         return
-
-    mode = require_confirmation(config_path, identity["examiner"])
 
     now = datetime.now(timezone.utc).isoformat()
 

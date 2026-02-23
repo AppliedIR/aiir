@@ -1,5 +1,6 @@
 """Tests for approval authentication module."""
 
+import json
 import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -14,7 +15,7 @@ from aiir_cli.approval_auth import (
     reset_pin,
     require_confirmation,
     require_tty_confirmation,
-    _pin_failures,
+    _LOCKOUT_FILE,
     _check_lockout,
     _record_failure,
     _clear_failures,
@@ -117,19 +118,13 @@ class TestRequireConfirmation:
             with pytest.raises(SystemExit):
                 require_confirmation(config_path, "analyst1")
 
-    def test_interactive_mode_confirmed(self, config_path):
-        mock_tty = MagicMock()
-        mock_tty.readline.return_value = "y\n"
-        with patch("builtins.open", return_value=mock_tty):
-            mode = require_confirmation(config_path, "analyst1")
-        assert mode == "interactive"
-
-    def test_interactive_mode_cancelled(self, config_path):
-        mock_tty = MagicMock()
-        mock_tty.readline.return_value = "n\n"
-        with patch("builtins.open", return_value=mock_tty):
-            with pytest.raises(SystemExit):
-                require_confirmation(config_path, "analyst1")
+    def test_no_pin_configured_exits(self, config_path, capsys):
+        """require_confirmation with no PIN configured exits with setup instructions."""
+        with pytest.raises(SystemExit):
+            require_confirmation(config_path, "analyst1")
+        captured = capsys.readouterr()
+        assert "No approval PIN configured" in captured.err
+        assert "aiir config --setup-pin" in captured.err
 
 
 class TestTtyConfirmation:
@@ -158,11 +153,13 @@ class TestTtyConfirmation:
 
 
 @pytest.fixture(autouse=True)
-def clear_pin_failures():
-    """Clear lockout state between tests to prevent state leakage."""
-    _pin_failures.clear()
-    yield
-    _pin_failures.clear()
+def isolate_lockout_file(tmp_path, monkeypatch):
+    """Point lockout file to temp dir and clean between tests."""
+    lockout = tmp_path / ".pin_lockout"
+    monkeypatch.setattr("aiir_cli.approval_auth._LOCKOUT_FILE", lockout)
+    yield lockout
+    if lockout.exists():
+        lockout.unlink()
 
 
 class TestPinLockout:
@@ -179,10 +176,10 @@ class TestPinLockout:
     def test_lockout_expires_after_timeout(self, monkeypatch):
         """Lockout expires after _LOCKOUT_SECONDS."""
         import time as time_mod
-        base_time = 1000.0
+        base_time = 1000000.0
         call_count = [0]
 
-        def mock_monotonic():
+        def mock_time():
             call_count[0] += 1
             # First 3 calls are for _record_failure (recording timestamps)
             if call_count[0] <= _MAX_PIN_ATTEMPTS:
@@ -190,7 +187,7 @@ class TestPinLockout:
             # Subsequent calls are after lockout has expired
             return base_time + _LOCKOUT_SECONDS + 1
 
-        monkeypatch.setattr(time_mod, "monotonic", mock_monotonic)
+        monkeypatch.setattr(time_mod, "time", mock_time)
         for _ in range(_MAX_PIN_ATTEMPTS):
             _record_failure("analyst1")
         # After lockout expires, check should NOT raise
@@ -246,6 +243,29 @@ class TestPinLockout:
             _record_failure("analyst1")
         with pytest.raises(SystemExit):
             require_confirmation(config_path, "analyst1")
+
+    def test_lockout_persists_across_clear(self, isolate_lockout_file):
+        """Lockout file survives even if in-process state is gone."""
+        for _ in range(_MAX_PIN_ATTEMPTS):
+            _record_failure("analyst1")
+        # Verify lockout file exists and has data
+        assert isolate_lockout_file.exists()
+        data = json.loads(isolate_lockout_file.read_text())
+        assert len(data["analyst1"]) == _MAX_PIN_ATTEMPTS
+        # Simulating process restart: re-read from disk
+        assert _recent_failure_count("analyst1") == _MAX_PIN_ATTEMPTS
+
+    def test_lockout_file_corrupt_treated_as_empty(self, isolate_lockout_file):
+        """Corrupt lockout file is treated as empty (zero failures)."""
+        isolate_lockout_file.parent.mkdir(parents=True, exist_ok=True)
+        isolate_lockout_file.write_text("not valid json {{{")
+        assert _recent_failure_count("analyst1") == 0
+
+    def test_lockout_file_permissions(self, isolate_lockout_file):
+        """Lockout file has 0o600 permissions."""
+        _record_failure("analyst1")
+        assert isolate_lockout_file.exists()
+        assert (isolate_lockout_file.stat().st_mode & 0o777) == 0o600
 
 
 class TestPinConfigFilePermissions:
