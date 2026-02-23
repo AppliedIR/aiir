@@ -12,6 +12,7 @@ AIIR is an LLM-agnostic forensic investigation platform built on the Model Conte
 graph TB
     subgraph analyst ["Analyst Machine (Path 2)"]
         CC["LLM Client<br/>(human interface)"]
+        SSH["SSH Session<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
@@ -46,8 +47,9 @@ graph TB
 
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
-    analyst -.->|"SSH"| CLI
+    SSH -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
+    style SSH fill:#e0e0e0,stroke:#999,color:#333
 ```
 
 In Path 1 (co-located), the LLM client also runs on SIFT and no SSH is needed. In Path 2, the examiner SSHs into SIFT for all CLI operations.
@@ -174,6 +176,7 @@ graph LR
 graph LR
     subgraph analyst ["Analyst Machine"]
         CC["LLM Client<br/>(human interface)"]
+        SSH["SSH Session<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
@@ -223,8 +226,9 @@ graph LR
     CC -->|"HTTPS"| ML
     CC -->|"HTTPS"| ZE
     OC -->|"HTTP(S)"| OCTI
-    analyst -.->|"SSH"| CLI
+    SSH -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
+    style SSH fill:#e0e0e0,stroke:#999,color:#333
 ```
 
 #### Multi-Examiner Team
@@ -288,11 +292,20 @@ cases/INC-2026-0219/
 ```bash
 # One-command quickstart (SIFT workstation)
 curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
+```
 
-# Or step by step
+Or step by step:
+
+```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./sift-install.sh          # Install MCP servers + gateway
 ./aiir-install.sh          # Install aiir CLI + configure client
+```
+
+We recommend using an LLM client that does not have the ability to directly interface with your system's shell. Tools like Claude Code are amazingly effective, but difficult to constrain. Our system is designed to require the LLM to go through existing MCPs to ensure proper audit trail when accessing forensic tooling. However, your use case may be different. If you prefer to move fast, break things, and let Claude take the wheel:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash -s -- --ccode
 ```
 
 The quickstart installs all core components, starts the gateway, and runs the aiir setup wizard. For tier selection (quick, recommended, custom) or remote access, run `sift-install.sh` directly.
