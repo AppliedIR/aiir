@@ -27,6 +27,7 @@ from aiir_cli.commands.migrate import cmd_migrate
 from aiir_cli.commands.report import cmd_report
 from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.service import cmd_service
+from aiir_cli.commands.join import cmd_join, cmd_setup_join_code
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -131,6 +132,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_todo_update.add_argument("--assignee", help="Reassign")
     p_todo_update.add_argument("--priority", choices=["high", "medium", "low"], help="Change priority")
 
+    # join (top-level command for remote machines)
+    p_join = sub.add_parser("join", help="Join a SIFT gateway from a remote machine")
+    p_join.add_argument("--sift", required=True, help="SIFT gateway address (e.g., 10.0.0.5 or 10.0.0.5:4508)")
+    p_join.add_argument("--code", required=True, help="Join code from 'aiir setup join-code'")
+    p_join.add_argument("--wintools", action="store_true", help="This is a wintools machine")
+    p_join.add_argument("--ca-cert", help="Path to CA certificate for TLS verification")
+    p_join.add_argument("--skip-setup", action="store_true", help="Skip client config generation")
+
     # setup
     p_setup = sub.add_parser("setup", help="Interactive setup for all MCP servers")
     p_setup.add_argument("--force-reprompt", action="store_true", help="Force re-prompting for all values")
@@ -149,6 +158,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_client.add_argument("-y", "--yes", action="store_true", help="Accept defaults, no prompts")
     p_client.add_argument("--remote", action="store_true", help="Remote setup mode (gateway on another host)")
     p_client.add_argument("--token", help="Bearer token for gateway authentication")
+
+    p_join_code = setup_sub.add_parser("join-code", help="Generate a join code for remote machines")
+    p_join_code.add_argument("--expires", type=int, help="Expiry in hours (default: 2)")
 
     # export
     p_export = sub.add_parser("export", help="Export findings + timeline as JSON")
@@ -262,6 +274,7 @@ def main() -> None:
         "evidence": cmd_evidence,
         "audit": cmd_audit,
         "service": cmd_service,
+        "join": cmd_join,
     }
 
     handler = dispatch.get(args.command)

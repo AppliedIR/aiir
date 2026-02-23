@@ -37,6 +37,11 @@ def cmd_setup(args, identity: dict) -> None:
         cmd_setup_client(args, identity)
         return
 
+    if action == "join-code":
+        from aiir_cli.commands.join import cmd_setup_join_code
+        cmd_setup_join_code(args, identity)
+        return
+
     print("WARNING: 'aiir setup' is deprecated. Use 'aiir setup client' instead.",
           file=sys.stderr)
 

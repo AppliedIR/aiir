@@ -1,0 +1,161 @@
+"""Tests for aiir join and aiir setup join-code commands."""
+
+import json
+import os
+import sys
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+
+import pytest
+import yaml
+
+from aiir_cli.commands.join import (
+    cmd_join,
+    cmd_setup_join_code,
+    _write_config,
+    _get_local_gateway_url,
+    _get_local_gateway_token,
+)
+
+
+# Create a mock requests module for tests
+def _make_mock_requests(status_code=200, json_data=None):
+    """Create a mock requests module with a preset response."""
+    mock_mod = MagicMock()
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    mock_resp.json.return_value = json_data or {}
+    mock_mod.post.return_value = mock_resp
+    mock_mod.exceptions = MagicMock()
+    mock_mod.exceptions.ConnectionError = ConnectionError
+    mock_mod.exceptions.SSLError = Exception
+    return mock_mod
+
+
+class TestWriteConfig:
+    def test_writes_config(self, tmp_path, monkeypatch):
+        """Verify ~/.aiir/config.yaml written with gateway_url and token."""
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        _write_config("https://10.0.0.5:4508", "aiir_gw_abc123")
+
+        config_path = tmp_path / ".aiir" / "config.yaml"
+        assert config_path.exists()
+        config = yaml.safe_load(config_path.read_text())
+        assert config["gateway_url"] == "https://10.0.0.5:4508"
+        assert config["gateway_token"] == "aiir_gw_abc123"
+
+    def test_preserves_existing_fields(self, tmp_path, monkeypatch):
+        """Existing config fields are preserved when writing gateway credentials."""
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir(parents=True)
+        config_path = config_dir / "config.yaml"
+        config_path.write_text(yaml.dump({"examiner": "steve"}))
+
+        _write_config("https://10.0.0.5:4508", "aiir_gw_abc123")
+
+        config = yaml.safe_load(config_path.read_text())
+        assert config["examiner"] == "steve"
+        assert config["gateway_url"] == "https://10.0.0.5:4508"
+
+
+class TestUrlNormalization:
+    def _run_join(self, sift_url, json_data=None):
+        """Helper to run cmd_join with mocked requests and return the POST URL."""
+        args = MagicMock()
+        args.sift = sift_url
+        args.code = "ABCD-EFGH"
+        args.wintools = False
+        args.ca_cert = None
+        args.skip_setup = True
+
+        if json_data is None:
+            json_data = {
+                "gateway_url": f"https://{sift_url}",
+                "gateway_token": "aiir_gw_test",
+                "backends": ["forensic-mcp", "sift-mcp"],
+                "examiner": "tester",
+            }
+
+        mock_requests = _make_mock_requests(200, json_data)
+
+        with patch.dict(sys.modules, {"requests": mock_requests}), \
+             patch("aiir_cli.commands.join._detect_wintools", return_value=False), \
+             patch("aiir_cli.commands.join._find_ca_cert", return_value=None), \
+             patch("aiir_cli.commands.join._write_config"):
+            # Need to reimport to pick up the patched requests
+            import importlib
+            import aiir_cli.commands.join as join_mod
+            importlib.reload(join_mod)
+            join_mod.cmd_join(args, {"examiner": "tester"})
+
+        return mock_requests.post.call_args[0][0]
+
+    def test_bare_ip_gets_https_and_port(self):
+        """Bare IP → https://IP:4508."""
+        url = self._run_join("10.0.0.5")
+        assert url == "https://10.0.0.5:4508/api/v1/setup/join"
+
+    def test_ip_with_port(self):
+        """IP:port → https://IP:port."""
+        url = self._run_join("10.0.0.5:9999")
+        assert url == "https://10.0.0.5:9999/api/v1/setup/join"
+
+    def test_full_url_preserved(self):
+        """Full https:// URL is preserved."""
+        url = self._run_join("https://sift.lab:4508")
+        assert url == "https://sift.lab:4508/api/v1/setup/join"
+
+
+class TestJoinCodeCommand:
+    def test_prints_instructions(self, capsys):
+        """Verify output format includes code and instructions."""
+        args = MagicMock()
+        args.expires = 2
+
+        mock_requests = _make_mock_requests(200, {
+            "code": "ABCD-EFGH",
+            "expires_hours": 2,
+            "instructions": "aiir join --sift 10.0.0.5:4508 --code ABCD-EFGH",
+        })
+
+        with patch.dict(sys.modules, {"requests": mock_requests}), \
+             patch("aiir_cli.commands.join._get_local_gateway_url", return_value="http://127.0.0.1:4508"), \
+             patch("aiir_cli.commands.join._get_local_gateway_token", return_value="aiir_gw_test"):
+            import importlib
+            import aiir_cli.commands.join as join_mod
+            importlib.reload(join_mod)
+            join_mod.cmd_setup_join_code(args, {"examiner": "steve"})
+
+        captured = capsys.readouterr()
+        assert "ABCD-EFGH" in captured.out
+        assert "aiir join" in captured.out
+        assert "expires in 2 hours" in captured.out
+
+
+class TestGetLocalConfig:
+    def test_get_gateway_url_default(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        assert _get_local_gateway_url() == "http://127.0.0.1:4508"
+
+    def test_get_gateway_url_from_config(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir(parents=True)
+        (config_dir / "config.yaml").write_text(
+            yaml.dump({"gateway_url": "https://sift.lab:4508"})
+        )
+        assert _get_local_gateway_url() == "https://sift.lab:4508"
+
+    def test_get_gateway_token_from_gateway_yaml(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir(parents=True)
+        (config_dir / "gateway.yaml").write_text(
+            yaml.dump({"api_keys": {"aiir_gw_mytoken": {"examiner": "steve"}}})
+        )
+        assert _get_local_gateway_token() == "aiir_gw_mytoken"
+
+    def test_get_gateway_token_none(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        assert _get_local_gateway_token() is None
