@@ -82,7 +82,7 @@ sequenceDiagram
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
 | forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline (15 tools + 14 resources) |
-| sift-mcp | SIFT | (via gateway) | Denylist-protected forensic tool execution on Linux/SIFT |
+| sift-mcp | SIFT | (via gateway) | Authenticated, denylist-protected forensic tool execution on Linux/SIFT |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI |
