@@ -367,12 +367,16 @@ def _case_list(args, identity: dict) -> None:
         print(f"No cases directory found: {cases_dir}")
         return
 
-    # Determine active case
-    active_case = None
+    # Determine active case (file may contain absolute path or legacy bare ID)
+    active_case_dir_name = None
     active_file = Path.home() / ".aiir" / "active_case"
     if active_file.exists():
         try:
-            active_case = active_file.read_text().strip()
+            content = active_file.read_text().strip()
+            if os.path.isabs(content):
+                active_case_dir_name = Path(content).name
+            else:
+                active_case_dir_name = content
         except OSError:
             pass
 
@@ -402,7 +406,7 @@ def _case_list(args, identity: dict) -> None:
     print(f"{'Case ID':<25} {'Status':<10} Name")
     print("-" * 65)
     for c in cases:
-        marker = " (active)" if c["dir_name"] == active_case else ""
+        marker = " (active)" if c["dir_name"] == active_case_dir_name else ""
         print(f"{c['case_id']:<25} {c['status']:<10} {c['name']}{marker}")
 
 
@@ -473,7 +477,7 @@ def _case_init(args, identity: dict) -> None:
         from aiir_cli.case_io import _atomic_write
         aiir_dir = Path.home() / ".aiir"
         aiir_dir.mkdir(exist_ok=True)
-        _atomic_write(aiir_dir / "active_case", case_id)
+        _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
     except OSError as e:
         print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
 
@@ -508,7 +512,7 @@ def _case_activate(args, identity: dict) -> None:
         from aiir_cli.case_io import _atomic_write
         aiir_dir = Path.home() / ".aiir"
         aiir_dir.mkdir(exist_ok=True)
-        _atomic_write(aiir_dir / "active_case", case_id)
+        _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
     except OSError as e:
         print(f"Failed to set active case: {e}", file=sys.stderr)
         sys.exit(1)
@@ -556,7 +560,9 @@ def _case_close(args, identity: dict) -> None:
     if active_file.exists():
         try:
             current = active_file.read_text().strip()
-            if current == case_id:
+            # Handle both absolute path and legacy bare case ID formats
+            current_id = Path(current).name if os.path.isabs(current) else current
+            if current_id == case_id:
                 active_file.unlink()
         except OSError:
             pass
@@ -598,7 +604,7 @@ def _case_reopen(args, identity: dict) -> None:
     # Set as active case
     aiir_dir = Path.home() / ".aiir"
     aiir_dir.mkdir(exist_ok=True)
-    _atomic_write(aiir_dir / "active_case", case_id)
+    _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
 
     print(f"Case {case_id} reopened and set as active.")
 

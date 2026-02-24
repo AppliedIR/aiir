@@ -69,13 +69,16 @@ def get_case_dir(case_id: str | None = None) -> Path:
     if env_dir:
         return Path(env_dir)
 
-    # Check ~/.aiir/active_case pointer
+    # Check ~/.aiir/active_case pointer (absolute path or legacy bare ID)
     active_file = Path.home() / ".aiir" / "active_case"
     if active_file.exists():
-        case_id = active_file.read_text().strip()
-        _validate_case_id(case_id)
+        content = active_file.read_text().strip()
+        if os.path.isabs(content):
+            return Path(content)
+        # Legacy: bare case ID — resolve via AIIR_CASES_DIR
+        _validate_case_id(content)
         cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
-        return cases_dir / case_id
+        return cases_dir / content
 
     print("No active case. Use --case <id> or set AIIR_CASE_DIR.", file=sys.stderr)
     sys.exit(1)
