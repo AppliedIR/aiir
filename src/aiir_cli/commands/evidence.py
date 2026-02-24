@@ -124,7 +124,10 @@ def cmd_register_evidence(args, identity: dict) -> None:
         resolved = evidence_path.resolve()
         case_resolved = case_dir.resolve()
         if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
-            print(f"Error: evidence path must be within the case directory: {case_dir}", file=sys.stderr)
+            print(f"Error: evidence path must be within the case directory.", file=sys.stderr)
+            print(f"  Evidence file:     {resolved}", file=sys.stderr)
+            print(f"  Case evidence dir: {case_dir / 'evidence'}", file=sys.stderr)
+            print(f"  Fix: copy the file into the evidence directory first, then register it.", file=sys.stderr)
             sys.exit(1)
     except OSError as e:
         print(f"Failed to resolve evidence path: {e}", file=sys.stderr)
@@ -171,10 +174,8 @@ def cmd_register_evidence(args, identity: dict) -> None:
     registry["files"].append(entry)
 
     try:
-        with open(reg_file, "w") as f:
-            json.dump(registry, f, indent=2, default=str)
-            f.flush()
-            os.fsync(f.fileno())
+        from aiir_cli.case_io import _atomic_write
+        _atomic_write(reg_file, json.dumps(registry, indent=2, default=str))
     except OSError as e:
         print(f"Failed to write evidence registry: {e}", file=sys.stderr)
         sys.exit(1)

@@ -75,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_case_close.add_argument("--summary", default="", help="Closing summary")
 
     case_sub.add_parser("list", help="List available cases")
+    case_sub.add_parser("status", help="Show active case summary")
 
     p_case_reopen = case_sub.add_parser("reopen", help="Reopen a closed case")
     p_case_reopen.add_argument("case_id", help="Case ID to reopen")
@@ -301,11 +302,57 @@ def _cmd_case(args, identity: dict) -> None:
         _case_reopen(args, identity)
     elif action == "migrate":
         cmd_migrate(args, identity)
+    elif action == "status":
+        _case_status(args, identity)
     elif action == "list":
         _case_list(args, identity)
     else:
-        print("Usage: aiir case {init|activate|close|reopen|list|migrate}", file=sys.stderr)
+        print("Usage: aiir case {init|activate|close|reopen|status|list|migrate}", file=sys.stderr)
         sys.exit(1)
+
+
+def _case_status(args, identity: dict) -> None:
+    """Show active case summary."""
+    from pathlib import Path
+
+    import yaml
+    from aiir_cli.case_io import get_case_dir, load_findings, load_timeline, load_todos
+
+    try:
+        case_dir = get_case_dir(getattr(args, "case", None))
+    except SystemExit:
+        return
+
+    meta_file = case_dir / "CASE.yaml"
+    if not meta_file.exists():
+        print(f"Not an AIIR case directory: {case_dir}", file=sys.stderr)
+        return
+
+    with open(meta_file) as f:
+        meta = yaml.safe_load(f) or {}
+
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
+    todos = load_todos(case_dir)
+
+    draft_f = sum(1 for f in findings if f.get("status") == "DRAFT")
+    approved_f = sum(1 for f in findings if f.get("status") == "APPROVED")
+    draft_t = sum(1 for t in timeline if t.get("status") == "DRAFT")
+    approved_t = sum(1 for t in timeline if t.get("status") == "APPROVED")
+    open_todos = sum(1 for t in todos if t.get("status") == "open")
+
+    print(f"Case: {meta.get('case_id', case_dir.name)}")
+    print(f"  Name:     {meta.get('name', '(unnamed)')}")
+    print(f"  Status:   {meta.get('status', 'unknown')}")
+    print(f"  Examiner: {meta.get('examiner', 'unknown')}")
+    print(f"  Path:     {case_dir}")
+    print(f"  Findings: {len(findings)} ({draft_f} draft, {approved_f} approved)")
+    print(f"  Timeline: {len(timeline)} ({draft_t} draft, {approved_t} approved)")
+    print(f"  TODOs:    {open_todos} open / {len(todos)} total")
+
+    pending = draft_f + draft_t
+    if pending:
+        print(f"\n  {pending} item(s) awaiting approval — run: aiir approve")
 
 
 def _case_list(args, identity: dict) -> None:
@@ -401,10 +448,8 @@ def _case_init(args, identity: dict) -> None:
     }
 
     try:
-        with open(case_dir / "CASE.yaml", "w") as f:
-            yaml.dump(case_meta, f, default_flow_style=False)
-            f.flush()
-            os.fsync(f.fileno())
+        from aiir_cli.case_io import _atomic_write
+        _atomic_write(case_dir / "CASE.yaml", yaml.dump(case_meta, default_flow_style=False))
     except (OSError, yaml.YAMLError) as e:
         print(f"Failed to write CASE.yaml: {e}", file=sys.stderr)
         sys.exit(1)
@@ -436,6 +481,11 @@ def _case_init(args, identity: dict) -> None:
     print(f"  Name: {args.name}")
     print(f"  Examiner: {examiner}")
     print(f"  Path: {case_dir}")
+    print()
+    print("Next steps:")
+    print(f"  1. Copy evidence into: {case_dir / 'evidence'}/")
+    print(f"  2. Register each file:  aiir evidence register <file>")
+    print(f"  3. Connect your LLM — it will discover this case automatically")
 
 
 def _case_activate(args, identity: dict) -> None:
@@ -498,10 +548,8 @@ def _case_close(args, identity: dict) -> None:
     if summary:
         meta["close_summary"] = summary
 
-    with open(meta_file, "w") as f:
-        yaml.dump(meta, f, default_flow_style=False)
-        f.flush()
-        os.fsync(f.fileno())
+    from aiir_cli.case_io import _atomic_write as _aw
+    _aw(meta_file, yaml.dump(meta, default_flow_style=False))
 
     # Clear active case pointer if this was the active case
     active_file = Path.home() / ".aiir" / "active_case"
@@ -545,10 +593,7 @@ def _case_reopen(args, identity: dict) -> None:
     meta.pop("closed", None)
     meta.pop("close_summary", None)
 
-    with open(meta_file, "w") as f:
-        yaml.dump(meta, f, default_flow_style=False)
-        f.flush()
-        os.fsync(f.fileno())
+    _atomic_write(meta_file, yaml.dump(meta, default_flow_style=False))
 
     # Set as active case
     aiir_dir = Path.home() / ".aiir"

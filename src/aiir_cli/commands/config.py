@@ -58,8 +58,8 @@ def cmd_config(args, identity: dict) -> None:
         config.pop("analyst", None)
 
         try:
-            with open(config_path, "w") as f:
-                yaml.dump(config, f, default_flow_style=False)
+            from aiir_cli.case_io import _atomic_write
+            _atomic_write(config_path, yaml.dump(config, default_flow_style=False))
         except (OSError, yaml.YAMLError) as e:
             print(f"Failed to write configuration: {e}", file=sys.stderr)
             return
