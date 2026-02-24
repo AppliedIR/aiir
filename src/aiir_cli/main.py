@@ -76,6 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     case_sub.add_parser("list", help="List available cases")
 
+    p_case_reopen = case_sub.add_parser("reopen", help="Reopen a closed case")
+    p_case_reopen.add_argument("case_id", help="Case ID to reopen")
+
     p_case_migrate = case_sub.add_parser("migrate", help="Migrate case from examiners/ to flat layout")
     p_case_migrate.add_argument("--examiner", help="Primary examiner slug")
     p_case_migrate.add_argument("--import-all", action="store_true", help="Re-ID and merge all examiners' data")
@@ -294,12 +297,14 @@ def _cmd_case(args, identity: dict) -> None:
         _case_activate(args, identity)
     elif action == "close":
         _case_close(args, identity)
+    elif action == "reopen":
+        _case_reopen(args, identity)
     elif action == "migrate":
         cmd_migrate(args, identity)
     elif action == "list":
         _case_list(args, identity)
     else:
-        print("Usage: aiir case {init|activate|close|list|migrate}", file=sys.stderr)
+        print("Usage: aiir case {init|activate|close|reopen|list|migrate}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -317,7 +322,7 @@ def _case_list(args, identity: dict) -> None:
 
     # Determine active case
     active_case = None
-    active_file = Path(".aiir") / "active_case"
+    active_file = Path.home() / ".aiir" / "active_case"
     if active_file.exists():
         try:
             active_case = active_file.read_text().strip()
@@ -420,10 +425,10 @@ def _case_init(args, identity: dict) -> None:
 
     # Set active case pointer
     try:
-        aiir_dir = Path(".aiir")
+        from aiir_cli.case_io import _atomic_write
+        aiir_dir = Path.home() / ".aiir"
         aiir_dir.mkdir(exist_ok=True)
-        with open(aiir_dir / "active_case", "w") as f:
-            f.write(case_id)
+        _atomic_write(aiir_dir / "active_case", case_id)
     except OSError as e:
         print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
 
@@ -450,10 +455,10 @@ def _case_activate(args, identity: dict) -> None:
 
     # Set active case pointer
     try:
-        aiir_dir = Path(".aiir")
+        from aiir_cli.case_io import _atomic_write
+        aiir_dir = Path.home() / ".aiir"
         aiir_dir.mkdir(exist_ok=True)
-        with open(aiir_dir / "active_case", "w") as f:
-            f.write(case_id)
+        _atomic_write(aiir_dir / "active_case", case_id)
     except OSError as e:
         print(f"Failed to set active case: {e}", file=sys.stderr)
         sys.exit(1)
@@ -498,7 +503,59 @@ def _case_close(args, identity: dict) -> None:
         f.flush()
         os.fsync(f.fileno())
 
+    # Clear active case pointer if this was the active case
+    active_file = Path.home() / ".aiir" / "active_case"
+    if active_file.exists():
+        try:
+            current = active_file.read_text().strip()
+            if current == case_id:
+                active_file.unlink()
+        except OSError:
+            pass
+
     print(f"Case {case_id} closed.")
+
+
+def _case_reopen(args, identity: dict) -> None:
+    """Reopen a closed case."""
+    import os
+    from pathlib import Path
+
+    import yaml
+    from aiir_cli.case_io import _validate_case_id, _atomic_write
+
+    case_id = args.case_id
+    _validate_case_id(case_id)
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    case_dir = cases_dir / case_id
+
+    if not case_dir.exists():
+        print(f"Case not found: {case_id}", file=sys.stderr)
+        sys.exit(1)
+
+    meta_file = case_dir / "CASE.yaml"
+    with open(meta_file) as f:
+        meta = yaml.safe_load(f) or {}
+
+    if meta.get("status") != "closed":
+        print(f"Case {case_id} is not closed (status: {meta.get('status', 'unknown')}).")
+        return
+
+    meta["status"] = "open"
+    meta.pop("closed", None)
+    meta.pop("close_summary", None)
+
+    with open(meta_file, "w") as f:
+        yaml.dump(meta, f, default_flow_style=False)
+        f.flush()
+        os.fsync(f.fileno())
+
+    # Set as active case
+    aiir_dir = Path.home() / ".aiir"
+    aiir_dir.mkdir(exist_ok=True)
+    _atomic_write(aiir_dir / "active_case", case_id)
+
+    print(f"Case {case_id} reopened and set as active.")
 
 
 if __name__ == "__main__":

@@ -69,8 +69,8 @@ def get_case_dir(case_id: str | None = None) -> Path:
     if env_dir:
         return Path(env_dir)
 
-    # Check .aiir/active_case pointer
-    active_file = Path(".aiir") / "active_case"
+    # Check ~/.aiir/active_case pointer
+    active_file = Path.home() / ".aiir" / "active_case"
     if active_file.exists():
         case_id = active_file.read_text().strip()
         _validate_case_id(case_id)
