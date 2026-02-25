@@ -18,7 +18,9 @@ graph TB
     subgraph sift ["SIFT Workstation"]
         CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
-        FM["forensic-mcp<br/>Case management + discipline"]
+        FM["forensic-mcp<br/>Findings + discipline"]
+        CM["case-mcp<br/>Case management"]
+        RM["report-mcp<br/>Report generation"]
         SM["sift-mcp<br/>Linux tool execution"]
         FR["forensic-rag-mcp<br/>Knowledge search"]
         WTR["windows-triage-mcp<br/>Baseline validation"]
@@ -27,6 +29,8 @@ graph TB
         CASE["Case Directory"]
 
         GW -->|stdio| FM
+        GW -->|stdio| CM
+        GW -->|stdio| RM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
@@ -34,6 +38,8 @@ graph TB
         FM --> FK
         SM --> FK
         FM --> CASE
+        CM --> CASE
+        RM --> CASE
         CLI --> CASE
     end
 
@@ -81,12 +87,14 @@ sequenceDiagram
 | Component | Runs on | Port | Purpose |
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
-| forensic-mcp | SIFT | (via gateway) | Case management, findings, timeline, evidence, discipline (15 tools + 14 resources) |
-| sift-mcp | SIFT | (via gateway) | Authenticated, denylist-protected forensic tool execution on Linux/SIFT |
+| forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, discipline (15 tools + 14 resources) |
+| case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration (13 tools) |
+| report-mcp | SIFT | (via gateway) | Report generation with profiles, IOC aggregation, MITRE mapping (6 tools) |
+| sift-mcp | SIFT | (via gateway) | Denylist-protected forensic tool execution on Linux/SIFT (6 tools) |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
-| opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI |
-| wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows |
+| opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI (10 tools) |
+| wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows (7 tools) |
 | aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence. Remote examiners access via SSH. |
 | forensic-knowledge | anywhere | -- | Shared YAML data package (tools, artifacts, discipline) |
 
@@ -95,6 +103,8 @@ The gateway exposes each backend as a separate MCP endpoint. Clients can connect
 ```
 http://localhost:4508/mcp              # Aggregate (all tools)
 http://localhost:4508/mcp/forensic-mcp
+http://localhost:4508/mcp/case-mcp
+http://localhost:4508/mcp/report-mcp
 http://localhost:4508/mcp/sift-mcp
 http://localhost:4508/mcp/windows-triage-mcp
 http://localhost:4508/mcp/forensic-rag-mcp
@@ -117,6 +127,8 @@ graph LR
         CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
+        CM[case-mcp]
+        RM[report-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
         WTR[windows-triage-mcp]
@@ -125,11 +137,15 @@ graph LR
 
         CC -->|"streamable-http"| GW
         GW -->|stdio| FM
+        GW -->|stdio| CM
+        GW -->|stdio| RM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
         FM --> CASE
+        CM --> CASE
+        RM --> CASE
         CLI --> CASE
     end
 ```
@@ -143,6 +159,8 @@ graph LR
         CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
+        CM[case-mcp]
+        RM[report-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
         WTR[windows-triage-mcp]
@@ -151,11 +169,15 @@ graph LR
 
         CC -->|"streamable-http"| GW
         GW -->|stdio| FM
+        GW -->|stdio| CM
+        GW -->|stdio| RM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
         FM --> CASE
+        CM --> CASE
+        RM --> CASE
         CLI --> CASE
     end
 
@@ -183,6 +205,8 @@ graph LR
         CLI["aiir CLI<br/>(human interface)"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
+        CM[case-mcp]
+        RM[report-mcp]
         SM[sift-mcp]
         FR[forensic-rag-mcp]
         WTR[windows-triage-mcp]
@@ -191,6 +215,8 @@ graph LR
         CASE[Case Directory]
 
         GW -->|stdio| FM
+        GW -->|stdio| CM
+        GW -->|stdio| RM
         GW -->|stdio| SM
         GW -->|stdio| FR
         GW -->|stdio| WTR
@@ -198,6 +224,8 @@ graph LR
         FM --> FK
         SM --> FK
         FM --> CASE
+        CM --> CASE
+        RM --> CASE
         CLI --> CASE
     end
 
@@ -239,7 +267,7 @@ graph LR
         CC1["LLM Client<br/>(human interface)"]
         CLI1["aiir CLI<br/>(human interface)"]
         GW1["sift-gateway<br/>:4508"]
-        MCPs1["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+        MCPs1["forensic-mcp · case-mcp · report-mcp<br/>sift-mcp · forensic-rag-mcp<br/>windows-triage-mcp · opencti-mcp"]
         CASE1["Case Directory"]
 
         CC1 -->|"streamable-http"| GW1
@@ -252,7 +280,7 @@ graph LR
         CC2["LLM Client<br/>(human interface)"]
         CLI2["aiir CLI<br/>(human interface)"]
         GW2["sift-gateway<br/>:4508"]
-        MCPs2["forensic-mcp · sift-mcp<br/>forensic-rag-mcp · windows-triage-mcp<br/>opencti-mcp"]
+        MCPs2["forensic-mcp · case-mcp · report-mcp<br/>sift-mcp · forensic-rag-mcp<br/>windows-triage-mcp · opencti-mcp"]
         CASE2["Case Directory"]
 
         CC2 -->|"streamable-http"| GW2
@@ -282,6 +310,7 @@ cases/INC-2026-0219/
 └── audit/
     ├── forensic-mcp.jsonl
     ├── sift-mcp.jsonl
+    ├── claude-code.jsonl       # PostToolUse hook captures (Claude Code only)
     └── ...
 ```
 
@@ -342,7 +371,7 @@ Any data loaded into the system or its component VMs, computers, or instances ru
 
 Outgoing Internet connections are required for report generation (Zeltser IR Writing MCP) and optionally used for threat intelligence (OpenCTI) and documentation (MS Learn MCP). No incoming connections from external systems should be allowed.
 
-When choosing an LLM client, we recommend constrained clients that are limited to chat and MCP functionality. AIIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. AI clients with the ability to run arbitrary commands on the host system can bypass those safeguards. Such clients can still interact with AIIR, but they can also conduct activities outside the scope of the platform's controls. AIIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
+AIIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. Clients with direct shell access (like Claude Code) can also operate outside MCP, but `aiir setup client` deploys forensic controls for Claude Code: a kernel-level sandbox restricts Bash writes, a PostToolUse hook captures every Bash command to the audit trail, and provenance enforcement ensures findings are traceable to evidence. AIIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
 
 ## Commands
 
@@ -380,7 +409,7 @@ aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 aiir review                                # Case summary (counts by status)
 aiir review --findings                     # Findings table
 aiir review --findings --detail            # Full finding detail
-aiir review --findings --verify            # Cross-check against approval records + content hash integrity
+aiir review --findings --verify            # Cross-check content hashes against approval records
 aiir review --iocs                         # IOCs grouped by approval status
 aiir review --timeline                     # Timeline events
 aiir review --timeline --status APPROVED   # Filter timeline by status
@@ -537,7 +566,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 
 | Repo | Purpose |
 |------|---------|
-| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: all SIFT components (forensic-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti) |
+| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 10 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
