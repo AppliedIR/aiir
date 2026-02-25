@@ -301,6 +301,7 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         output = Path.cwd() / ".mcp.json"
         _merge_and_write(output, config)
         _copy_agents_md(Path.cwd() / "CLAUDE.md")
+        _deploy_claude_code_assets(Path.cwd())
         print(f"  Generated: {output}")
         print(f"  Examiner:  {examiner}")
 
@@ -361,6 +362,132 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         output = Path.cwd() / "aiir-mcp-config.json"
         _merge_and_write(output, config)
         print(f"  Generated: {output}")
+
+
+def _find_claude_code_assets() -> Path | None:
+    """Locate the sift-mcp/claude-code/ directory.
+
+    Search order:
+    1. Well-known paths relative to sift-mcp installation
+    2. ~/.aiir/src/sift-mcp/claude-code/
+    3. /opt/aiir/sift-mcp/claude-code/
+    """
+    candidates = [
+        lambda: Path.home() / ".aiir" / "src" / "sift-mcp" / "claude-code",
+        lambda: Path.home() / "aiir" / "sift-mcp" / "claude-code",
+        lambda: Path("/opt/aiir/sift-mcp/claude-code"),
+    ]
+
+    # Also check gateway.yaml for sift-mcp source path
+    gw_config = Path.home() / ".aiir" / "gateway.yaml"
+    if gw_config.is_file():
+        try:
+            import yaml
+            config = yaml.safe_load(gw_config.read_text()) or {}
+            src_dir = config.get("sift_mcp_dir", "")
+            if src_dir:
+                candidate = Path(src_dir) / "claude-code"
+                if candidate.is_dir():
+                    return candidate
+        except Exception:
+            pass
+
+    for fn in candidates:
+        p = fn()
+        if p.is_dir():
+            return p
+    return None
+
+
+def _merge_settings(target: Path, source: Path) -> None:
+    """Deep-merge hooks and sandbox keys from source into target settings.json."""
+    existing = {}
+    if target.is_file():
+        try:
+            existing = json.loads(target.read_text())
+        except json.JSONDecodeError:
+            pass
+        except OSError:
+            pass
+
+    try:
+        incoming = json.loads(source.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"  Warning: could not read source settings: {e}", file=sys.stderr)
+        return
+
+    # Deep-merge hooks: merge arrays for each hook type
+    if "hooks" in incoming:
+        existing_hooks = existing.setdefault("hooks", {})
+        for hook_type, entries in incoming["hooks"].items():
+            if hook_type not in existing_hooks:
+                existing_hooks[hook_type] = entries
+            else:
+                # Deduplicate by comparing command strings
+                existing_cmds = set()
+                for entry in existing_hooks[hook_type]:
+                    for h in entry.get("hooks", []):
+                        existing_cmds.add(h.get("command", ""))
+                for entry in entries:
+                    new_cmds = [h.get("command", "") for h in entry.get("hooks", [])]
+                    if not any(c in existing_cmds for c in new_cmds):
+                        existing_hooks[hook_type].append(entry)
+
+    # Merge sandbox config
+    if "sandbox" in incoming:
+        existing.setdefault("sandbox", {}).update(incoming["sandbox"])
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    _write_600(target, json.dumps(existing, indent=2) + "\n")
+
+
+def _deploy_hook(source: Path, target: Path) -> None:
+    """Copy hook script and set executable permissions."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    target.chmod(0o755)
+
+
+def _deploy_claude_code_assets(project_dir: Path) -> None:
+    """Deploy settings.json, hooks, and doc files for Claude Code.
+
+    Sources from sift-mcp/claude-code/ directory.
+    """
+    assets_dir = _find_claude_code_assets()
+    if not assets_dir:
+        print(
+            "  Note: sift-mcp claude-code assets not found. "
+            "Hook and settings deployment skipped."
+        )
+        return
+
+    # Deploy settings.json
+    settings_src = assets_dir / "settings.json"
+    if settings_src.is_file():
+        settings_target = project_dir / ".claude" / "settings.json"
+        _merge_settings(settings_target, settings_src)
+        print(f"  Merged:    settings.json -> {settings_target}")
+
+    # Deploy hook script
+    hook_src = assets_dir / "hooks" / "forensic-audit.sh"
+    if hook_src.is_file():
+        hook_target = project_dir / ".claude" / "hooks" / "forensic-audit.sh"
+        _deploy_hook(hook_src, hook_target)
+        print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+
+    # Deploy FORENSIC_DISCIPLINE.md
+    discipline_src = assets_dir / "FORENSIC_DISCIPLINE.md"
+    if discipline_src.is_file():
+        discipline_target = project_dir / "FORENSIC_DISCIPLINE.md"
+        shutil.copy2(discipline_src, discipline_target)
+        print(f"  Copied:    FORENSIC_DISCIPLINE.md")
+
+    # Deploy TOOL_REFERENCE.md
+    toolref_src = assets_dir / "TOOL_REFERENCE.md"
+    if toolref_src.is_file():
+        toolref_target = project_dir / "TOOL_REFERENCE.md"
+        shutil.copy2(toolref_src, toolref_target)
+        print(f"  Copied:    TOOL_REFERENCE.md")
 
 
 def _merge_and_write(path: Path, config: dict) -> None:
