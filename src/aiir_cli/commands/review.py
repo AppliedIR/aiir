@@ -21,6 +21,7 @@ from pathlib import Path
 
 from aiir_cli.case_io import (
     get_case_dir,
+    load_audit_index,
     load_case_meta,
     load_findings,
     load_timeline,
@@ -131,15 +132,16 @@ def _show_findings_table(case_dir: Path) -> None:
         print("No findings recorded.")
         return
 
-    print(f"{'ID':<20} {'Status':<12} {'Confidence':<12} {'Examiner':<10} Title")
-    print("-" * 80)
+    print(f"{'Title':<40} {'Confidence':<12} {'Provenance':<12} {'Status':<10}")
+    print("-" * 76)
     for f in findings:
-        fid = f.get("id", "?")
-        status = f.get("status", "?")
-        confidence = f.get("confidence", "?")
-        examiner = f.get("examiner", "?")
         title = f.get("title", "Untitled")
-        print(f"{fid:<20} {status:<12} {confidence:<12} {examiner:<10} {title}")
+        if len(title) > 37:
+            title = title[:37] + "..."
+        confidence = f.get("confidence", "?")
+        provenance = f.get("provenance", "\u2014")
+        status = f.get("status", "?")
+        print(f"{title:<40} {confidence:<12} {provenance:<12} {status:<10}")
 
 
 def _show_findings_detail(case_dir: Path) -> None:
@@ -149,14 +151,18 @@ def _show_findings_detail(case_dir: Path) -> None:
         print("No findings recorded.")
         return
 
+    audit_index = load_audit_index(case_dir)
+
     for f in findings:
         print(f"\n{'=' * 60}")
         print(f"  [{f['id']}] {f.get('title', 'Untitled')}")
         print(f"{'=' * 60}")
+        print(f"  ID: {f['id']} | Examiner: {f.get('examiner', '?')}")
         print(f"  Status:       {f.get('status', '?')}")
         print(f"  Confidence:   {f.get('confidence', '?')}")
         if f.get("confidence_justification"):
             print(f"  Justification: {f['confidence_justification']}")
+        print(f"  Provenance:   {f.get('provenance', '\u2014')}")
         print(f"  Evidence:     {', '.join(f.get('evidence_ids', []))}")
         print(f"  Observation:  {f.get('observation', '')}")
         print(f"  Interpretation: {f.get('interpretation', '')}")
@@ -169,6 +175,45 @@ def _show_findings_detail(case_dir: Path) -> None:
         if f.get("rejected_at"):
             print(f"  Rejected:     {f['rejected_at']}")
             print(f"  Reason:       {f.get('rejection_reason', '?')}")
+
+        # Evidence chain
+        evidence_ids = f.get("evidence_ids", [])
+        if evidence_ids:
+            print(f"\n  Evidence Chain:")
+            for eid in evidence_ids:
+                entry = audit_index.get(eid)
+                if entry:
+                    source_file = entry.get("_source_file", "")
+                    ts = entry.get("ts", "")[:19]
+                    if source_file == "claude-code.jsonl":
+                        cmd = entry.get("command", "?")
+                        print(f"    [HOOK]  {eid} \u2014 \"{cmd}\" @ {ts}")
+                    elif eid.startswith("shell-"):
+                        cmd = entry.get("params", {}).get("command", "?")
+                        print(f"    [SHELL] {eid} \u2014 \"{cmd}\"")
+                    else:
+                        tool = entry.get("tool", "?")
+                        params = entry.get("params", {})
+                        params_summary = ", ".join(
+                            f"{k}={v}" for k, v in list(params.items())[:3]
+                        )
+                        print(f"    [MCP]   {eid} \u2014 {tool}({params_summary}) @ {ts}")
+                else:
+                    print(f"    [NONE]  {eid} \u2014 no audit record")
+
+        # Supporting commands
+        supporting = f.get("supporting_commands", [])
+        if supporting:
+            print(f"\n  Supporting Commands:")
+            for i, cmd in enumerate(supporting, 1):
+                print(f"    {i}. {cmd.get('command', '?')}")
+                print(f"       Purpose: {cmd.get('purpose', '?')}")
+                excerpt = cmd.get("output_excerpt", "")
+                if excerpt:
+                    display = excerpt[:120]
+                    if len(excerpt) > 120:
+                        display += "..."
+                    print(f"       Output:  {display}")
 
 
 def _show_findings_verify(case_dir: Path) -> None:
