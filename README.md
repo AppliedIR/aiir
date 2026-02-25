@@ -2,6 +2,9 @@
 
 Artificial Intelligence Incident Response platform. CLI and architecture reference.
 
+**[Platform Documentation](https://appliedir.github.io/sift-mcp/)** ·
+[CLI Reference](https://appliedir.github.io/sift-mcp/cli-reference/)
+
 ## Platform Architecture
 
 AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, Cherry Studio, LibreChat, Goose, and others. The LLM client and the aiir CLI are the two human-facing tools. The aiir CLI always runs on the SIFT workstation — it requires direct filesystem access to the case directory. When the LLM client runs on a separate machine (Path 2), the examiner must have SSH access to SIFT for all CLI operations (approve, review, report, etc.).
