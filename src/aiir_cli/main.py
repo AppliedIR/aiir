@@ -311,22 +311,27 @@ def _cmd_case(args, identity: dict) -> None:
         sys.exit(1)
 
 
-def _case_status(args, identity: dict) -> None:
-    """Show active case summary."""
+def _case_status_data(case_dir) -> dict:
+    """Return case status as structured data.
+
+    Args:
+        case_dir: Path to the case directory.
+
+    Returns:
+        Dict with case_id, name, status, examiner, path, counts.
+
+    Raises:
+        ValueError: If case_dir is not a valid case directory.
+    """
     from pathlib import Path
 
     import yaml
-    from aiir_cli.case_io import get_case_dir, load_findings, load_timeline, load_todos
+    from aiir_cli.case_io import load_findings, load_timeline, load_todos
 
-    try:
-        case_dir = get_case_dir(getattr(args, "case", None))
-    except SystemExit:
-        return
-
+    case_dir = Path(case_dir)
     meta_file = case_dir / "CASE.yaml"
     if not meta_file.exists():
-        print(f"Not an AIIR case directory: {case_dir}", file=sys.stderr)
-        return
+        raise ValueError(f"Not an AIIR case directory: {case_dir}")
 
     with open(meta_file) as f:
         meta = yaml.safe_load(f) or {}
@@ -341,31 +346,73 @@ def _case_status(args, identity: dict) -> None:
     approved_t = sum(1 for t in timeline if t.get("status") == "APPROVED")
     open_todos = sum(1 for t in todos if t.get("status") == "open")
 
-    print(f"Case: {meta.get('case_id', case_dir.name)}")
-    print(f"  Name:     {meta.get('name', '(unnamed)')}")
-    print(f"  Status:   {meta.get('status', 'unknown')}")
-    print(f"  Examiner: {meta.get('examiner', 'unknown')}")
-    print(f"  Path:     {case_dir}")
-    print(f"  Findings: {len(findings)} ({draft_f} draft, {approved_f} approved)")
-    print(f"  Timeline: {len(timeline)} ({draft_t} draft, {approved_t} approved)")
-    print(f"  TODOs:    {open_todos} open / {len(todos)} total")
+    return {
+        "case_id": meta.get("case_id", case_dir.name),
+        "name": meta.get("name", "(unnamed)"),
+        "status": meta.get("status", "unknown"),
+        "examiner": meta.get("examiner", "unknown"),
+        "path": str(case_dir),
+        "finding_count": len(findings),
+        "finding_draft": draft_f,
+        "finding_approved": approved_f,
+        "timeline_count": len(timeline),
+        "timeline_draft": draft_t,
+        "timeline_approved": approved_t,
+        "todo_open": open_todos,
+        "todo_total": len(todos),
+    }
 
-    pending = draft_f + draft_t
+
+def _case_status(args, identity: dict) -> None:
+    """CLI wrapper — prints formatted case status."""
+    from aiir_cli.case_io import get_case_dir
+
+    try:
+        case_dir = get_case_dir(getattr(args, "case", None))
+    except SystemExit:
+        return
+
+    try:
+        data = _case_status_data(case_dir)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return
+
+    print(f"Case: {data['case_id']}")
+    print(f"  Name:     {data['name']}")
+    print(f"  Status:   {data['status']}")
+    print(f"  Examiner: {data['examiner']}")
+    print(f"  Path:     {data['path']}")
+    print(f"  Findings: {data['finding_count']} ({data['finding_draft']} draft, {data['finding_approved']} approved)")
+    print(f"  Timeline: {data['timeline_count']} ({data['timeline_draft']} draft, {data['timeline_approved']} approved)")
+    print(f"  TODOs:    {data['todo_open']} open / {data['todo_total']} total")
+
+    pending = data["finding_draft"] + data["timeline_draft"]
     if pending:
         print(f"\n  {pending} item(s) awaiting approval — run: aiir approve")
 
 
-def _case_list(args, identity: dict) -> None:
-    """List available cases from AIIR_CASES_DIR."""
+def _case_list_data(cases_dir=None) -> dict:
+    """Return list of cases as structured data.
+
+    Args:
+        cases_dir: Path to cases directory. Defaults to AIIR_CASES_DIR env or "cases".
+
+    Returns:
+        Dict with "cases" list, each entry having id, name, status, active bool.
+    """
     import os
     from pathlib import Path
 
     import yaml
 
-    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    if cases_dir is None:
+        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    else:
+        cases_dir = Path(cases_dir)
+
     if not cases_dir.is_dir():
-        print(f"No cases directory found: {cases_dir}")
-        return
+        return {"cases": []}
 
     # Determine active case (file may contain absolute path or legacy bare ID)
     active_case_dir_name = None
@@ -393,12 +440,28 @@ def _case_list(args, identity: dict) -> None:
         except (OSError, yaml.YAMLError):
             meta = {}
         cases.append({
-            "case_id": meta.get("case_id", entry.name),
+            "id": meta.get("case_id", entry.name),
             "name": meta.get("name", ""),
             "status": meta.get("status", "unknown"),
-            "dir_name": entry.name,
+            "active": entry.name == active_case_dir_name,
         })
 
+    return {"cases": cases}
+
+
+def _case_list(args, identity: dict) -> None:
+    """CLI wrapper — prints formatted case list."""
+    import os
+    from pathlib import Path
+
+    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    if not cases_dir.is_dir():
+        print(f"No cases directory found: {cases_dir}")
+        return
+
+    data = _case_list_data(cases_dir)
+
+    cases = data["cases"]
     if not cases:
         print("No cases found.")
         return
@@ -406,118 +469,169 @@ def _case_list(args, identity: dict) -> None:
     print(f"{'Case ID':<25} {'Status':<10} Name")
     print("-" * 65)
     for c in cases:
-        marker = " (active)" if c["dir_name"] == active_case_dir_name else ""
-        print(f"{c['case_id']:<25} {c['status']:<10} {c['name']}{marker}")
+        marker = " (active)" if c["active"] else ""
+        print(f"{c['id']:<25} {c['status']:<10} {c['name']}{marker}")
 
 
-def _case_init(args, identity: dict) -> None:
-    """Initialize a new case from CLI."""
+def _case_init_data(name: str, examiner: str, description: str = "",
+                    cases_dir=None) -> dict:
+    """Create a new case and return structured data.
+
+    Args:
+        name: Case name.
+        examiner: Examiner identity slug.
+        description: Optional case description.
+        cases_dir: Path to cases directory. Defaults to AIIR_CASES_DIR env or "cases".
+
+    Returns:
+        Dict with case_id, case_dir, examiner, created.
+
+    Raises:
+        ValueError: If examiner is empty or case directory already exists.
+        OSError: If directory/file creation fails.
+    """
     import json
     import os
     from datetime import datetime, timezone
     from pathlib import Path
 
     import yaml
+    from aiir_cli.case_io import _atomic_write
 
-    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    if cases_dir is None:
+        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    else:
+        cases_dir = Path(cases_dir)
+
+    if not examiner:
+        raise ValueError("Cannot initialize case: examiner identity is empty.")
+
     ts = datetime.now(timezone.utc)
     case_id = f"INC-{ts.strftime('%Y')}-{ts.strftime('%m%d%H%M%S')}"
     case_dir = cases_dir / case_id
 
     if case_dir.exists():
-        print(f"Case directory already exists: {case_dir}", file=sys.stderr)
-        sys.exit(1)
-
-    examiner = identity["examiner"]
-    if not examiner:
-        print("Cannot initialize case: examiner identity is empty.", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"Case directory already exists: {case_dir}")
 
     # Create flat directory structure
-    try:
-        case_dir.mkdir(parents=True)
-        for subdir in ("evidence", "extractions", "reports", "audit"):
-            (case_dir / subdir).mkdir()
-    except OSError as e:
-        print(f"Failed to create case directories: {e}", file=sys.stderr)
-        sys.exit(1)
+    case_dir.mkdir(parents=True)
+    for subdir in ("evidence", "extractions", "reports", "audit"):
+        (case_dir / subdir).mkdir()
 
     case_meta = {
         "case_id": case_id,
-        "name": args.name,
-        "description": getattr(args, "description", ""),
+        "name": name,
+        "description": description,
         "status": "open",
         "examiner": examiner,
         "created": ts.isoformat(),
     }
 
-    try:
-        from aiir_cli.case_io import _atomic_write
-        _atomic_write(case_dir / "CASE.yaml", yaml.dump(case_meta, default_flow_style=False))
-    except (OSError, yaml.YAMLError) as e:
-        print(f"Failed to write CASE.yaml: {e}", file=sys.stderr)
-        sys.exit(1)
+    _atomic_write(case_dir / "CASE.yaml", yaml.dump(case_meta, default_flow_style=False))
 
-    try:
-        for fname in ("findings.json", "timeline.json", "todos.json"):
-            with open(case_dir / fname, "w") as f:
-                f.write("[]")
-                f.flush()
-                os.fsync(f.fileno())
-        with open(case_dir / "evidence.json", "w") as f:
-            json.dump({"files": []}, f)
+    for fname in ("findings.json", "timeline.json", "todos.json"):
+        with open(case_dir / fname, "w") as f:
+            f.write("[]")
             f.flush()
             os.fsync(f.fileno())
-    except OSError as e:
-        print(f"Failed to write initial case files: {e}", file=sys.stderr)
-        sys.exit(1)
+    with open(case_dir / "evidence.json", "w") as f:
+        json.dump({"files": []}, f)
+        f.flush()
+        os.fsync(f.fileno())
 
     # Set active case pointer
     try:
-        from aiir_cli.case_io import _atomic_write
         aiir_dir = Path.home() / ".aiir"
         aiir_dir.mkdir(exist_ok=True)
         _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
-    except OSError as e:
-        print(f"Warning: could not set active case pointer: {e}", file=sys.stderr)
+    except OSError:
+        pass  # non-fatal — CLI wrapper will warn
 
-    print(f"Case initialized: {case_id}")
+    return {
+        "case_id": case_id,
+        "case_dir": str(case_dir),
+        "examiner": examiner,
+        "created": ts.isoformat(),
+    }
+
+
+def _case_init(args, identity: dict) -> None:
+    """CLI wrapper — creates case and prints summary."""
+    try:
+        data = _case_init_data(
+            name=args.name,
+            examiner=identity["examiner"],
+            description=getattr(args, "description", ""),
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except OSError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Case initialized: {data['case_id']}")
     print(f"  Name: {args.name}")
-    print(f"  Examiner: {examiner}")
-    print(f"  Path: {case_dir}")
+    print(f"  Examiner: {data['examiner']}")
+    print(f"  Path: {data['case_dir']}")
     print()
     print("Next steps:")
-    print(f"  1. Copy evidence into: {case_dir / 'evidence'}/")
+    print(f"  1. Copy evidence into: {data['case_dir']}/evidence/")
     print(f"  2. Register each file:  aiir evidence register <file>")
     print(f"  3. Connect your LLM — it will discover this case automatically")
 
 
-def _case_activate(args, identity: dict) -> None:
-    """Set active case for session."""
+def _case_activate_data(case_id: str, cases_dir=None) -> dict:
+    """Activate a case and return structured data.
+
+    Args:
+        case_id: Case ID to activate.
+        cases_dir: Path to cases directory. Defaults to AIIR_CASES_DIR env or "cases".
+
+    Returns:
+        Dict with case_id, case_dir.
+
+    Raises:
+        ValueError: If case_id is invalid or case not found.
+        OSError: If active case pointer write fails.
+    """
     import os
     from pathlib import Path
-    from aiir_cli.case_io import _validate_case_id
+    from aiir_cli.case_io import _atomic_write
 
-    case_id = args.case_id
-    _validate_case_id(case_id)
-    cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    if cases_dir is None:
+        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+    else:
+        cases_dir = Path(cases_dir)
+
+    # Inline validation (avoids _validate_case_id's sys.exit)
+    if not case_id or ".." in case_id or "/" in case_id or "\\" in case_id:
+        raise ValueError(f"Invalid case ID: {case_id}")
+
     case_dir = cases_dir / case_id
 
     if not case_dir.exists():
-        print(f"Case not found: {case_id}", file=sys.stderr)
-        sys.exit(1)
+        raise ValueError(f"Case not found: {case_id}")
 
-    # Set active case pointer
+    aiir_dir = Path.home() / ".aiir"
+    aiir_dir.mkdir(exist_ok=True)
+    _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
+
+    return {"case_id": case_id, "case_dir": str(case_dir)}
+
+
+def _case_activate(args, identity: dict) -> None:
+    """CLI wrapper — activates case and prints confirmation."""
     try:
-        from aiir_cli.case_io import _atomic_write
-        aiir_dir = Path.home() / ".aiir"
-        aiir_dir.mkdir(exist_ok=True)
-        _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
+        data = _case_activate_data(args.case_id)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     except OSError as e:
         print(f"Failed to set active case: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Active case: {case_id}")
+    print(f"Active case: {data['case_id']}")
 
 
 def _case_close(args, identity: dict) -> None:

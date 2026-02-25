@@ -110,45 +110,56 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
     print("Use 'aiir evidence register <path>' after adding new files.")
 
 
-def cmd_register_evidence(args, identity: dict) -> None:
-    """Register evidence file: hash + chmod 444."""
-    case_dir = get_case_dir(getattr(args, "case", None))
-    evidence_path = Path(args.path)
+def register_evidence_data(case_dir, path: str, examiner: str,
+                           description: str = "") -> dict:
+    """Register an evidence file and return structured data.
+
+    Validates path, computes SHA-256, sets chmod 444, writes registry.
+
+    Args:
+        case_dir: Path to the active case directory.
+        path: Path to the evidence file.
+        examiner: Examiner identity slug.
+        description: Optional description.
+
+    Returns:
+        Dict with path, sha256, description, registered_at, registered_by.
+
+    Raises:
+        FileNotFoundError: If evidence file doesn't exist.
+        ValueError: If path is outside the case directory.
+        OSError: If registry write fails.
+    """
+    from aiir_cli.case_io import _atomic_write
+
+    case_dir = Path(case_dir)
+    evidence_path = Path(path)
 
     if not evidence_path.exists():
-        print(f"File not found: {args.path}", file=sys.stderr)
-        sys.exit(1)
+        raise FileNotFoundError(f"File not found: {path}")
 
     # Validate path is within case directory
-    try:
-        resolved = evidence_path.resolve()
-        case_resolved = case_dir.resolve()
-        if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
-            print(f"Error: evidence path must be within the case directory.", file=sys.stderr)
-            print(f"  Evidence file:     {resolved}", file=sys.stderr)
-            print(f"  Case evidence dir: {case_dir / 'evidence'}", file=sys.stderr)
-            print(f"  Fix: copy the file into the evidence directory first, then register it.", file=sys.stderr)
-            sys.exit(1)
-    except OSError as e:
-        print(f"Failed to resolve evidence path: {e}", file=sys.stderr)
-        sys.exit(1)
+    resolved = evidence_path.resolve()
+    case_resolved = case_dir.resolve()
+    if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
+        raise ValueError(
+            f"Evidence path must be within the case directory.\n"
+            f"  Evidence file:     {resolved}\n"
+            f"  Case evidence dir: {case_dir / 'evidence'}"
+        )
 
     # Compute SHA256
-    try:
-        sha256 = hashlib.sha256()
-        with open(evidence_path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha256.update(chunk)
-        file_hash = sha256.hexdigest()
-    except OSError as e:
-        print(f"Failed to read evidence file for hashing: {e}", file=sys.stderr)
-        sys.exit(1)
+    sha = hashlib.sha256()
+    with open(evidence_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            sha.update(chunk)
+    file_hash = sha.hexdigest()
 
     # Set read-only
     try:
         evidence_path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 444
-    except OSError as e:
-        print(f"Warning: could not set evidence file to read-only: {e}", file=sys.stderr)
+    except OSError:
+        pass  # non-fatal — CLI wrapper can warn
 
     # Record in evidence registry
     reg_file = case_dir / "evidence.json"
@@ -157,34 +168,49 @@ def cmd_register_evidence(args, identity: dict) -> None:
             registry = json.loads(reg_file.read_text())
         else:
             registry = {"files": []}
-    except json.JSONDecodeError as e:
-        print(f"Warning: evidence registry is corrupt ({e}), starting fresh.", file=sys.stderr)
-        registry = {"files": []}
-    except OSError as e:
-        print(f"Warning: could not read evidence registry ({e}), starting fresh.", file=sys.stderr)
+    except (json.JSONDecodeError, OSError):
         registry = {"files": []}
 
     entry = {
-        "path": str(evidence_path.resolve()),
+        "path": str(resolved),
         "sha256": file_hash,
-        "description": args.description,
+        "description": description,
         "registered_at": datetime.now(timezone.utc).isoformat(),
-        "registered_by": identity.get("examiner", identity.get("analyst", "")),
+        "registered_by": examiner,
     }
     registry["files"].append(entry)
 
+    _atomic_write(reg_file, json.dumps(registry, indent=2, default=str))
+
+    return entry
+
+
+def cmd_register_evidence(args, identity: dict) -> None:
+    """CLI wrapper — registers evidence and prints summary."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+
     try:
-        from aiir_cli.case_io import _atomic_write
-        _atomic_write(reg_file, json.dumps(registry, indent=2, default=str))
+        data = register_evidence_data(
+            case_dir=case_dir,
+            path=args.path,
+            examiner=identity.get("examiner", identity.get("analyst", "")),
+            description=args.description,
+        )
+    except FileNotFoundError as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     except OSError as e:
         print(f"Failed to write evidence registry: {e}", file=sys.stderr)
         sys.exit(1)
 
     # Log access
-    _log_evidence_action(case_dir, "register", str(evidence_path), identity, sha256=file_hash)
+    _log_evidence_action(case_dir, "register", data["path"], identity, sha256=data["sha256"])
 
-    print(f"Registered: {evidence_path}")
-    print(f"  SHA256: {file_hash}")
+    print(f"Registered: {data['path']}")
+    print(f"  SHA256: {data['sha256']}")
     print(f"  Permissions: 444 (read-only)")
 
 
@@ -209,22 +235,43 @@ def _log_evidence_action(case_dir: Path, action: str, detail: str,
         print(f"WARNING: failed to write evidence access log: {e}", file=sys.stderr)
 
 
-def cmd_list_evidence(args, identity: dict) -> None:
-    """List registered evidence files from evidence.json."""
-    case_dir = get_case_dir(getattr(args, "case", None))
+def list_evidence_data(case_dir) -> dict:
+    """Return registered evidence as structured data.
+
+    Args:
+        case_dir: Path to the active case directory.
+
+    Returns:
+        Dict with "evidence" list and "registry_exists" bool.
+
+    Raises:
+        OSError: If registry can't be read.
+    """
+    case_dir = Path(case_dir)
     reg_file = case_dir / "evidence.json"
 
     if not reg_file.exists():
-        print("No evidence registry found.")
-        return
+        return {"evidence": [], "registry_exists": False}
+
+    registry = json.loads(reg_file.read_text())
+    return {"evidence": registry.get("files", []), "registry_exists": True}
+
+
+def cmd_list_evidence(args, identity: dict) -> None:
+    """CLI wrapper — prints formatted evidence list."""
+    case_dir = get_case_dir(getattr(args, "case", None))
 
     try:
-        registry = json.loads(reg_file.read_text())
+        data = list_evidence_data(case_dir)
     except (json.JSONDecodeError, OSError) as e:
         print(f"Failed to read evidence registry: {e}", file=sys.stderr)
         sys.exit(1)
 
-    files = registry.get("files", [])
+    if not data["registry_exists"]:
+        print("No evidence registry found.")
+        return
+
+    files = data["evidence"]
     if not files:
         print("No evidence files registered.")
         return
@@ -242,65 +289,102 @@ def cmd_list_evidence(args, identity: dict) -> None:
     print(f"\n{len(files)} evidence file(s) registered")
 
 
-def cmd_verify_evidence(args, identity: dict) -> None:
-    """Re-hash registered evidence files and report modifications."""
-    case_dir = get_case_dir(getattr(args, "case", None))
+def verify_evidence_data(case_dir) -> dict:
+    """Verify evidence integrity and return structured results.
+
+    Args:
+        case_dir: Path to the active case directory.
+
+    Returns:
+        Dict with "results" list and summary counts (verified, modified,
+        missing, errors).
+
+    Raises:
+        OSError: If registry can't be read.
+    """
+    case_dir = Path(case_dir)
     reg_file = case_dir / "evidence.json"
 
     if not reg_file.exists():
-        print("No evidence registry found.")
-        return
+        return {"results": [], "verified": 0, "modified": 0, "missing": 0, "errors": 0}
 
-    try:
-        registry = json.loads(reg_file.read_text())
-    except (json.JSONDecodeError, OSError) as e:
-        print(f"Failed to read evidence registry: {e}", file=sys.stderr)
-        sys.exit(1)
-
+    registry = json.loads(reg_file.read_text())
     files = registry.get("files", [])
     if not files:
-        print("No evidence files registered.")
-        return
+        return {"results": [], "verified": 0, "modified": 0, "missing": 0, "errors": 0}
 
-    verified = 0
-    modified = 0
-    missing = 0
-    errors = 0
-
-    print(f"{'Status':<12} {'Path'}")
-    print("-" * 70)
+    results = []
+    verified = modified = missing = errors = 0
 
     for entry in files:
         path = Path(entry.get("path", ""))
         expected_hash = entry.get("sha256", "")
 
         if not path.exists():
-            print(f"{'MISSING':<12} {path}")
+            results.append({"path": str(path), "status": "MISSING",
+                            "expected_hash": expected_hash, "actual_hash": None})
             missing += 1
             continue
 
         try:
-            sha256 = hashlib.sha256()
+            sha = hashlib.sha256()
             with open(path, "rb") as f:
                 for chunk in iter(lambda: f.read(8192), b""):
-                    sha256.update(chunk)
-            actual_hash = sha256.hexdigest()
+                    sha.update(chunk)
+            actual_hash = sha.hexdigest()
         except OSError as e:
-            print(f"{'ERROR':<12} {path} ({e})")
+            results.append({"path": str(path), "status": "ERROR",
+                            "expected_hash": expected_hash, "actual_hash": None,
+                            "error": str(e)})
             errors += 1
             continue
 
         if actual_hash == expected_hash:
-            print(f"{'OK':<12} {path}")
+            results.append({"path": str(path), "status": "OK",
+                            "expected_hash": expected_hash, "actual_hash": actual_hash})
             verified += 1
         else:
-            print(f"{'MODIFIED':<12} {path}")
-            print(f"             Expected: {expected_hash}")
-            print(f"             Actual:   {actual_hash}")
+            results.append({"path": str(path), "status": "MODIFIED",
+                            "expected_hash": expected_hash, "actual_hash": actual_hash})
             modified += 1
 
-    print(f"\n{verified} verified, {modified} MODIFIED, {missing} missing, {errors} errors")
-    if modified:
+    return {
+        "results": results,
+        "verified": verified,
+        "modified": modified,
+        "missing": missing,
+        "errors": errors,
+    }
+
+
+def cmd_verify_evidence(args, identity: dict) -> None:
+    """CLI wrapper — prints formatted verification results."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+
+    try:
+        data = verify_evidence_data(case_dir)
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"Failed to read evidence registry: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    results = data["results"]
+    if not results:
+        print("No evidence files registered.")
+        return
+
+    print(f"{'Status':<12} {'Path'}")
+    print("-" * 70)
+
+    for r in results:
+        print(f"{r['status']:<12} {r['path']}")
+        if r["status"] == "MODIFIED":
+            print(f"             Expected: {r['expected_hash']}")
+            print(f"             Actual:   {r['actual_hash']}")
+        elif r["status"] == "ERROR" and r.get("error"):
+            print(f"             Error: {r['error']}")
+
+    print(f"\n{data['verified']} verified, {data['modified']} MODIFIED, {data['missing']} missing, {data['errors']} errors")
+    if data["modified"]:
         print("ALERT: Evidence files have been modified since registration.")
         sys.exit(2)
 

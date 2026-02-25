@@ -42,9 +42,10 @@ class TestGetCaseDir:
         result = get_case_dir("INC-TEST")
         assert result == case
 
-    def test_no_case_exits(self, monkeypatch):
+    def test_no_case_exits(self, tmp_path, monkeypatch):
         monkeypatch.delenv("AIIR_CASE_DIR", raising=False)
         monkeypatch.delenv("AIIR_CASES_DIR", raising=False)
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
         with pytest.raises(SystemExit):
             get_case_dir()
 
@@ -339,7 +340,8 @@ class TestCaseList:
         with open(case1 / "CASE.yaml", "w") as f:
             yaml.dump({"case_id": "INC-2026-001", "name": "Active Case", "status": "open"}, f)
 
-        # Set active case
+        # Set active case — monkeypatch HOME so _case_list_data reads from tmp_path
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
         aiir_dir = tmp_path / ".aiir"
         aiir_dir.mkdir()
         (aiir_dir / "active_case").write_text("INC-2026-001")

@@ -113,16 +113,20 @@ def _audit_log(args) -> None:
     print(f"\nShowing {len(entries)} entries")
 
 
-def _audit_summary(args) -> None:
-    """Show audit summary: counts per MCP and per tool."""
-    case_dir = get_case_dir(getattr(args, "case", None))
+def audit_summary_data(case_dir) -> dict:
+    """Return audit summary as structured data.
+
+    Args:
+        case_dir: Path to the active case directory.
+
+    Returns:
+        Dict with total_entries, evidence_ids count, by_mcp, by_tool.
+    """
+    from pathlib import Path
+
+    case_dir = Path(case_dir)
     entries = _load_audit_entries(case_dir)
 
-    if not entries:
-        print("No audit entries found.")
-        return
-
-    # Count by MCP
     mcp_counts: dict[str, int] = {}
     tool_counts: dict[str, dict[str, int]] = {}
     evidence_ids: set[str] = set()
@@ -141,18 +145,35 @@ def _audit_summary(args) -> None:
         if eid:
             evidence_ids.add(eid)
 
+    return {
+        "total_entries": len(entries),
+        "evidence_ids": len(evidence_ids),
+        "by_mcp": mcp_counts,
+        "by_tool": tool_counts,
+    }
+
+
+def _audit_summary(args) -> None:
+    """CLI wrapper — prints formatted audit summary."""
+    case_dir = get_case_dir(getattr(args, "case", None))
+    data = audit_summary_data(case_dir)
+
+    if data["total_entries"] == 0:
+        print("No audit entries found.")
+        return
+
     print("AUDIT SUMMARY")
     print("=" * 50)
-    print(f"Total entries: {len(entries)}")
-    print(f"Evidence IDs:  {len(evidence_ids)}")
+    print(f"Total entries: {data['total_entries']}")
+    print(f"Evidence IDs:  {data['evidence_ids']}")
     print()
 
     print("By MCP:")
-    for mcp, count in sorted(mcp_counts.items()):
+    for mcp, count in sorted(data["by_mcp"].items()):
         print(f"  {mcp:<25} {count}")
 
     print()
     print("By Tool:")
-    for mcp in sorted(tool_counts):
-        for tool, count in sorted(tool_counts[mcp].items()):
+    for mcp in sorted(data["by_tool"]):
+        for tool, count in sorted(data["by_tool"][mcp].items()):
             print(f"  {mcp:<20} {tool:<25} {count}")
