@@ -240,9 +240,9 @@ class TestFindingsVerify:
 
 class TestVerifyIntegrity:
     def test_confirmed(self, case_dir, identity):
-        save_findings(
-            case_dir, [{"id": "F-tester-001", "status": "APPROVED", "title": "Test"}]
-        )
+        finding = {"id": "F-tester-001", "status": "APPROVED", "title": "Test"}
+        finding["content_hash"] = compute_content_hash(finding)
+        save_findings(case_dir, [finding])
         write_approval_log(case_dir, "F-tester-001", "APPROVED", identity)
         results = verify_approval_integrity(case_dir)
         assert results[0]["verification"] == "confirmed"

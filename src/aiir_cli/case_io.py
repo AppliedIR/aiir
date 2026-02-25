@@ -339,17 +339,18 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
         elif record:
             if record["action"] == status:
                 recomputed = compute_content_hash(f)
+                finding_hash = f.get("content_hash")
+                approval_hash = record.get("content_hash")
                 # Check findings.json content hash
-                if f.get("content_hash") and recomputed != f["content_hash"]:
+                if finding_hash and recomputed != finding_hash:
                     result["verification"] = "tampered"
                 # Cross-file check: approval record content hash
-                elif (
-                    record.get("content_hash")
-                    and recomputed != record["content_hash"]
-                ):
+                elif approval_hash and recomputed != approval_hash:
                     result["verification"] = "tampered"
-                else:
+                elif finding_hash or approval_hash:
                     result["verification"] = "confirmed"
+                else:
+                    result["verification"] = "unverified"
             else:
                 result["verification"] = "no approval record"
         else:
