@@ -307,9 +307,9 @@ cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
 ./aiir-install.sh          # Install aiir CLI + configure client
 ```
 
-Claude Code is the most controlled client option. When selected during `aiir setup client`, the installer deploys a full forensic control stack: kernel-level sandbox (restricts Bash writes), PostToolUse audit hook (captures every Bash command to the case audit trail), provenance enforcement (findings without an evidence trail are rejected), and PIN-gated human approval. Other clients (Claude Desktop, Cursor, etc.) receive MCP configuration only — no sandbox, no hooks, no provenance enforcement.
+When you select Claude Code during `aiir setup client`, the installer deploys additional forensic controls. Claude Code has direct terminal access, so it needs constraints beyond a client that can only reach the system through MCP: kernel-level sandbox (restricts Bash writes), PostToolUse audit hook (captures every Bash command to the case audit trail), provenance enforcement (findings without an evidence trail are rejected).
 
-If you don't need direct Bash access to forensic tools, a non-shell client is simpler — the MCP tools provide the same forensic capabilities with a smaller attack surface.
+If you don't need direct Bash access to forensic tools, a non-shell client is another option — the MCP tools provide the same forensic capabilities with a smaller attack surface.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
