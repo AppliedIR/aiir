@@ -14,16 +14,17 @@ import secrets
 import sys
 import tempfile
 import time
+
 try:
     import termios
     import tty
+
     _HAS_TERMIOS = True
 except ImportError:
     _HAS_TERMIOS = False
 from pathlib import Path
 
 import yaml
-
 
 PBKDF2_ITERATIONS = 600_000
 _MAX_PIN_ATTEMPTS = 3
@@ -41,8 +42,7 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
     """
     if not has_pin(config_path, analyst):
         print(
-            "No approval PIN configured. Set one with:\n"
-            "  aiir config --setup-pin\n",
+            "No approval PIN configured. Set one with:\n  aiir config --setup-pin\n",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -52,11 +52,12 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
         _record_failure(analyst)
         remaining = _MAX_PIN_ATTEMPTS - _recent_failure_count(analyst)
         if remaining <= 0:
-            print(f"Too many failed attempts. Locked out for {_LOCKOUT_SECONDS}s.",
-                  file=sys.stderr)
+            print(
+                f"Too many failed attempts. Locked out for {_LOCKOUT_SECONDS}s.",
+                file=sys.stderr,
+            )
         else:
-            print(f"Incorrect PIN. {remaining} attempt(s) remaining.",
-                  file=sys.stderr)
+            print(f"Incorrect PIN. {remaining} attempt(s) remaining.", file=sys.stderr)
         sys.exit(1)
     _clear_failures(analyst)
     return "pin"
@@ -65,9 +66,12 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
 def require_tty_confirmation(prompt: str) -> bool:
     """Prompt y/N via /dev/tty. Returns True if confirmed."""
     try:
-        tty = open("/dev/tty", "r")
+        tty = open("/dev/tty")
     except OSError:
-        print("No terminal available (/dev/tty). Cannot confirm interactively.", file=sys.stderr)
+        print(
+            "No terminal available (/dev/tty). Cannot confirm interactively.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     try:
         sys.stderr.write(prompt)
@@ -97,7 +101,9 @@ def verify_pin(config_path: Path, analyst: str, pin: str) -> bool:
         salt = bytes.fromhex(entry["salt"])
     except (KeyError, ValueError):
         return False
-    computed = hashlib.pbkdf2_hmac("sha256", pin.encode(), salt, PBKDF2_ITERATIONS).hex()
+    computed = hashlib.pbkdf2_hmac(
+        "sha256", pin.encode(), salt, PBKDF2_ITERATIONS
+    ).hex()
     return secrets.compare_digest(computed, stored_hash)
 
 
@@ -113,7 +119,9 @@ def setup_pin(config_path: Path, analyst: str) -> None:
         sys.exit(1)
 
     salt = secrets.token_bytes(32)
-    pin_hash = hashlib.pbkdf2_hmac("sha256", pin1.encode(), salt, PBKDF2_ITERATIONS).hex()
+    pin_hash = hashlib.pbkdf2_hmac(
+        "sha256", pin1.encode(), salt, PBKDF2_ITERATIONS
+    ).hex()
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config = _load_config(config_path)
@@ -128,7 +136,10 @@ def setup_pin(config_path: Path, analyst: str) -> None:
 def reset_pin(config_path: Path, analyst: str) -> None:
     """Reset PIN. Requires current PIN first."""
     if not has_pin(config_path, analyst):
-        print(f"No PIN configured for analyst '{analyst}'. Use --setup-pin first.", file=sys.stderr)
+        print(
+            f"No PIN configured for analyst '{analyst}'. Use --setup-pin first.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     current = _getpass_prompt("Enter current PIN: ")
@@ -186,7 +197,10 @@ def _check_lockout(analyst: str) -> None:
             remaining = max(remaining, 1)
         else:
             remaining = _LOCKOUT_SECONDS
-        print(f"PIN locked. Too many failed attempts. Try again in {remaining} seconds.", file=sys.stderr)
+        print(
+            f"PIN locked. Too many failed attempts. Try again in {remaining} seconds.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -217,12 +231,12 @@ def _getpass_prompt(prompt: str) -> str:
         )
 
     try:
-        tty_in = open("/dev/tty", "r")
-    except OSError:
+        tty_in = open("/dev/tty")
+    except OSError as err:
         raise RuntimeError(
             "PIN entry requires /dev/tty. Cannot read PIN in this environment. "
             "Ensure you are running from an interactive terminal."
-        )
+        ) from err
     try:
         fd = tty_in.fileno()
         sys.stderr.write(prompt)

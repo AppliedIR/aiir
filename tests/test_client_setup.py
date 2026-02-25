@@ -1,7 +1,6 @@
 """Tests for aiir setup client command."""
 
 import json
-import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,14 +8,11 @@ import pytest
 
 from aiir_cli.commands.client_setup import (
     _MSLEARN_MCP,
-    _ZELTSER_MCP,
     _cmd_setup_client_remote,
-    _discover_services,
     _ensure_mcp_path,
     _format_server_entry,
     _merge_and_write,
     _normalise_url,
-    _probe_health_with_auth,
     _read_local_token,
     _save_gateway_config,
     _wizard_client,
@@ -35,7 +31,9 @@ class TestNormaliseUrl:
         assert _normalise_url("http://10.0.0.1:4624", 4624) == "http://10.0.0.1:4624"
 
     def test_https_url(self):
-        assert _normalise_url("https://example.com:443", 4624) == "https://example.com:443"
+        assert (
+            _normalise_url("https://example.com:443", 4624) == "https://example.com:443"
+        )
 
     def test_empty(self):
         assert _normalise_url("", 4624) == ""
@@ -46,7 +44,9 @@ class TestEnsureMcpPath:
         assert _ensure_mcp_path("http://127.0.0.1:4508") == "http://127.0.0.1:4508/mcp"
 
     def test_already_has_mcp(self):
-        assert _ensure_mcp_path("http://127.0.0.1:4508/mcp") == "http://127.0.0.1:4508/mcp"
+        assert (
+            _ensure_mcp_path("http://127.0.0.1:4508/mcp") == "http://127.0.0.1:4508/mcp"
+        )
 
     def test_trailing_slash_stripped(self):
         assert _ensure_mcp_path("http://127.0.0.1:4508/") == "http://127.0.0.1:4508/mcp"
@@ -55,7 +55,11 @@ class TestEnsureMcpPath:
 class TestMergeAndWrite:
     def test_creates_new_file(self, tmp_path):
         path = tmp_path / "config.json"
-        config = {"mcpServers": {"aiir": {"type": "streamable-http", "url": "http://localhost:4508/mcp"}}}
+        config = {
+            "mcpServers": {
+                "aiir": {"type": "streamable-http", "url": "http://localhost:4508/mcp"}
+            }
+        }
         _merge_and_write(path, config)
         data = json.loads(path.read_text())
         assert "aiir" in data["mcpServers"]
@@ -66,7 +70,11 @@ class TestMergeAndWrite:
         existing = {"mcpServers": {"custom": {"type": "stdio", "command": "test"}}}
         path.write_text(json.dumps(existing))
 
-        config = {"mcpServers": {"aiir": {"type": "streamable-http", "url": "http://localhost:4508/mcp"}}}
+        config = {
+            "mcpServers": {
+                "aiir": {"type": "streamable-http", "url": "http://localhost:4508/mcp"}
+            }
+        }
         _merge_and_write(path, config)
         data = json.loads(path.read_text())
         assert "custom" in data["mcpServers"]
@@ -74,17 +82,27 @@ class TestMergeAndWrite:
 
     def test_overwrites_aiir_server(self, tmp_path):
         path = tmp_path / "config.json"
-        existing = {"mcpServers": {"aiir": {"type": "streamable-http", "url": "http://old:4508/mcp"}}}
+        existing = {
+            "mcpServers": {
+                "aiir": {"type": "streamable-http", "url": "http://old:4508/mcp"}
+            }
+        }
         path.write_text(json.dumps(existing))
 
-        config = {"mcpServers": {"aiir": {"type": "streamable-http", "url": "http://new:4508/mcp"}}}
+        config = {
+            "mcpServers": {
+                "aiir": {"type": "streamable-http", "url": "http://new:4508/mcp"}
+            }
+        }
         _merge_and_write(path, config)
         data = json.loads(path.read_text())
         assert data["mcpServers"]["aiir"]["url"] == "http://new:4508/mcp"
 
     def test_creates_parent_dirs(self, tmp_path):
         path = tmp_path / "subdir" / "deep" / "config.json"
-        config = {"mcpServers": {"aiir": {"type": "streamable-http", "url": "http://x/mcp"}}}
+        config = {
+            "mcpServers": {"aiir": {"type": "streamable-http", "url": "http://x/mcp"}}
+        }
         _merge_and_write(path, config)
         assert path.is_file()
 
@@ -93,6 +111,7 @@ class TestCmdSetupClient:
     def _make_args(self, **kwargs):
         """Build a namespace with defaults."""
         import argparse
+
         defaults = {
             "client": "claude-code",
             "sift": "http://127.0.0.1:4508",
@@ -170,7 +189,9 @@ class TestCmdSetupClient:
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "wintools-mcp" in data["mcpServers"]
-        assert data["mcpServers"]["wintools-mcp"]["url"] == "http://192.168.1.20:4624/mcp"
+        assert (
+            data["mcpServers"]["wintools-mcp"]["url"] == "http://192.168.1.20:4624/mcp"
+        )
 
     def test_remnux_endpoint(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -217,7 +238,9 @@ class TestCmdSetupClient:
     def test_merge_preserves_existing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         # Pre-existing config
-        existing = {"mcpServers": {"my-custom-mcp": {"type": "stdio", "command": "test"}}}
+        existing = {
+            "mcpServers": {"my-custom-mcp": {"type": "stdio", "command": "test"}}
+        }
         (tmp_path / ".mcp.json").write_text(json.dumps(existing))
 
         args = self._make_args()
@@ -315,8 +338,12 @@ class TestFormatServerEntry:
         assert entry["headers"]["Authorization"] == "Bearer tok123"
 
     def test_claude_desktop_uses_mcp_remote(self):
-        with patch("aiir_cli.commands.client_setup.shutil.which", return_value="/usr/bin/npx"):
-            entry = _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
+        with patch(
+            "aiir_cli.commands.client_setup.shutil.which", return_value="/usr/bin/npx"
+        ):
+            entry = _format_server_entry(
+                "claude-desktop", "https://sift:4508/mcp", "tok123"
+            )
         assert entry["command"] == "npx"
         assert "mcp-remote" in entry["args"]
         assert "https://sift:4508/mcp" in entry["args"]
@@ -331,7 +358,9 @@ class TestFormatServerEntry:
         """Verify SystemExit raised when npx is not installed."""
         with patch("aiir_cli.commands.client_setup.shutil.which", return_value=None):
             with pytest.raises(SystemExit, match="npx"):
-                _format_server_entry("claude-desktop", "https://sift:4508/mcp", "tok123")
+                _format_server_entry(
+                    "claude-desktop", "https://sift:4508/mcp", "tok123"
+                )
 
     def test_cursor_with_token(self):
         entry = _format_server_entry("cursor", "https://sift:4508/mcp", "tok")
@@ -342,6 +371,7 @@ class TestFormatServerEntry:
 class TestRemoteSetup:
     def _make_args(self, **kwargs):
         import argparse
+
         defaults = {
             "client": "claude-code",
             "sift": "https://sift.example.com:4508",
@@ -360,7 +390,9 @@ class TestRemoteSetup:
     @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._save_gateway_config")
-    def test_remote_generates_per_backend_urls(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+    def test_remote_generates_per_backend_urls(
+        self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [
@@ -380,14 +412,22 @@ class TestRemoteSetup:
 
         # Per-backend endpoints
         assert "forensic-mcp" in data["mcpServers"]
-        assert data["mcpServers"]["forensic-mcp"]["url"] == "https://sift.example.com:4508/mcp/forensic-mcp"
+        assert (
+            data["mcpServers"]["forensic-mcp"]["url"]
+            == "https://sift.example.com:4508/mcp/forensic-mcp"
+        )
         assert "sift-mcp" in data["mcpServers"]
-        assert data["mcpServers"]["sift-mcp"]["url"] == "https://sift.example.com:4508/mcp/sift-mcp"
+        assert (
+            data["mcpServers"]["sift-mcp"]["url"]
+            == "https://sift.example.com:4508/mcp/sift-mcp"
+        )
 
     @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._save_gateway_config")
-    def test_remote_bearer_token_in_headers(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+    def test_remote_bearer_token_in_headers(
+        self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
@@ -396,7 +436,7 @@ class TestRemoteSetup:
         _cmd_setup_client_remote(args, identity)
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
-        for name, entry in data["mcpServers"].items():
+        for _name, entry in data["mcpServers"].items():
             if "headers" in entry:
                 assert entry["headers"]["Authorization"] == "Bearer secret_token_xyz"
 
@@ -412,20 +452,26 @@ class TestRemoteSetup:
     @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._save_gateway_config")
-    def test_remote_saves_gateway_config(self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch):
+    def test_remote_saves_gateway_config(
+        self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
         args = self._make_args()
         identity = {"examiner": "testuser"}
         _cmd_setup_client_remote(args, identity)
-        mock_save.assert_called_once_with("https://sift.example.com:4508", "aiir_gw_abc123")
+        mock_save.assert_called_once_with(
+            "https://sift.example.com:4508", "aiir_gw_abc123"
+        )
 
     @patch("aiir_cli.commands.client_setup.shutil.which", return_value="/usr/bin/npx")
     @patch("aiir_cli.commands.client_setup._probe_health_with_auth")
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._save_gateway_config")
-    def test_remote_claude_desktop_uses_mcp_remote(self, mock_save, mock_discover, mock_probe, mock_which, tmp_path, monkeypatch):
+    def test_remote_claude_desktop_uses_mcp_remote(
+        self, mock_save, mock_discover, mock_probe, mock_which, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("HOME", str(tmp_path))
         mock_probe.return_value = {"status": "ok"}
@@ -450,6 +496,7 @@ class TestSaveGatewayConfig:
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         _save_gateway_config("https://sift:4508", "tok123")
         import yaml
+
         config = yaml.safe_load((tmp_path / ".aiir" / "config.yaml").read_text())
         assert config["gateway_url"] == "https://sift:4508"
         assert config["gateway_token"] == "tok123"
@@ -459,6 +506,7 @@ class TestSaveGatewayConfig:
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
         import yaml
+
         (config_dir / "config.yaml").write_text(yaml.dump({"other_key": "value"}))
         _save_gateway_config("https://sift:4508", "tok")
         config = yaml.safe_load((config_dir / "config.yaml").read_text())
@@ -472,6 +520,7 @@ class TestReadLocalToken:
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
         import yaml
+
         gateway_config = {
             "api_keys": {
                 "aiir_gw_abc123xyz": {"examiner": "default", "role": "lead"},
@@ -489,6 +538,7 @@ class TestReadLocalToken:
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
         import yaml
+
         (config_dir / "gateway.yaml").write_text(yaml.dump({"api_keys": {}}))
         assert _read_local_token() is None
 
@@ -497,6 +547,7 @@ class TestReadLocalToken:
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
         import yaml
+
         (config_dir / "gateway.yaml").write_text(yaml.dump({"gateway": {"port": 4508}}))
         assert _read_local_token() is None
 
@@ -504,6 +555,7 @@ class TestReadLocalToken:
 class TestLocalModeTokenThreading:
     def _make_args(self, **kwargs):
         import argparse
+
         defaults = {
             "client": "claude-code",
             "sift": "http://127.0.0.1:4508",
@@ -519,7 +571,9 @@ class TestLocalModeTokenThreading:
 
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._read_local_token")
-    def test_local_mode_injects_token(self, mock_token, mock_discover, tmp_path, monkeypatch):
+    def test_local_mode_injects_token(
+        self, mock_token, mock_discover, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_token.return_value = "aiir_gw_secret123"
         mock_discover.return_value = [
@@ -536,11 +590,15 @@ class TestLocalModeTokenThreading:
             assert entry["headers"]["Authorization"] == "Bearer aiir_gw_secret123"
 
         # Verify token was passed to discover
-        mock_discover.assert_called_once_with("http://127.0.0.1:4508", "aiir_gw_secret123")
+        mock_discover.assert_called_once_with(
+            "http://127.0.0.1:4508", "aiir_gw_secret123"
+        )
 
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._read_local_token")
-    def test_local_mode_no_token_no_headers(self, mock_token, mock_discover, tmp_path, monkeypatch):
+    def test_local_mode_no_token_no_headers(
+        self, mock_token, mock_discover, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_token.return_value = None
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
@@ -553,7 +611,9 @@ class TestLocalModeTokenThreading:
 
     @patch("aiir_cli.commands.client_setup._discover_services")
     @patch("aiir_cli.commands.client_setup._read_local_token")
-    def test_local_mode_fallback_aggregate_gets_token(self, mock_token, mock_discover, tmp_path, monkeypatch):
+    def test_local_mode_fallback_aggregate_gets_token(
+        self, mock_token, mock_discover, tmp_path, monkeypatch
+    ):
         monkeypatch.chdir(tmp_path)
         mock_token.return_value = "aiir_gw_tok"
         mock_discover.return_value = None  # Discovery failed

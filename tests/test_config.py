@@ -1,6 +1,5 @@
 """Tests for aiir config command."""
 
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -17,8 +16,13 @@ def config_dir(tmp_path):
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag",
-            "analyst": "analyst1", "analyst_source": "flag"}
+    return {
+        "os_user": "testuser",
+        "examiner": "analyst1",
+        "examiner_source": "flag",
+        "analyst": "analyst1",
+        "analyst_source": "flag",
+    }
 
 
 class FakeArgs:

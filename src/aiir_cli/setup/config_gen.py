@@ -130,7 +130,9 @@ def generate_gateway_yaml(
         output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         raise OSError(f"Failed to create directory {output_path.parent}: {e}") from e
-    _write_600(output_path, yaml.dump(config, default_flow_style=False, sort_keys=False))
+    _write_600(
+        output_path, yaml.dump(config, default_flow_style=False, sort_keys=False)
+    )
     return output_path
 
 

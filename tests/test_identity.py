@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from aiir_cli.identity import get_examiner_identity, get_analyst_identity
+from aiir_cli.identity import get_analyst_identity, get_examiner_identity
 
 
 def test_flag_override_takes_priority():
@@ -42,8 +42,13 @@ def test_os_user_fallback():
         os.environ.pop("AIIR_EXAMINER", None)
         os.environ.pop("AIIR_ANALYST", None)
         identity = get_examiner_identity()
-        assert identity["examiner_source"] == "os_user" or identity["examiner_source"] == "config"
-        assert identity["os_user"] == os.environ.get("USER", os.environ.get("USERNAME", "unknown"))
+        assert (
+            identity["examiner_source"] == "os_user"
+            or identity["examiner_source"] == "config"
+        )
+        assert identity["os_user"] == os.environ.get(
+            "USER", os.environ.get("USERNAME", "unknown")
+        )
 
 
 def test_backward_compatible_alias():

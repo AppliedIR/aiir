@@ -2,7 +2,6 @@
 
 import json
 from argparse import Namespace
-from pathlib import Path
 
 import pytest
 import yaml
@@ -49,17 +48,47 @@ def identity():
 def sample_audit(case_dir):
     """Write sample audit entries across multiple JSONL files."""
     sift_entries = [
-        {"ts": "2026-02-19T10:00:00Z", "mcp": "sift-mcp", "tool": "run_tool", "examiner": "tester", "evidence_id": "sift-tester-20260219-001"},
-        {"ts": "2026-02-19T10:05:00Z", "mcp": "sift-mcp", "tool": "get_tool_help", "examiner": "tester", "evidence_id": "sift-tester-20260219-002"},
-        {"ts": "2026-02-19T10:10:00Z", "mcp": "sift-mcp", "tool": "run_tool", "examiner": "tester", "evidence_id": "sift-tester-20260219-003"},
+        {
+            "ts": "2026-02-19T10:00:00Z",
+            "mcp": "sift-mcp",
+            "tool": "run_tool",
+            "examiner": "tester",
+            "evidence_id": "sift-tester-20260219-001",
+        },
+        {
+            "ts": "2026-02-19T10:05:00Z",
+            "mcp": "sift-mcp",
+            "tool": "get_tool_help",
+            "examiner": "tester",
+            "evidence_id": "sift-tester-20260219-002",
+        },
+        {
+            "ts": "2026-02-19T10:10:00Z",
+            "mcp": "sift-mcp",
+            "tool": "run_tool",
+            "examiner": "tester",
+            "evidence_id": "sift-tester-20260219-003",
+        },
     ]
     with open(case_dir / "audit" / "sift-mcp.jsonl", "w") as f:
         for entry in sift_entries:
             f.write(json.dumps(entry) + "\n")
 
     forensic_entries = [
-        {"ts": "2026-02-19T10:01:00Z", "mcp": "forensic-mcp", "tool": "record_finding", "examiner": "tester", "evidence_id": "forensic-tester-20260219-001"},
-        {"ts": "2026-02-19T10:06:00Z", "mcp": "forensic-mcp", "tool": "record_timeline_event", "examiner": "tester", "evidence_id": "forensic-tester-20260219-002"},
+        {
+            "ts": "2026-02-19T10:01:00Z",
+            "mcp": "forensic-mcp",
+            "tool": "record_finding",
+            "examiner": "tester",
+            "evidence_id": "forensic-tester-20260219-001",
+        },
+        {
+            "ts": "2026-02-19T10:06:00Z",
+            "mcp": "forensic-mcp",
+            "tool": "record_timeline_event",
+            "examiner": "tester",
+            "evidence_id": "forensic-tester-20260219-002",
+        },
     ]
     with open(case_dir / "audit" / "forensic-mcp.jsonl", "w") as f:
         for entry in forensic_entries:
@@ -72,8 +101,20 @@ def sample_audit(case_dir):
 def sample_approvals(case_dir):
     """Write sample approval entries."""
     approvals = [
-        {"ts": "2026-02-19T11:00:00Z", "item_id": "F-tester-001", "action": "APPROVED", "os_user": "testuser", "examiner": "tester"},
-        {"ts": "2026-02-19T11:05:00Z", "item_id": "T-tester-001", "action": "APPROVED", "os_user": "testuser", "examiner": "tester"},
+        {
+            "ts": "2026-02-19T11:00:00Z",
+            "item_id": "F-tester-001",
+            "action": "APPROVED",
+            "os_user": "testuser",
+            "examiner": "tester",
+        },
+        {
+            "ts": "2026-02-19T11:05:00Z",
+            "item_id": "T-tester-001",
+            "action": "APPROVED",
+            "os_user": "testuser",
+            "examiner": "tester",
+        },
     ]
     with open(case_dir / "approvals.jsonl", "w") as f:
         for entry in approvals:
@@ -98,11 +139,13 @@ class TestAuditLog:
     def test_log_sorted_by_timestamp(self, case_dir, sample_audit, identity, capsys):
         cmd_audit(_make_args("log", limit=50), identity)
         output = capsys.readouterr().out
-        lines = [l for l in output.strip().split("\n") if "2026-02-19" in l]
-        timestamps = [l.split()[0] for l in lines]
+        lines = [line for line in output.strip().split("\n") if "2026-02-19" in line]
+        timestamps = [line.split()[0] for line in lines]
         assert timestamps == sorted(timestamps)
 
-    def test_log_includes_approvals(self, case_dir, sample_audit, sample_approvals, identity, capsys):
+    def test_log_includes_approvals(
+        self, case_dir, sample_audit, sample_approvals, identity, capsys
+    ):
         cmd_audit(_make_args("log", limit=50), identity)
         output = capsys.readouterr().out
         assert "aiir-cli" in output
@@ -134,7 +177,11 @@ class TestAuditLog:
 
     def test_log_mcp_derived_from_filename(self, case_dir, identity, capsys):
         """When entry has no mcp field, derive from filename."""
-        entry = {"ts": "2026-02-19T10:00:00Z", "tool": "some_tool", "examiner": "tester"}
+        entry = {
+            "ts": "2026-02-19T10:00:00Z",
+            "tool": "some_tool",
+            "examiner": "tester",
+        }
         with open(case_dir / "audit" / "wintools.jsonl", "w") as f:
             f.write(json.dumps(entry) + "\n")
         cmd_audit(_make_args("log", limit=50), identity)
@@ -142,9 +189,13 @@ class TestAuditLog:
         assert "wintools" in output
 
     def test_log_combined_filter(self, case_dir, sample_audit, identity, capsys):
-        cmd_audit(_make_args("log", limit=50, mcp="sift-mcp", tool="run_tool"), identity)
+        cmd_audit(
+            _make_args("log", limit=50, mcp="sift-mcp", tool="run_tool"), identity
+        )
         output = capsys.readouterr().out
-        data_lines = [l for l in output.strip().split("\n") if "2026-02-19" in l]
+        data_lines = [
+            line for line in output.strip().split("\n") if "2026-02-19" in line
+        ]
         assert len(data_lines) == 2  # Two run_tool entries in sift-mcp
 
 
@@ -157,12 +208,16 @@ class TestAuditSummary:
         assert "sift-mcp" in output
         assert "forensic-mcp" in output
 
-    def test_summary_includes_evidence_ids(self, case_dir, sample_audit, identity, capsys):
+    def test_summary_includes_evidence_ids(
+        self, case_dir, sample_audit, identity, capsys
+    ):
         cmd_audit(_make_args("summary"), identity)
         output = capsys.readouterr().out
         assert "Evidence IDs:  5" in output
 
-    def test_summary_with_approvals(self, case_dir, sample_audit, sample_approvals, identity, capsys):
+    def test_summary_with_approvals(
+        self, case_dir, sample_audit, sample_approvals, identity, capsys
+    ):
         cmd_audit(_make_args("summary"), identity)
         output = capsys.readouterr().out
         assert "Total entries: 7" in output

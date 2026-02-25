@@ -4,39 +4,50 @@ from __future__ import annotations
 
 import json
 import stat
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
-from aiir_cli.setup.detect import detect_installed_mcps, detect_venv_mcps, MCP_SERVERS
-from aiir_cli.setup.config_gen import (
-    generate_mcp_json,
-    generate_gateway_yaml,
-)
-from aiir_cli.setup.wizard import wizard_clients
 from aiir_cli.commands.setup import cmd_setup
-
+from aiir_cli.setup.config_gen import (
+    generate_gateway_yaml,
+    generate_mcp_json,
+)
+from aiir_cli.setup.detect import MCP_SERVERS, detect_installed_mcps, detect_venv_mcps
+from aiir_cli.setup.wizard import wizard_clients
 
 # -- Fixtures --
+
 
 @pytest.fixture
 def sample_mcps():
     return [
-        {"name": "forensic-mcp", "python_path": "/usr/bin/python3", "module": "forensic_mcp"},
+        {
+            "name": "forensic-mcp",
+            "python_path": "/usr/bin/python3",
+            "module": "forensic_mcp",
+        },
         {"name": "sift-mcp", "python_path": "/usr/bin/python3", "module": "sift_mcp"},
     ]
 
 
 @pytest.fixture
 def opencti_mcp():
-    return {"name": "opencti-mcp", "python_path": "/usr/bin/python3", "module": "opencti_mcp"}
+    return {
+        "name": "opencti-mcp",
+        "python_path": "/usr/bin/python3",
+        "module": "opencti_mcp",
+    }
 
 
 @pytest.fixture
 def opencti_config():
-    return {"url": "https://opencti.example.com", "token": "secret123", "ssl_verify": True}
+    return {
+        "url": "https://opencti.example.com",
+        "token": "secret123",
+        "ssl_verify": True,
+    }
 
 
 @pytest.fixture
@@ -45,6 +56,7 @@ def identity():
 
 
 # -- Detection tests --
+
 
 class TestDetection:
     def test_detect_installed_returns_all_known(self):
@@ -116,6 +128,7 @@ class TestDetection:
 
 # -- Config generation tests --
 
+
 class TestConfigGen:
     def test_generate_mcp_json_basic(self, tmp_path, sample_mcps):
         output = tmp_path / ".mcp.json"
@@ -125,7 +138,9 @@ class TestConfigGen:
         assert "forensic-mcp" in config["mcpServers"]
         assert config["mcpServers"]["forensic-mcp"]["args"] == ["-m", "forensic_mcp"]
 
-    def test_generate_mcp_json_opencti_env(self, tmp_path, sample_mcps, opencti_mcp, opencti_config):
+    def test_generate_mcp_json_opencti_env(
+        self, tmp_path, sample_mcps, opencti_mcp, opencti_config
+    ):
         mcps = sample_mcps + [opencti_mcp]
         output = tmp_path / ".mcp.json"
         generate_mcp_json(mcps, output, opencti_config)
@@ -171,7 +186,10 @@ class TestConfigGen:
         config = yaml.safe_load(output.read_text())
         assert "remnux-mcp" in config["backends"]
         assert config["backends"]["remnux-mcp"]["type"] == "http"
-        assert "Bearer mytoken" in config["backends"]["remnux-mcp"]["headers"]["Authorization"]
+        assert (
+            "Bearer mytoken"
+            in config["backends"]["remnux-mcp"]["headers"]["Authorization"]
+        )
 
     def test_generate_gateway_yaml_api_keys(self, tmp_path, sample_mcps):
         keys = {"key1": {"analyst": "steve"}}
@@ -182,6 +200,7 @@ class TestConfigGen:
 
 
 # -- Wizard tests --
+
 
 class TestWizard:
     def test_wizard_clients_all(self):
@@ -207,6 +226,7 @@ class TestWizard:
 
 # -- cmd_setup integration --
 
+
 class TestCmdSetup:
     def test_non_interactive_generates_mcp_json(self, tmp_path, identity):
         args = MagicMock()
@@ -215,11 +235,20 @@ class TestCmdSetup:
         args.setup_action = None
 
         fake_mcps = [
-            {"name": "forensic-mcp", "module": "forensic_mcp", "python_path": "/usr/bin/python3", "available": True},
+            {
+                "name": "forensic-mcp",
+                "module": "forensic_mcp",
+                "python_path": "/usr/bin/python3",
+                "available": True,
+            },
         ]
-        with patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=fake_mcps), \
-             patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]), \
-             patch("aiir_cli.commands.setup.Path.cwd", return_value=tmp_path):
+        with (
+            patch(
+                "aiir_cli.commands.setup.detect_installed_mcps", return_value=fake_mcps
+            ),
+            patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]),
+            patch("aiir_cli.commands.setup.Path.cwd", return_value=tmp_path),
+        ):
             cmd_setup(args, identity)
 
         output = tmp_path / ".mcp.json"
@@ -233,8 +262,10 @@ class TestCmdSetup:
         args.non_interactive = True
         args.setup_action = None
 
-        with patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]), \
-             patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]):
+        with (
+            patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]),
+            patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]),
+        ):
             with pytest.raises(SystemExit):
                 cmd_setup(args, identity)
 
@@ -251,8 +282,10 @@ class TestCmdSetup:
         args = MagicMock()
         args.setup_action = "test"
 
-        with patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]), \
-             patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]):
+        with (
+            patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]),
+            patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]),
+        ):
             cmd_setup(args, identity)
 
         output = capsys.readouterr().out

@@ -1,16 +1,12 @@
 """Tests for aiir service subcommand."""
 
 import argparse
-import json
-import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
 from aiir_cli.commands.service import (
-    _api_request,
-    _load_config,
     _resolve_gateway,
     _service_action,
     _service_status,
@@ -40,13 +36,18 @@ class TestResolveGateway:
 
     def test_config_file(self, tmp_path, monkeypatch):
         import yaml
+
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
         config_file = config_dir / "config.yaml"
-        config_file.write_text(yaml.dump({
-            "gateway_url": "https://config-host:4508",
-            "gateway_token": "cfg_tok",
-        }))
+        config_file.write_text(
+            yaml.dump(
+                {
+                    "gateway_url": "https://config-host:4508",
+                    "gateway_token": "cfg_tok",
+                }
+            )
+        )
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         # Clear env vars
         monkeypatch.delenv("AIIR_GATEWAY_URL", raising=False)
@@ -78,8 +79,18 @@ class TestServiceStatus:
         mock_resolve.return_value = ("http://localhost:4508", None)
         mock_api.return_value = {
             "services": [
-                {"name": "forensic-mcp", "started": True, "type": "stdio", "health": {"status": "ok"}},
-                {"name": "sift-mcp", "started": False, "type": "stdio", "health": {"status": "stopped"}},
+                {
+                    "name": "forensic-mcp",
+                    "started": True,
+                    "type": "stdio",
+                    "health": {"status": "ok"},
+                },
+                {
+                    "name": "sift-mcp",
+                    "started": False,
+                    "type": "stdio",
+                    "health": {"status": "stopped"},
+                },
             ],
             "count": 2,
         }
@@ -112,7 +123,9 @@ class TestServiceAction:
         assert "forensic-mcp" in out
         assert "started" in out
         mock_api.assert_called_once_with(
-            "http://localhost:4508/api/v1/services/forensic-mcp/start", "tok", method="POST",
+            "http://localhost:4508/api/v1/services/forensic-mcp/start",
+            "tok",
+            method="POST",
         )
 
     @patch("aiir_cli.commands.service._api_request")
@@ -169,7 +182,9 @@ class TestCmdService:
 
     @patch("aiir_cli.commands.service._service_action")
     def test_routes_to_start(self, mock_action):
-        args = argparse.Namespace(service_action="start", gateway=None, token=None, backend_name="b1")
+        args = argparse.Namespace(
+            service_action="start", gateway=None, token=None, backend_name="b1"
+        )
         cmd_service(args, {"examiner": "test"})
         mock_action.assert_called_once_with(args, "start")
 
@@ -181,10 +196,12 @@ class TestBulkServiceAction:
         mock_resolve.return_value = ("http://localhost:4508", "tok")
         mock_api.side_effect = [
             # First call: GET /api/v1/services
-            {"services": [
-                {"name": "forensic-mcp", "started": True},
-                {"name": "sift-mcp", "started": True},
-            ]},
+            {
+                "services": [
+                    {"name": "forensic-mcp", "started": True},
+                    {"name": "sift-mcp", "started": True},
+                ]
+            },
             # Per-backend POST calls
             {"status": "stopped", "name": "forensic-mcp"},
             {"status": "stopped", "name": "sift-mcp"},

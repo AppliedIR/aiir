@@ -22,7 +22,6 @@ import re
 import shutil
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
 import yaml
 
@@ -46,7 +45,11 @@ def cmd_migrate(args, identity: dict) -> None:
 
     exam_dir = examiners_root / examiner
     if not exam_dir.is_dir():
-        available = [d.name for d in examiners_root.iterdir() if d.is_dir() and not d.name.startswith(".")]
+        available = [
+            d.name
+            for d in examiners_root.iterdir()
+            if d.is_dir() and not d.name.startswith(".")
+        ]
         print(f"Examiner directory not found: {exam_dir}", file=sys.stderr)
         if available:
             print(f"Available examiners: {', '.join(available)}", file=sys.stderr)
@@ -82,7 +85,9 @@ def cmd_migrate(args, identity: dict) -> None:
             try:
                 findings = json.loads(findings_file.read_text())
             except (json.JSONDecodeError, OSError) as e:
-                print(f"    WARNING: could not read {findings_file}: {e}", file=sys.stderr)
+                print(
+                    f"    WARNING: could not read {findings_file}: {e}", file=sys.stderr
+                )
                 findings = []
             for f in findings:
                 old_id = f.get("id", "")
@@ -91,7 +96,10 @@ def cmd_migrate(args, identity: dict) -> None:
                 id_map[f"{exam}/{old_id}"] = new_id  # Also map scoped form
                 f["id"] = new_id
                 f["examiner"] = exam
-                f.setdefault("modified_at", f.get("staged", datetime.now(timezone.utc).isoformat()))
+                f.setdefault(
+                    "modified_at",
+                    f.get("staged", datetime.now(timezone.utc).isoformat()),
+                )
                 all_findings.append(f)
             print(f"    Findings: {len(findings)} (re-IDed)")
 
@@ -101,7 +109,9 @@ def cmd_migrate(args, identity: dict) -> None:
             try:
                 timeline = json.loads(timeline_file.read_text())
             except (json.JSONDecodeError, OSError) as e:
-                print(f"    WARNING: could not read {timeline_file}: {e}", file=sys.stderr)
+                print(
+                    f"    WARNING: could not read {timeline_file}: {e}", file=sys.stderr
+                )
                 timeline = []
             for t in timeline:
                 old_id = t.get("id", "")
@@ -110,7 +120,10 @@ def cmd_migrate(args, identity: dict) -> None:
                 id_map[f"{exam}/{old_id}"] = new_id
                 t["id"] = new_id
                 t["examiner"] = exam
-                t.setdefault("modified_at", t.get("staged", datetime.now(timezone.utc).isoformat()))
+                t.setdefault(
+                    "modified_at",
+                    t.get("staged", datetime.now(timezone.utc).isoformat()),
+                )
                 all_timeline.append(t)
             print(f"    Timeline: {len(timeline)} (re-IDed)")
 
@@ -130,7 +143,9 @@ def cmd_migrate(args, identity: dict) -> None:
                 t["todo_id"] = new_id
                 t["examiner"] = exam
                 # Update related_findings references
-                t["related_findings"] = [id_map.get(r, r) for r in t.get("related_findings", [])]
+                t["related_findings"] = [
+                    id_map.get(r, r) for r in t.get("related_findings", [])
+                ]
                 all_todos.append(t)
             print(f"    TODOs: {len(todos)} (re-IDed)")
 
@@ -169,7 +184,9 @@ def cmd_migrate(args, identity: dict) -> None:
 
     # --- Phase 2: Update cross-references with final id_map ---
     for t in all_todos:
-        t["related_findings"] = [id_map.get(r, r) for r in t.get("related_findings", [])]
+        t["related_findings"] = [
+            id_map.get(r, r) for r in t.get("related_findings", [])
+        ]
     for t in all_timeline:
         if "related_findings" in t:
             t["related_findings"] = [id_map.get(r, r) for r in t["related_findings"]]
@@ -177,7 +194,7 @@ def cmd_migrate(args, identity: dict) -> None:
         _re_id_refs(entry, id_map)
 
     # --- Phase 3: Write flat files to case root ---
-    print(f"\nWriting flat case directory...")
+    print("\nWriting flat case directory...")
 
     # Check for existing flat files (don't overwrite)
     for fname in ("findings.json", "timeline.json", "todos.json"):
@@ -185,11 +202,18 @@ def cmd_migrate(args, identity: dict) -> None:
         if existing.exists():
             data = json.loads(existing.read_text())
             if data:
-                print(f"  WARNING: {fname} already has data at case root. Skipping migration.", file=sys.stderr)
+                print(
+                    f"  WARNING: {fname} already has data at case root. Skipping migration.",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
 
-    _atomic_write(case_dir / "findings.json", json.dumps(all_findings, indent=2, default=str))
-    _atomic_write(case_dir / "timeline.json", json.dumps(all_timeline, indent=2, default=str))
+    _atomic_write(
+        case_dir / "findings.json", json.dumps(all_findings, indent=2, default=str)
+    )
+    _atomic_write(
+        case_dir / "timeline.json", json.dumps(all_timeline, indent=2, default=str)
+    )
     _atomic_write(case_dir / "todos.json", json.dumps(all_todos, indent=2, default=str))
 
     # Merge actions
@@ -250,13 +274,16 @@ def cmd_migrate(args, identity: dict) -> None:
     # --- Phase 5: Backup old structure ---
     backup_dir = case_dir / "examiners.bak"
     if backup_dir.exists():
-        print(f"  WARNING: {backup_dir} already exists. Not overwriting backup.", file=sys.stderr)
+        print(
+            f"  WARNING: {backup_dir} already exists. Not overwriting backup.",
+            file=sys.stderr,
+        )
     else:
         examiners_root.rename(backup_dir)
-        print(f"  Backed up examiners/ → examiners.bak/")
+        print("  Backed up examiners/ → examiners.bak/")
 
     # --- Summary ---
-    print(f"\nMigration complete:")
+    print("\nMigration complete:")
     print(f"  Findings: {len(all_findings)}")
     print(f"  Timeline: {len(all_timeline)}")
     print(f"  TODOs: {len(all_todos)}")

@@ -84,5 +84,9 @@ def cmd_merge(args, identity: dict) -> None:
     fr = result.get("findings", {})
     tr = result.get("timeline", {})
     print("Merge complete:")
-    print(f"  Findings: {fr.get('added', 0)} added, {fr.get('updated', 0)} updated, {fr.get('skipped', 0)} skipped")
-    print(f"  Timeline: {tr.get('added', 0)} added, {tr.get('updated', 0)} updated, {tr.get('skipped', 0)} skipped")
+    print(
+        f"  Findings: {fr.get('added', 0)} added, {fr.get('updated', 0)} updated, {fr.get('skipped', 0)} skipped"
+    )
+    print(
+        f"  Timeline: {tr.get('added', 0)} added, {tr.get('updated', 0)} updated, {tr.get('skipped', 0)} skipped"
+    )

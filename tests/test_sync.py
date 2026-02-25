@@ -2,9 +2,7 @@
 
 import argparse
 import json
-import os
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -17,14 +15,30 @@ def _init_case(case_dir: Path, examiner: str = "alice") -> None:
     case_dir.mkdir(parents=True, exist_ok=True)
     (case_dir / "CASE.yaml").write_text(json.dumps(meta))
     (case_dir / "audit").mkdir(exist_ok=True)
-    (case_dir / "findings.json").write_text(json.dumps([
-        {"id": f"F-{examiner}-001", "title": "Malware found", "status": "DRAFT",
-         "staged": "2026-01-01T00:00:00Z"},
-    ]))
-    (case_dir / "timeline.json").write_text(json.dumps([
-        {"id": f"T-{examiner}-001", "timestamp": "2026-01-01T00:00:00Z",
-         "description": "First event", "staged": "2026-01-01T00:00:00Z"},
-    ]))
+    (case_dir / "findings.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": f"F-{examiner}-001",
+                    "title": "Malware found",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                },
+            ]
+        )
+    )
+    (case_dir / "timeline.json").write_text(
+        json.dumps(
+            [
+                {
+                    "id": f"T-{examiner}-001",
+                    "timestamp": "2026-01-01T00:00:00Z",
+                    "description": "First event",
+                    "staged": "2026-01-01T00:00:00Z",
+                },
+            ]
+        )
+    )
     (case_dir / "todos.json").write_text(json.dumps([]))
 
 
@@ -73,8 +87,14 @@ class TestExport:
         _init_case(case_dir)
         # Add a newer finding
         findings = json.loads((case_dir / "findings.json").read_text())
-        findings.append({"id": "F-alice-002", "title": "New", "status": "DRAFT",
-                         "staged": "2026-06-01T00:00:00Z"})
+        findings.append(
+            {
+                "id": "F-alice-002",
+                "title": "New",
+                "status": "DRAFT",
+                "staged": "2026-06-01T00:00:00Z",
+            }
+        )
         (case_dir / "findings.json").write_text(json.dumps(findings))
 
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
@@ -99,8 +119,14 @@ class TestMerge:
         bundle = {
             "case_id": "INC-2026-0001",
             "examiner": "bob",
-            "findings": [{"id": "F-bob-001", "title": "Bob's finding", "status": "DRAFT",
-                          "staged": "2026-01-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-bob-001",
+                    "title": "Bob's finding",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                }
+            ],
             "timeline": [],
         }
         bundle_file = tmp_path / "bob-bundle.json"
@@ -143,8 +169,14 @@ class TestMerge:
 
         # Import a bundle with a newer version of alice's finding
         bundle = {
-            "findings": [{"id": "F-alice-001", "title": "Updated by Bob", "status": "DRAFT",
-                          "staged": "2026-06-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-alice-001",
+                    "title": "Updated by Bob",
+                    "status": "DRAFT",
+                    "staged": "2026-06-01T00:00:00Z",
+                }
+            ],
             "timeline": [],
         }
         bundle_file = tmp_path / "updated.json"

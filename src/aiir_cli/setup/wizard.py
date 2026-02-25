@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import getpass
-import sys
 
 
 def wizard_opencti() -> dict:

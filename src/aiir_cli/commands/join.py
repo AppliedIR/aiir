@@ -61,7 +61,10 @@ def cmd_join(args, identity: dict) -> None:
         sys.exit(1)
     except requests.exceptions.SSLError as e:
         print(f"TLS error: {e}", file=sys.stderr)
-        print("Try --ca-cert to specify the CA certificate, or check the gateway's TLS config", file=sys.stderr)
+        print(
+            "Try --ca-cert to specify the CA certificate, or check the gateway's TLS config",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     if resp.status_code != 200:
@@ -82,7 +85,9 @@ def cmd_join(args, identity: dict) -> None:
     if data.get("wintools_registered"):
         print("Windows wintools-mcp registered with gateway")
         if data.get("restart_required"):
-            print("Note: gateway restart may be needed to activate the wintools backend")
+            print(
+                "Note: gateway restart may be needed to activate the wintools backend"
+            )
 
     # Run aiir setup client to generate MCP config
     if not getattr(args, "skip_setup", False):
@@ -136,13 +141,15 @@ def _join_urllib(sift_url, code, wintools_url, wintools_token, verify, args):
     import ssl
     import urllib.request
 
-    payload = json.dumps({
-        "code": code,
-        "machine_type": "wintools" if wintools_url else "examiner",
-        "hostname": socket.gethostname(),
-        "wintools_url": wintools_url,
-        "wintools_token": wintools_token,
-    }).encode("utf-8")
+    payload = json.dumps(
+        {
+            "code": code,
+            "machine_type": "wintools" if wintools_url else "examiner",
+            "hostname": socket.gethostname(),
+            "wintools_url": wintools_url,
+            "wintools_token": wintools_token,
+        }
+    ).encode("utf-8")
 
     ctx = ssl.create_default_context()
     if not verify:
@@ -180,7 +187,9 @@ def _join_urllib(sift_url, code, wintools_url, wintools_token, verify, args):
     if data.get("wintools_registered"):
         print("Windows wintools-mcp registered with gateway")
         if data.get("restart_required"):
-            print("Note: gateway restart may be needed to activate the wintools backend")
+            print(
+                "Note: gateway restart may be needed to activate the wintools backend"
+            )
 
     if not getattr(args, "skip_setup", False):
         print()

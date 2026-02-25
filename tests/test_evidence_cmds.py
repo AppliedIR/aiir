@@ -3,18 +3,16 @@
 import json
 import os
 import stat
-from argparse import Namespace
-from pathlib import Path
 
 import pytest
 
 from aiir_cli.commands.evidence import (
     cmd_evidence,
+    cmd_evidence_log,
+    cmd_list_evidence,
     cmd_lock_evidence,
     cmd_register_evidence,
-    cmd_list_evidence,
     cmd_verify_evidence,
-    cmd_evidence_log,
 )
 
 
@@ -29,11 +27,24 @@ def case_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
+    return {
+        "os_user": "testuser",
+        "examiner": "analyst1",
+        "examiner_source": "flag",
+        "analyst": "analyst1",
+        "analyst_source": "flag",
+    }
 
 
 class FakeArgs:
-    def __init__(self, case=None, path=None, description="", evidence_action=None, path_filter=None):
+    def __init__(
+        self,
+        case=None,
+        path=None,
+        description="",
+        evidence_action=None,
+        path_filter=None,
+    ):
         self.case = case
         self.path = path
         self.description = description
@@ -79,7 +90,9 @@ class TestListEvidence:
         # Register a file first
         ev_file = case_dir / "evidence" / "sample.bin"
         ev_file.write_bytes(b"test data")
-        cmd_register_evidence(FakeArgs(path=str(ev_file), description="Test file"), identity)
+        cmd_register_evidence(
+            FakeArgs(path=str(ev_file), description="Test file"), identity
+        )
         capsys.readouterr()  # clear register output
 
         cmd_list_evidence(FakeArgs(), identity)
@@ -201,7 +214,9 @@ class TestEvidenceSubcommandDispatch:
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         ev_file = case_dir / "evidence" / "dispatch.bin"
         ev_file.write_bytes(b"dispatch test")
-        args = FakeArgs(evidence_action="register", path=str(ev_file), description="via dispatch")
+        args = FakeArgs(
+            evidence_action="register", path=str(ev_file), description="via dispatch"
+        )
         cmd_evidence(args, identity)
         output = capsys.readouterr().out
         assert "Registered" in output

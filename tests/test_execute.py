@@ -1,12 +1,11 @@
 """Tests for aiir exec command."""
 
 import json
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aiir_cli.commands.execute import cmd_exec, _next_evidence_id
+from aiir_cli.commands.execute import cmd_exec
 
 
 def _mock_tty(response="y\n"):
@@ -26,7 +25,13 @@ def case_dir(tmp_path, monkeypatch):
 
 @pytest.fixture
 def identity():
-    return {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
+    return {
+        "os_user": "testuser",
+        "examiner": "analyst1",
+        "examiner_source": "flag",
+        "analyst": "analyst1",
+        "analyst_source": "flag",
+    }
 
 
 class FakeArgs:
@@ -37,7 +42,9 @@ class FakeArgs:
 
 
 class TestExecEmptyCommand:
-    def test_empty_cmd_exits_with_guidance(self, case_dir, identity, monkeypatch, capsys):
+    def test_empty_cmd_exits_with_guidance(
+        self, case_dir, identity, monkeypatch, capsys
+    ):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=[], purpose="test")
         with pytest.raises(SystemExit):
@@ -46,7 +53,9 @@ class TestExecEmptyCommand:
         assert "No command provided" in captured.err
         assert "--" in captured.err
 
-    def test_only_separator_exits_with_guidance(self, case_dir, identity, monkeypatch, capsys):
+    def test_only_separator_exits_with_guidance(
+        self, case_dir, identity, monkeypatch, capsys
+    ):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["--"], purpose="test")
         with pytest.raises(SystemExit):
@@ -90,7 +99,7 @@ class TestExec:
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
             cmd_exec(args2, identity)
         log_file = case_dir / "audit" / "cli-exec.jsonl"
-        lines = [json.loads(l) for l in log_file.read_text().strip().split("\n")]
+        lines = [json.loads(line) for line in log_file.read_text().strip().split("\n")]
         assert len(lines) == 2
         assert lines[0]["evidence_id"].endswith("-001")
         assert lines[1]["evidence_id"].endswith("-002")

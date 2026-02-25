@@ -33,7 +33,14 @@ def cmd_report(args, identity: dict) -> None:
 
     # Detect multiple report flags — only one allowed at a time
     flags = []
-    for flag in ("full", "executive_summary", "report_timeline", "ioc", "report_findings", "status_brief"):
+    for flag in (
+        "full",
+        "executive_summary",
+        "report_timeline",
+        "ioc",
+        "report_findings",
+        "status_brief",
+    ):
         val = getattr(args, flag, None)
         if val:
             flags.append(flag)
@@ -54,7 +61,10 @@ def cmd_report(args, identity: dict) -> None:
     elif getattr(args, "status_brief", False):
         _report_status_brief(case_dir, args)
     else:
-        print("Usage: aiir report --full | --executive-summary | --timeline | --ioc | --findings <ids> | --status-brief", file=sys.stderr)
+        print(
+            "Usage: aiir report --full | --executive-summary | --timeline | --ioc | --findings <ids> | --status-brief",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -70,8 +80,14 @@ def _save_output(case_dir: Path, save_path: str | None, content: str) -> None:
     try:
         resolved = out.resolve()
         case_resolved = case_dir.resolve()
-        if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
-            print(f"Error: save path must be within the case directory: {case_dir}", file=sys.stderr)
+        if (
+            not str(resolved).startswith(str(case_resolved) + os.sep)
+            and resolved != case_resolved
+        ):
+            print(
+                f"Error: save path must be within the case directory: {case_dir}",
+                file=sys.stderr,
+            )
             sys.exit(1)
     except OSError as e:
         print(f"Failed to resolve save path: {e}", file=sys.stderr)
@@ -121,19 +137,22 @@ def _extract_all_iocs(findings: list[dict]) -> dict[str, list[str]]:
 
         # Text extraction from observation/interpretation
         text = f"{f.get('observation', '')} {f.get('interpretation', '')}"
-        ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b'
+        ipv4_pattern = r"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b"
         for ip in re.findall(ipv4_pattern, text):
             if not ip.startswith(("0.", "127.", "255.")):
                 collected.setdefault("IPv4", set()).add(ip)
-        for h in re.findall(r'\b[a-fA-F0-9]{64}\b', text):
+        for h in re.findall(r"\b[a-fA-F0-9]{64}\b", text):
             collected.setdefault("SHA256", set()).add(h.lower())
-        for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])', text):
+        for h in re.findall(r"(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])", text):
             collected.setdefault("SHA1", set()).add(h.lower())
-        for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])', text):
+        for h in re.findall(r"(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])", text):
             collected.setdefault("MD5", set()).add(h.lower())
-        for fp in re.findall(r'[A-Z]:\\(?:[^\s,;]+)', text):
+        for fp in re.findall(r"[A-Z]:\\(?:[^\s,;]+)", text):
             collected.setdefault("File", set()).add(fp)
-        for d in re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b', text):
+        for d in re.findall(
+            r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b",
+            text,
+        ):
             collected.setdefault("Domain", set()).add(d.lower())
 
     return {k: sorted(v) for k, v in sorted(collected.items())}
@@ -354,8 +373,12 @@ def _report_status_brief(case_dir: Path, args) -> None:
 
     lines = []
     lines.append(f"Case {meta.get('case_id', '?')}: {meta.get('status', '?')}")
-    lines.append(f"Findings: {len(findings)} ({', '.join(f'{s} {c}' for s, c in sorted(f_counts.items()))})")
-    lines.append(f"Timeline: {len(timeline)} ({', '.join(f'{s} {c}' for s, c in sorted(t_counts.items()))})")
+    lines.append(
+        f"Findings: {len(findings)} ({', '.join(f'{s} {c}' for s, c in sorted(f_counts.items()))})"
+    )
+    lines.append(
+        f"Timeline: {len(timeline)} ({', '.join(f'{s} {c}' for s, c in sorted(t_counts.items()))})"
+    )
     lines.append(f"Open TODOs: {open_todos}")
 
     output = "\n".join(lines)

@@ -21,11 +21,10 @@ from pathlib import Path
 
 from aiir_cli.case_io import (
     get_case_dir,
+    load_case_meta,
     load_findings,
     load_timeline,
     load_todos,
-    load_approval_log,
-    load_case_meta,
     verify_approval_integrity,
 )
 
@@ -41,7 +40,8 @@ def cmd_review(args, identity: dict) -> None:
     elif getattr(args, "timeline", False):
         detail = getattr(args, "detail", False)
         _show_timeline(
-            case_dir, detail,
+            case_dir,
+            detail,
             status=getattr(args, "status", None),
             start=getattr(args, "start", None),
             end=getattr(args, "end", None),
@@ -81,7 +81,9 @@ def _show_summary(case_dir: Path) -> None:
     draft_f = sum(1 for f in findings if f.get("status") == "DRAFT")
     approved_f = sum(1 for f in findings if f.get("status") == "APPROVED")
     rejected_f = sum(1 for f in findings if f.get("status") == "REJECTED")
-    print(f"Findings: {len(findings)} total ({draft_f} draft, {approved_f} approved, {rejected_f} rejected)")
+    print(
+        f"Findings: {len(findings)} total ({draft_f} draft, {approved_f} approved, {rejected_f} rejected)"
+    )
 
     draft_t = sum(1 for t in timeline if t.get("status") == "DRAFT")
     approved_t = sum(1 for t in timeline if t.get("status") == "APPROVED")
@@ -275,24 +277,26 @@ def _extract_iocs_from_findings(findings: list[dict]) -> dict[str, set[str]]:
 
 def _extract_text_iocs(text: str, collected: dict[str, set[str]]) -> None:
     """Extract common IOC patterns from free text."""
-    ipv4_pattern = r'\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b'
+    ipv4_pattern = r"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\b"
     for ip in re.findall(ipv4_pattern, text):
         if not ip.startswith(("0.", "127.", "255.")):
             collected.setdefault("IPv4", set()).add(ip)
 
-    for h in re.findall(r'\b[a-fA-F0-9]{64}\b', text):
+    for h in re.findall(r"\b[a-fA-F0-9]{64}\b", text):
         collected.setdefault("SHA256", set()).add(h.lower())
 
-    for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])', text):
+    for h in re.findall(r"(?<![a-fA-F0-9])[a-fA-F0-9]{40}(?![a-fA-F0-9])", text):
         collected.setdefault("SHA1", set()).add(h.lower())
 
-    for h in re.findall(r'(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])', text):
+    for h in re.findall(r"(?<![a-fA-F0-9])[a-fA-F0-9]{32}(?![a-fA-F0-9])", text):
         collected.setdefault("MD5", set()).add(h.lower())
 
-    for fp in re.findall(r'[A-Z]:\\(?:[^\s,;]+)', text):
+    for fp in re.findall(r"[A-Z]:\\(?:[^\s,;]+)", text):
         collected.setdefault("File", set()).add(fp)
 
-    for d in re.findall(r'\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b', text):
+    for d in re.findall(
+        r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|net|org|io|ru|cn|info|biz|xyz|top|cc|tk)\b", text
+    ):
         collected.setdefault("Domain", set()).add(d.lower())
 
 
@@ -360,7 +364,9 @@ def _show_evidence(case_dir: Path) -> None:
         print(f"\n  {e.get('path', '?')}")
         print(f"    SHA256: {e.get('sha256', '?')}")
         print(f"    Description: {e.get('description', '')}")
-        print(f"    Registered: {e.get('registered_at', '?')} by {e.get('registered_by', '?')}")
+        print(
+            f"    Registered: {e.get('registered_at', '?')} by {e.get('registered_by', '?')}"
+        )
 
     # Show access log if exists
     access_log = case_dir / "evidence_access.jsonl"
@@ -377,11 +383,15 @@ def _show_evidence(case_dir: Path) -> None:
                     try:
                         entry = json.loads(line)
                     except json.JSONDecodeError:
-                        print(f"  Warning: skipping corrupt log line", file=sys.stderr)
+                        print("  Warning: skipping corrupt log line", file=sys.stderr)
                         continue
-                    print(f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}")
+                    print(
+                        f"  {entry.get('ts', '?')} | {entry.get('action', '?')} | {entry.get('path', '?')} | {entry.get('examiner', '?')}"
+                    )
         except OSError as e:
-            print(f"  Warning: could not read evidence access log: {e}", file=sys.stderr)
+            print(
+                f"  Warning: could not read evidence access log: {e}", file=sys.stderr
+            )
 
 
 def _show_audit(case_dir: Path, limit: int) -> None:
@@ -401,7 +411,10 @@ def _show_audit(case_dir: Path, limit: int) -> None:
                         try:
                             entries.append(json.loads(line))
                         except json.JSONDecodeError:
-                            print(f"  Warning: skipping corrupt audit line in {jsonl_file.name}", file=sys.stderr)
+                            print(
+                                f"  Warning: skipping corrupt audit line in {jsonl_file.name}",
+                                file=sys.stderr,
+                            )
             except OSError as e:
                 print(f"  Warning: could not read {jsonl_file}: {e}", file=sys.stderr)
                 continue
@@ -418,7 +431,9 @@ def _show_audit(case_dir: Path, limit: int) -> None:
                     try:
                         entry = json.loads(line)
                     except json.JSONDecodeError:
-                        print(f"  Warning: skipping corrupt approval line", file=sys.stderr)
+                        print(
+                            "  Warning: skipping corrupt approval line", file=sys.stderr
+                        )
                         continue
                     entry["tool"] = "approval"
                     entry["mcp"] = "aiir-cli"

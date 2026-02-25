@@ -63,7 +63,7 @@ def _todo_add(case_dir, args, identity: dict) -> None:
         tid = t.get("todo_id", "")
         if tid.startswith(prefix):
             try:
-                seq = int(tid[len(prefix):])
+                seq = int(tid[len(prefix) :])
                 max_seq = max(max_seq, seq)
             except ValueError:
                 pass
@@ -116,11 +116,13 @@ def _todo_update(case_dir, args, identity: dict) -> None:
         if t["todo_id"] == args.todo_id:
             changed = []
             if getattr(args, "note", None):
-                t.setdefault("notes", []).append({
-                    "note": args.note,
-                    "by": identity["examiner"],
-                    "at": datetime.now(timezone.utc).isoformat(),
-                })
+                t.setdefault("notes", []).append(
+                    {
+                        "note": args.note,
+                        "by": identity["examiner"],
+                        "at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
                 changed.append("note added")
             if getattr(args, "assignee", None):
                 t["assignee"] = args.assignee
@@ -129,7 +131,10 @@ def _todo_update(case_dir, args, identity: dict) -> None:
                 t["priority"] = args.priority
                 changed.append(f"priority={args.priority}")
             if not changed:
-                print("Nothing to update. Use --note, --assignee, or --priority.", file=sys.stderr)
+                print(
+                    "Nothing to update. Use --note, --assignee, or --priority.",
+                    file=sys.stderr,
+                )
                 return
             save_todos(case_dir, todos)
             print(f"Updated {args.todo_id}: {', '.join(changed)}")

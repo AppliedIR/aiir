@@ -71,7 +71,10 @@ def _load_audit_entries(case_dir: Path) -> list[dict]:
             pass
 
     if corrupt_lines:
-        print(f"  Warning: {corrupt_lines} corrupt JSONL line(s) skipped in audit trail", file=sys.stderr)
+        print(
+            f"  Warning: {corrupt_lines} corrupt JSONL line(s) skipped in audit trail",
+            file=sys.stderr,
+        )
 
     entries.sort(key=lambda e: e.get("ts", ""))
     return entries

@@ -15,7 +15,6 @@ Interactive review options per item:
 
 from __future__ import annotations
 
-import json
 import os
 import subprocess
 import sys
@@ -50,16 +49,28 @@ def cmd_approve(args, identity: dict) -> None:
         note = getattr(args, "note", None)
         edit = getattr(args, "edit", False)
         interpretation = getattr(args, "interpretation", None)
-        _approve_specific(case_dir, args.ids, identity, config_path,
-                          note=note, edit=edit, interpretation=interpretation)
+        _approve_specific(
+            case_dir,
+            args.ids,
+            identity,
+            config_path,
+            note=note,
+            edit=edit,
+            interpretation=interpretation,
+        )
     else:
         # Interactive review mode
         by_filter = getattr(args, "by", None)
         findings_only = getattr(args, "findings_only", False)
         timeline_only = getattr(args, "timeline_only", False)
-        _interactive_review(case_dir, identity, config_path,
-                            by_filter=by_filter, findings_only=findings_only,
-                            timeline_only=timeline_only)
+        _interactive_review(
+            case_dir,
+            identity,
+            config_path,
+            by_filter=by_filter,
+            findings_only=findings_only,
+            timeline_only=timeline_only,
+        )
 
 
 def _approve_specific(
@@ -131,8 +142,12 @@ def _interactive_review(
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)
 
-    drafts = [] if timeline_only else [f for f in findings if f.get("status") == "DRAFT"]
-    draft_events = [] if findings_only else [t for t in timeline if t.get("status") == "DRAFT"]
+    drafts = (
+        [] if timeline_only else [f for f in findings if f.get("status") == "DRAFT"]
+    )
+    draft_events = (
+        [] if findings_only else [t for t in timeline if t.get("status") == "DRAFT"]
+    )
     all_items = drafts + draft_events
 
     # Filter by creator
@@ -158,12 +173,12 @@ def _interactive_review(
 
         if choice == "approve":
             dispositions[item["id"]] = ("approve", None)
-            print(f"  -> APPROVE")
+            print("  -> APPROVE")
 
         elif choice == "edit":
             _apply_edit(item, identity)
             dispositions[item["id"]] = ("approve", "edited")
-            print(f"  -> APPROVE (with edits)")
+            print("  -> APPROVE (with edits)")
 
         elif choice == "note":
             try:
@@ -173,7 +188,7 @@ def _interactive_review(
             if note_text:
                 _apply_note(item, note_text, identity)
             dispositions[item["id"]] = ("approve", "noted")
-            print(f"  -> APPROVE (with note)")
+            print("  -> APPROVE (with note)")
 
         elif choice == "reject":
             try:
@@ -181,7 +196,7 @@ def _interactive_review(
             except EOFError:
                 reason = ""
             dispositions[item["id"]] = ("reject", reason)
-            print(f"  -> REJECT")
+            print("  -> REJECT")
 
         elif choice == "todo":
             try:
@@ -193,18 +208,20 @@ def _interactive_review(
                 assignee = ""
                 priority = "medium"
             if desc:
-                todos_to_create.append({
-                    "description": desc,
-                    "assignee": assignee,
-                    "priority": priority,
-                    "related_findings": [item["id"]],
-                })
+                todos_to_create.append(
+                    {
+                        "description": desc,
+                        "assignee": assignee,
+                        "priority": priority,
+                        "related_findings": [item["id"]],
+                    }
+                )
             dispositions[item["id"]] = ("skip", None)
-            print(f"  -> skip (TODO created)")
+            print("  -> skip (TODO created)")
 
         elif choice == "skip":
             dispositions[item["id"]] = ("skip", None)
-            print(f"  -> skip (remains DRAFT)")
+            print("  -> skip (remains DRAFT)")
 
         elif choice == "quit":
             print("  Stopping review.")
@@ -216,8 +233,10 @@ def _interactive_review(
     skipped = {k for k, v in dispositions.items() if v[0] == "skip"}
 
     print(f"\n{'=' * 60}")
-    print(f"  Summary: {len(approvals)} approve, {len(rejections)} reject, "
-          f"{len(skipped)} skip, {len(todos_to_create)} TODO(s) created")
+    print(
+        f"  Summary: {len(approvals)} approve, {len(rejections)} reject, "
+        f"{len(skipped)} skip, {len(todos_to_create)} TODO(s) created"
+    )
     print(f"{'=' * 60}")
 
     if not approvals and not rejections:
@@ -272,9 +291,11 @@ def _prompt_choice() -> str:
     """Prompt for per-item action."""
     while True:
         try:
-            response = input(
-                "  [a]pprove  [e]dit  [n]ote  [r]eject  [t]odo  [s]kip  [q]uit: "
-            ).strip().lower()
+            response = (
+                input("  [a]pprove  [e]dit  [n]ote  [r]eject  [t]odo  [s]kip  [q]uit: ")
+                .strip()
+                .lower()
+            )
         except EOFError:
             return "skip"
         if response in ("", "a"):
@@ -302,8 +323,14 @@ def _apply_edit(item: dict, identity: dict) -> None:
     editable = {}
     if "title" in item:
         # Finding
-        for key in ("title", "observation", "interpretation", "confidence",
-                     "confidence_justification", "type"):
+        for key in (
+            "title",
+            "observation",
+            "interpretation",
+            "confidence",
+            "confidence_justification",
+            "type",
+        ):
             if key in item:
                 editable[key] = item[key]
     else:
@@ -399,11 +426,13 @@ def _apply_field_override(item: dict, field: str, value: str, identity: dict) ->
 def _apply_note(item: dict, note: str, identity: dict) -> None:
     """Add an examiner note to the item."""
     now = datetime.now(timezone.utc).isoformat()
-    item.setdefault("examiner_notes", []).append({
-        "note": note,
-        "by": identity["examiner"],
-        "at": now,
-    })
+    item.setdefault("examiner_notes", []).append(
+        {
+            "note": note,
+            "by": identity["examiner"],
+            "at": now,
+        }
+    )
 
 
 def _create_todos(case_dir: Path, todos_to_create: list[dict], identity: dict) -> None:
@@ -418,7 +447,7 @@ def _create_todos(case_dir: Path, todos_to_create: list[dict], identity: dict) -
             tid = t.get("todo_id", "")
             if tid.startswith(prefix):
                 try:
-                    max_num = max(max_num, int(tid[len(prefix):]))
+                    max_num = max(max_num, int(tid[len(prefix) :]))
                 except ValueError:
                     pass
         todo_id = f"TODO-{examiner}-{max_num + 1:03d}"
@@ -441,7 +470,6 @@ def _create_todos(case_dir: Path, todos_to_create: list[dict], identity: dict) -
 
 def _display_item(item: dict) -> None:
     """Display a finding or timeline event."""
-    status = item.get("status", "?")
     created_by = item.get("created_by", "")
     examiner = item.get("examiner", "")
     print(f"\n{'─' * 60}")

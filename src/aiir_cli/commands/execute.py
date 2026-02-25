@@ -26,7 +26,10 @@ def cmd_exec(args, identity: dict) -> None:
     case_dir = get_case_dir(getattr(args, "case", None))
 
     if not args.cmd:
-        print("No command provided. Usage: aiir exec --purpose \"reason\" -- <command> [args...]", file=sys.stderr)
+        print(
+            'No command provided. Usage: aiir exec --purpose "reason" -- <command> [args...]',
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Strip leading '--' if present
@@ -87,8 +90,17 @@ def cmd_exec(args, identity: dict) -> None:
     print(f"\nExit code: {exit_code}")
 
     # Write audit entry
-    _log_exec(case_dir, command_str, purpose, exit_code, stdout, stderr,
-              examiner, evidence_id, elapsed_ms)
+    _log_exec(
+        case_dir,
+        command_str,
+        purpose,
+        exit_code,
+        stdout,
+        stderr,
+        examiner,
+        evidence_id,
+        elapsed_ms,
+    )
     print(f"Evidence ID: {evidence_id}")
 
 
@@ -111,7 +123,7 @@ def _next_evidence_id(case_dir: Path, examiner: str) -> str:
                         eid = entry.get("evidence_id", "")
                         if eid.startswith(pattern):
                             try:
-                                seq = int(eid[len(pattern):])
+                                seq = int(eid[len(pattern) :])
                                 max_seq = max(max_seq, seq)
                             except ValueError:
                                 pass
@@ -119,13 +131,22 @@ def _next_evidence_id(case_dir: Path, examiner: str) -> str:
                         continue
         except OSError as e:
             import logging
+
             logging.debug("Could not read audit log for sequence: %s", e)
     return f"{_EVIDENCE_PREFIX}-{examiner}-{today}-{max_seq + 1:03d}"
 
 
-def _log_exec(case_dir: Path, command: str, purpose: str, exit_code: int,
-              stdout: str, stderr: str, examiner: str,
-              evidence_id: str, elapsed_ms: float) -> None:
+def _log_exec(
+    case_dir: Path,
+    command: str,
+    purpose: str,
+    exit_code: int,
+    stdout: str,
+    stderr: str,
+    examiner: str,
+    evidence_id: str,
+    elapsed_ms: float,
+) -> None:
     """Write execution record to audit trail using canonical schema."""
     audit_dir = case_dir / "audit"
     audit_dir.mkdir(parents=True, exist_ok=True)

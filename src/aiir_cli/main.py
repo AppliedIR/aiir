@@ -13,21 +13,26 @@ import argparse
 import sys
 
 from aiir_cli import __version__
-from aiir_cli.identity import get_examiner_identity, warn_if_unconfigured
 from aiir_cli.commands.approve import cmd_approve
-from aiir_cli.commands.reject import cmd_reject
-from aiir_cli.commands.review import cmd_review
-from aiir_cli.commands.execute import cmd_exec
-from aiir_cli.commands.evidence import cmd_evidence, cmd_lock_evidence, cmd_unlock_evidence, cmd_register_evidence
+from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.config import cmd_config
-from aiir_cli.commands.todo import cmd_todo
+from aiir_cli.commands.evidence import (
+    cmd_evidence,
+    cmd_lock_evidence,
+    cmd_register_evidence,
+    cmd_unlock_evidence,
+)
+from aiir_cli.commands.execute import cmd_exec
+from aiir_cli.commands.join import cmd_join
+from aiir_cli.commands.migrate import cmd_migrate
+from aiir_cli.commands.reject import cmd_reject
+from aiir_cli.commands.report import cmd_report
+from aiir_cli.commands.review import cmd_review
+from aiir_cli.commands.service import cmd_service
 from aiir_cli.commands.setup import cmd_setup
 from aiir_cli.commands.sync import cmd_export, cmd_merge
-from aiir_cli.commands.migrate import cmd_migrate
-from aiir_cli.commands.report import cmd_report
-from aiir_cli.commands.audit_cmd import cmd_audit
-from aiir_cli.commands.service import cmd_service
-from aiir_cli.commands.join import cmd_join, cmd_setup_join_code
+from aiir_cli.commands.todo import cmd_todo
+from aiir_cli.identity import get_examiner_identity, warn_if_unconfigured
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,29 +40,57 @@ def build_parser() -> argparse.ArgumentParser:
         prog="aiir",
         description="Applied IR — forensic investigation CLI",
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    parser.add_argument(
+        "--version", action="version", version=f"%(prog)s {__version__}"
+    )
     parser.add_argument("--case", help="Case ID (overrides active case)")
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
 
     # approve
-    p_approve = sub.add_parser("approve", help="Approve staged findings/timeline events")
-    p_approve.add_argument("ids", nargs="*", help="Finding/event IDs to approve (omit for interactive review)")
-    p_approve.add_argument("--examiner", dest="examiner_override", help="Override examiner identity")
-    p_approve.add_argument("--analyst", dest="examiner_override", help="(deprecated, use --examiner)")
-    p_approve.add_argument("--note", help="Add examiner note when approving specific IDs")
-    p_approve.add_argument("--edit", action="store_true", help="Open in $EDITOR before approving")
+    p_approve = sub.add_parser(
+        "approve", help="Approve staged findings/timeline events"
+    )
+    p_approve.add_argument(
+        "ids",
+        nargs="*",
+        help="Finding/event IDs to approve (omit for interactive review)",
+    )
+    p_approve.add_argument(
+        "--examiner", dest="examiner_override", help="Override examiner identity"
+    )
+    p_approve.add_argument(
+        "--analyst", dest="examiner_override", help="(deprecated, use --examiner)"
+    )
+    p_approve.add_argument(
+        "--note", help="Add examiner note when approving specific IDs"
+    )
+    p_approve.add_argument(
+        "--edit", action="store_true", help="Open in $EDITOR before approving"
+    )
     p_approve.add_argument("--interpretation", help="Override interpretation field")
-    p_approve.add_argument("--by", help="Filter items by creator examiner (interactive mode)")
-    p_approve.add_argument("--findings-only", action="store_true", help="Review only findings")
-    p_approve.add_argument("--timeline-only", action="store_true", help="Review only timeline events")
+    p_approve.add_argument(
+        "--by", help="Filter items by creator examiner (interactive mode)"
+    )
+    p_approve.add_argument(
+        "--findings-only", action="store_true", help="Review only findings"
+    )
+    p_approve.add_argument(
+        "--timeline-only", action="store_true", help="Review only timeline events"
+    )
 
     # reject
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
     p_reject.add_argument("ids", nargs="+", help="Finding/event IDs to reject")
-    p_reject.add_argument("--reason", default="", help="Reason for rejection (optional)")
-    p_reject.add_argument("--examiner", dest="examiner_override", help="Override examiner identity")
-    p_reject.add_argument("--analyst", dest="examiner_override", help="(deprecated, use --examiner)")
+    p_reject.add_argument(
+        "--reason", default="", help="Reason for rejection (optional)"
+    )
+    p_reject.add_argument(
+        "--examiner", dest="examiner_override", help="Override examiner identity"
+    )
+    p_reject.add_argument(
+        "--analyst", dest="examiner_override", help="(deprecated, use --examiner)"
+    )
 
     # case (init, activate, close, migrate)
     p_case = sub.add_parser("case", help="Case management")
@@ -67,7 +100,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_case_init.add_argument("name", help="Case name")
     p_case_init.add_argument("--description", default="", help="Case description")
 
-    p_case_activate = case_sub.add_parser("activate", help="Set active case for session")
+    p_case_activate = case_sub.add_parser(
+        "activate", help="Set active case for session"
+    )
     p_case_activate.add_argument("case_id", help="Case ID to activate")
 
     p_case_close = case_sub.add_parser("close", help="Close a case")
@@ -80,23 +115,49 @@ def build_parser() -> argparse.ArgumentParser:
     p_case_reopen = case_sub.add_parser("reopen", help="Reopen a closed case")
     p_case_reopen.add_argument("case_id", help="Case ID to reopen")
 
-    p_case_migrate = case_sub.add_parser("migrate", help="Migrate case from examiners/ to flat layout")
+    p_case_migrate = case_sub.add_parser(
+        "migrate", help="Migrate case from examiners/ to flat layout"
+    )
     p_case_migrate.add_argument("--examiner", help="Primary examiner slug")
-    p_case_migrate.add_argument("--import-all", action="store_true", help="Re-ID and merge all examiners' data")
+    p_case_migrate.add_argument(
+        "--import-all", action="store_true", help="Re-ID and merge all examiners' data"
+    )
 
     # review
     p_review = sub.add_parser("review", help="Review case status and audit trail")
     p_review.add_argument("--audit", action="store_true", help="Show audit log")
-    p_review.add_argument("--evidence", action="store_true", help="Show evidence integrity")
-    p_review.add_argument("--findings", action="store_true", help="Show findings summary table")
-    p_review.add_argument("--detail", action="store_true", help="Show full detail (with --findings or --timeline)")
-    p_review.add_argument("--verify", action="store_true", help="Cross-check findings against approval records")
-    p_review.add_argument("--iocs", action="store_true", help="Extract IOCs from findings grouped by status")
-    p_review.add_argument("--timeline", action="store_true", help="Show timeline events")
+    p_review.add_argument(
+        "--evidence", action="store_true", help="Show evidence integrity"
+    )
+    p_review.add_argument(
+        "--findings", action="store_true", help="Show findings summary table"
+    )
+    p_review.add_argument(
+        "--detail",
+        action="store_true",
+        help="Show full detail (with --findings or --timeline)",
+    )
+    p_review.add_argument(
+        "--verify",
+        action="store_true",
+        help="Cross-check findings against approval records",
+    )
+    p_review.add_argument(
+        "--iocs",
+        action="store_true",
+        help="Extract IOCs from findings grouped by status",
+    )
+    p_review.add_argument(
+        "--timeline", action="store_true", help="Show timeline events"
+    )
     p_review.add_argument("--todos", action="store_true", help="Show TODO items")
-    p_review.add_argument("--open", action="store_true", help="Show only open TODOs (with --todos)")
+    p_review.add_argument(
+        "--open", action="store_true", help="Show only open TODOs (with --todos)"
+    )
     p_review.add_argument("--status", help="Filter by status (DRAFT/APPROVED/REJECTED)")
-    p_review.add_argument("--start", help="Start date filter (ISO format, e.g. 2026-01-01)")
+    p_review.add_argument(
+        "--start", help="Start date filter (ISO format, e.g. 2026-01-01)"
+    )
     p_review.add_argument("--end", help="End date filter (ISO format, e.g. 2026-12-31)")
     p_review.add_argument("--type", help="Filter by event type (with --timeline)")
     p_review.add_argument("--limit", type=int, default=50, help="Limit entries shown")
@@ -104,28 +165,40 @@ def build_parser() -> argparse.ArgumentParser:
     # exec
     p_exec = sub.add_parser("exec", help="Execute forensic command with audit trail")
     p_exec.add_argument("--purpose", required=True, help="Purpose of command execution")
-    p_exec.add_argument("cmd", nargs=argparse.REMAINDER, help="Command to execute (after --)")
+    p_exec.add_argument(
+        "cmd", nargs=argparse.REMAINDER, help="Command to execute (after --)"
+    )
 
     # lock-evidence / unlock-evidence
-    sub.add_parser("lock-evidence", help="Set evidence directory to read-only (bind mount)")
+    sub.add_parser(
+        "lock-evidence", help="Set evidence directory to read-only (bind mount)"
+    )
     sub.add_parser("unlock-evidence", help="Unlock evidence directory for new files")
 
     # register-evidence
-    p_reg = sub.add_parser("register-evidence", help="Register evidence file (hash + chmod 444)")
+    p_reg = sub.add_parser(
+        "register-evidence", help="Register evidence file (hash + chmod 444)"
+    )
     p_reg.add_argument("path", help="Path to evidence file")
     p_reg.add_argument("--description", default="", help="Description of evidence")
 
     # todo
     p_todo = sub.add_parser("todo", help="Manage investigation TODOs")
     todo_sub = p_todo.add_subparsers(dest="todo_action", help="TODO actions")
-    p_todo.add_argument("--all", action="store_true", help="Show all TODOs including completed")
+    p_todo.add_argument(
+        "--all", action="store_true", help="Show all TODOs including completed"
+    )
     p_todo.add_argument("--assignee", default="", help="Filter by assignee")
 
     p_todo_add = todo_sub.add_parser("add", help="Add a new TODO")
     p_todo_add.add_argument("description", help="TODO description")
     p_todo_add.add_argument("--assignee", default="", help="Assign to analyst")
-    p_todo_add.add_argument("--priority", choices=["high", "medium", "low"], default="medium")
-    p_todo_add.add_argument("--finding", action="append", help="Related finding ID (repeatable)")
+    p_todo_add.add_argument(
+        "--priority", choices=["high", "medium", "low"], default="medium"
+    )
+    p_todo_add.add_argument(
+        "--finding", action="append", help="Related finding ID (repeatable)"
+    )
 
     p_todo_complete = todo_sub.add_parser("complete", help="Mark TODO as completed")
     p_todo_complete.add_argument("todo_id", help="TODO ID")
@@ -134,78 +207,159 @@ def build_parser() -> argparse.ArgumentParser:
     p_todo_update.add_argument("todo_id", help="TODO ID")
     p_todo_update.add_argument("--note", help="Add a note")
     p_todo_update.add_argument("--assignee", help="Reassign")
-    p_todo_update.add_argument("--priority", choices=["high", "medium", "low"], help="Change priority")
+    p_todo_update.add_argument(
+        "--priority", choices=["high", "medium", "low"], help="Change priority"
+    )
 
     # join (top-level command for remote machines)
     p_join = sub.add_parser("join", help="Join a SIFT gateway from a remote machine")
-    p_join.add_argument("--sift", required=True, help="SIFT gateway address (e.g., 10.0.0.5 or 10.0.0.5:4508)")
-    p_join.add_argument("--code", required=True, help="Join code from 'aiir setup join-code'")
-    p_join.add_argument("--wintools", action="store_true", help="This is a wintools machine")
+    p_join.add_argument(
+        "--sift",
+        required=True,
+        help="SIFT gateway address (e.g., 10.0.0.5 or 10.0.0.5:4508)",
+    )
+    p_join.add_argument(
+        "--code", required=True, help="Join code from 'aiir setup join-code'"
+    )
+    p_join.add_argument(
+        "--wintools", action="store_true", help="This is a wintools machine"
+    )
     p_join.add_argument("--ca-cert", help="Path to CA certificate for TLS verification")
-    p_join.add_argument("--skip-setup", action="store_true", help="Skip client config generation")
+    p_join.add_argument(
+        "--skip-setup", action="store_true", help="Skip client config generation"
+    )
 
     # setup
     p_setup = sub.add_parser("setup", help="Interactive setup for all MCP servers")
-    p_setup.add_argument("--force-reprompt", action="store_true", help="Force re-prompting for all values")
-    p_setup.add_argument("--non-interactive", action="store_true", help="Skip interactive prompts")
+    p_setup.add_argument(
+        "--force-reprompt",
+        action="store_true",
+        help="Force re-prompting for all values",
+    )
+    p_setup.add_argument(
+        "--non-interactive", action="store_true", help="Skip interactive prompts"
+    )
     setup_sub = p_setup.add_subparsers(dest="setup_action")
     setup_sub.add_parser("test", help="Test connectivity to all detected MCP servers")
 
-    p_client = setup_sub.add_parser("client", help="Configure LLM client for AIIR endpoints")
-    p_client.add_argument("--client", choices=["claude-code", "claude-desktop", "cursor", "librechat"], help="Target LLM client")
-    p_client.add_argument("--sift", help="SIFT gateway URL (e.g., http://127.0.0.1:4508)")
-    p_client.add_argument("--windows", help="Windows wintools-mcp endpoint (e.g., 192.168.1.20:4624)")
+    p_client = setup_sub.add_parser(
+        "client", help="Configure LLM client for AIIR endpoints"
+    )
+    p_client.add_argument(
+        "--client",
+        choices=["claude-code", "claude-desktop", "cursor", "librechat"],
+        help="Target LLM client",
+    )
+    p_client.add_argument(
+        "--sift", help="SIFT gateway URL (e.g., http://127.0.0.1:4508)"
+    )
+    p_client.add_argument(
+        "--windows", help="Windows wintools-mcp endpoint (e.g., 192.168.1.20:4624)"
+    )
     p_client.add_argument("--remnux", help="REMnux endpoint (e.g., 192.168.1.30:3000)")
     p_client.add_argument("--examiner", help="Examiner identity")
-    p_client.add_argument("--no-zeltser", action="store_true", help="Exclude Zeltser IR Writing MCP")
-    p_client.add_argument("--no-mslearn", action="store_true", help="Exclude Microsoft Learn MCP")
-    p_client.add_argument("-y", "--yes", action="store_true", help="Accept defaults, no prompts")
-    p_client.add_argument("--remote", action="store_true", help="Remote setup mode (gateway on another host)")
+    p_client.add_argument(
+        "--no-zeltser", action="store_true", help="Exclude Zeltser IR Writing MCP"
+    )
+    p_client.add_argument(
+        "--no-mslearn", action="store_true", help="Exclude Microsoft Learn MCP"
+    )
+    p_client.add_argument(
+        "-y", "--yes", action="store_true", help="Accept defaults, no prompts"
+    )
+    p_client.add_argument(
+        "--remote",
+        action="store_true",
+        help="Remote setup mode (gateway on another host)",
+    )
     p_client.add_argument("--token", help="Bearer token for gateway authentication")
 
-    p_join_code = setup_sub.add_parser("join-code", help="Generate a join code for remote machines")
+    p_join_code = setup_sub.add_parser(
+        "join-code", help="Generate a join code for remote machines"
+    )
     p_join_code.add_argument("--expires", type=int, help="Expiry in hours (default: 2)")
 
     # export
     p_export = sub.add_parser("export", help="Export findings + timeline as JSON")
     p_export.add_argument("--file", required=True, help="Output file path")
-    p_export.add_argument("--since", default="", help="Only export records modified after this ISO timestamp")
+    p_export.add_argument(
+        "--since",
+        default="",
+        help="Only export records modified after this ISO timestamp",
+    )
 
     # merge
-    p_merge = sub.add_parser("merge", help="Merge incoming JSON into local findings + timeline")
+    p_merge = sub.add_parser(
+        "merge", help="Merge incoming JSON into local findings + timeline"
+    )
     p_merge.add_argument("--file", required=True, help="Input file path")
 
     # config
     p_config = sub.add_parser("config", help="Configure AIIR settings")
     p_config.add_argument("--examiner", help="Set examiner identity")
-    p_config.add_argument("--analyst", dest="examiner", help="(deprecated, use --examiner)")
-    p_config.add_argument("--show", action="store_true", help="Show current configuration")
-    p_config.add_argument("--setup-pin", action="store_true", help="Set approval PIN for current examiner")
-    p_config.add_argument("--reset-pin", action="store_true", help="Reset approval PIN (requires current PIN)")
+    p_config.add_argument(
+        "--analyst", dest="examiner", help="(deprecated, use --examiner)"
+    )
+    p_config.add_argument(
+        "--show", action="store_true", help="Show current configuration"
+    )
+    p_config.add_argument(
+        "--setup-pin", action="store_true", help="Set approval PIN for current examiner"
+    )
+    p_config.add_argument(
+        "--reset-pin",
+        action="store_true",
+        help="Reset approval PIN (requires current PIN)",
+    )
 
     # report
     p_report = sub.add_parser("report", help="Generate case reports")
     p_report.add_argument("--full", action="store_true", help="Full case report (JSON)")
-    p_report.add_argument("--executive-summary", action="store_true", help="Executive summary")
-    p_report.add_argument("--timeline", dest="report_timeline", action="store_true", help="Timeline report")
-    p_report.add_argument("--from", dest="from_date", help="Start date filter (ISO format)")
+    p_report.add_argument(
+        "--executive-summary", action="store_true", help="Executive summary"
+    )
+    p_report.add_argument(
+        "--timeline",
+        dest="report_timeline",
+        action="store_true",
+        help="Timeline report",
+    )
+    p_report.add_argument(
+        "--from", dest="from_date", help="Start date filter (ISO format)"
+    )
     p_report.add_argument("--to", dest="to_date", help="End date filter (ISO format)")
-    p_report.add_argument("--ioc", action="store_true", help="IOC report from approved findings")
-    p_report.add_argument("--findings", dest="report_findings", help="Finding IDs (comma-separated)")
-    p_report.add_argument("--status-brief", action="store_true", help="Quick status counts")
-    p_report.add_argument("--save", help="Save output to file (relative paths use case_dir/reports/)")
+    p_report.add_argument(
+        "--ioc", action="store_true", help="IOC report from approved findings"
+    )
+    p_report.add_argument(
+        "--findings", dest="report_findings", help="Finding IDs (comma-separated)"
+    )
+    p_report.add_argument(
+        "--status-brief", action="store_true", help="Quick status counts"
+    )
+    p_report.add_argument(
+        "--save", help="Save output to file (relative paths use case_dir/reports/)"
+    )
 
     # evidence (subcommand group)
     p_evidence = sub.add_parser("evidence", help="Evidence management")
-    evidence_sub = p_evidence.add_subparsers(dest="evidence_action", help="Evidence actions")
+    evidence_sub = p_evidence.add_subparsers(
+        dest="evidence_action", help="Evidence actions"
+    )
 
-    p_ev_register = evidence_sub.add_parser("register", help="Register evidence file (hash + chmod 444)")
+    p_ev_register = evidence_sub.add_parser(
+        "register", help="Register evidence file (hash + chmod 444)"
+    )
     p_ev_register.add_argument("path", help="Path to evidence file")
-    p_ev_register.add_argument("--description", default="", help="Description of evidence")
+    p_ev_register.add_argument(
+        "--description", default="", help="Description of evidence"
+    )
 
     evidence_sub.add_parser("list", help="List registered evidence files")
 
-    evidence_sub.add_parser("verify", help="Re-hash registered evidence, report modifications")
+    evidence_sub.add_parser(
+        "verify", help="Re-hash registered evidence, report modifications"
+    )
 
     p_ev_log = evidence_sub.add_parser("log", help="Show evidence access log")
     p_ev_log.add_argument("--path", dest="path_filter", help="Filter by path substring")
@@ -218,7 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
     audit_sub = p_audit.add_subparsers(dest="audit_action", help="Audit actions")
 
     p_audit_log = audit_sub.add_parser("log", help="Show audit log entries")
-    p_audit_log.add_argument("--limit", type=int, default=50, help="Limit entries shown")
+    p_audit_log.add_argument(
+        "--limit", type=int, default=50, help="Limit entries shown"
+    )
     p_audit_log.add_argument("--mcp", help="Filter by MCP name")
     p_audit_log.add_argument("--tool", help="Filter by tool name")
 
@@ -233,16 +389,28 @@ def build_parser() -> argparse.ArgumentParser:
     service_sub.add_parser("status", help="Show status of all backend services")
 
     p_svc_start = service_sub.add_parser("start", help="Start a backend service")
-    p_svc_start.add_argument("backend_name", nargs="?", default=None,
-                             help="Backend name to start (omit for all)")
+    p_svc_start.add_argument(
+        "backend_name",
+        nargs="?",
+        default=None,
+        help="Backend name to start (omit for all)",
+    )
 
     p_svc_stop = service_sub.add_parser("stop", help="Stop a backend service")
-    p_svc_stop.add_argument("backend_name", nargs="?", default=None,
-                            help="Backend name to stop (omit for all)")
+    p_svc_stop.add_argument(
+        "backend_name",
+        nargs="?",
+        default=None,
+        help="Backend name to stop (omit for all)",
+    )
 
     p_svc_restart = service_sub.add_parser("restart", help="Restart a backend service")
-    p_svc_restart.add_argument("backend_name", nargs="?", default=None,
-                               help="Backend name to restart (omit for all)")
+    p_svc_restart.add_argument(
+        "backend_name",
+        nargs="?",
+        default=None,
+        help="Backend name to restart (omit for all)",
+    )
 
     return parser
 
@@ -256,7 +424,9 @@ def main() -> None:
         sys.exit(0)
 
     # Identity check on every command
-    flag_override = getattr(args, "examiner_override", None) or getattr(args, "analyst", None)
+    flag_override = getattr(args, "examiner_override", None) or getattr(
+        args, "analyst", None
+    )
     identity = get_examiner_identity(flag_override)
     warn_if_unconfigured(identity)
 
@@ -307,7 +477,10 @@ def _cmd_case(args, identity: dict) -> None:
     elif action == "list":
         _case_list(args, identity)
     else:
-        print("Usage: aiir case {init|activate|close|reopen|status|list|migrate}", file=sys.stderr)
+        print(
+            "Usage: aiir case {init|activate|close|reopen|status|list|migrate}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -326,6 +499,7 @@ def _case_status_data(case_dir) -> dict:
     from pathlib import Path
 
     import yaml
+
     from aiir_cli.case_io import load_findings, load_timeline, load_todos
 
     case_dir = Path(case_dir)
@@ -383,8 +557,12 @@ def _case_status(args, identity: dict) -> None:
     print(f"  Status:   {data['status']}")
     print(f"  Examiner: {data['examiner']}")
     print(f"  Path:     {data['path']}")
-    print(f"  Findings: {data['finding_count']} ({data['finding_draft']} draft, {data['finding_approved']} approved)")
-    print(f"  Timeline: {data['timeline_count']} ({data['timeline_draft']} draft, {data['timeline_approved']} approved)")
+    print(
+        f"  Findings: {data['finding_count']} ({data['finding_draft']} draft, {data['finding_approved']} approved)"
+    )
+    print(
+        f"  Timeline: {data['timeline_count']} ({data['timeline_draft']} draft, {data['timeline_approved']} approved)"
+    )
     print(f"  TODOs:    {data['todo_open']} open / {data['todo_total']} total")
 
     pending = data["finding_draft"] + data["timeline_draft"]
@@ -439,12 +617,14 @@ def _case_list_data(cases_dir=None) -> dict:
                 meta = yaml.safe_load(f) or {}
         except (OSError, yaml.YAMLError):
             meta = {}
-        cases.append({
-            "id": meta.get("case_id", entry.name),
-            "name": meta.get("name", ""),
-            "status": meta.get("status", "unknown"),
-            "active": entry.name == active_case_dir_name,
-        })
+        cases.append(
+            {
+                "id": meta.get("case_id", entry.name),
+                "name": meta.get("name", ""),
+                "status": meta.get("status", "unknown"),
+                "active": entry.name == active_case_dir_name,
+            }
+        )
 
     return {"cases": cases}
 
@@ -473,8 +653,9 @@ def _case_list(args, identity: dict) -> None:
         print(f"{c['id']:<25} {c['status']:<10} {c['name']}{marker}")
 
 
-def _case_init_data(name: str, examiner: str, description: str = "",
-                    cases_dir=None) -> dict:
+def _case_init_data(
+    name: str, examiner: str, description: str = "", cases_dir=None
+) -> dict:
     """Create a new case and return structured data.
 
     Args:
@@ -496,6 +677,7 @@ def _case_init_data(name: str, examiner: str, description: str = "",
     from pathlib import Path
 
     import yaml
+
     from aiir_cli.case_io import _atomic_write
 
     if cases_dir is None:
@@ -527,7 +709,9 @@ def _case_init_data(name: str, examiner: str, description: str = "",
         "created": ts.isoformat(),
     }
 
-    _atomic_write(case_dir / "CASE.yaml", yaml.dump(case_meta, default_flow_style=False))
+    _atomic_write(
+        case_dir / "CASE.yaml", yaml.dump(case_meta, default_flow_style=False)
+    )
 
     for fname in ("findings.json", "timeline.json", "todos.json"):
         with open(case_dir / fname, "w") as f:
@@ -577,8 +761,8 @@ def _case_init(args, identity: dict) -> None:
     print()
     print("Next steps:")
     print(f"  1. Copy evidence into: {data['case_dir']}/evidence/")
-    print(f"  2. Register each file:  aiir evidence register <file>")
-    print(f"  3. Connect your LLM — it will discover this case automatically")
+    print("  2. Register each file:  aiir evidence register <file>")
+    print("  3. Connect your LLM — it will discover this case automatically")
 
 
 def _case_activate_data(case_id: str, cases_dir=None) -> dict:
@@ -597,6 +781,7 @@ def _case_activate_data(case_id: str, cases_dir=None) -> dict:
     """
     import os
     from pathlib import Path
+
     from aiir_cli.case_io import _atomic_write
 
     if cases_dir is None:
@@ -641,6 +826,7 @@ def _case_close(args, identity: dict) -> None:
     from pathlib import Path
 
     import yaml
+
     from aiir_cli.case_io import _validate_case_id
 
     case_id = args.case_id
@@ -667,6 +853,7 @@ def _case_close(args, identity: dict) -> None:
         meta["close_summary"] = summary
 
     from aiir_cli.case_io import _atomic_write as _aw
+
     _aw(meta_file, yaml.dump(meta, default_flow_style=False))
 
     # Clear active case pointer if this was the active case
@@ -690,7 +877,8 @@ def _case_reopen(args, identity: dict) -> None:
     from pathlib import Path
 
     import yaml
-    from aiir_cli.case_io import _validate_case_id, _atomic_write
+
+    from aiir_cli.case_io import _atomic_write, _validate_case_id
 
     case_id = args.case_id
     _validate_case_id(case_id)
@@ -706,7 +894,9 @@ def _case_reopen(args, identity: dict) -> None:
         meta = yaml.safe_load(f) or {}
 
     if meta.get("status") != "closed":
-        print(f"Case {case_id} is not closed (status: {meta.get('status', 'unknown')}).")
+        print(
+            f"Case {case_id} is not closed (status: {meta.get('status', 'unknown')})."
+        )
         return
 
     meta["status"] = "open"

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import yaml
 
-_EXAMINER_RE = re.compile(r'^[a-z0-9][a-z0-9-]{0,19}$')
+_EXAMINER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
 
 
 def _validate_case_id(case_id: str) -> None:
@@ -25,7 +25,9 @@ def _validate_case_id(case_id: str) -> None:
         print("Case ID cannot be empty", file=sys.stderr)
         sys.exit(1)
     if ".." in case_id or "/" in case_id or "\\" in case_id:
-        print(f"Invalid case ID (path traversal characters): {case_id}", file=sys.stderr)
+        print(
+            f"Invalid case ID (path traversal characters): {case_id}", file=sys.stderr
+        )
         sys.exit(1)
 
 
@@ -105,6 +107,7 @@ def get_examiner(case_dir: Path | None = None) -> str:
             _validate_examiner(exam)
             return exam
     import getpass
+
     fallback = getpass.getuser().strip().lower()
     _validate_examiner(fallback)
     return fallback
@@ -123,6 +126,7 @@ def load_case_meta(case_dir: Path) -> dict:
 
 
 # --- Data I/O (case root) ---
+
 
 def load_findings(case_dir: Path) -> list[dict]:
     """Load findings from case root findings.json."""
@@ -186,6 +190,7 @@ def save_todos(case_dir: Path, todos: list[dict]) -> None:
 
 # --- Approval I/O ---
 
+
 def write_approval_log(
     case_dir: Path,
     item_id: str,
@@ -202,7 +207,9 @@ def write_approval_log(
         "action": action,
         "os_user": identity["os_user"],
         "examiner": identity.get("examiner", identity.get("analyst", "")),
-        "examiner_source": identity.get("examiner_source", identity.get("analyst_source", "")),
+        "examiner_source": identity.get(
+            "examiner_source", identity.get("analyst_source", "")
+        ),
         "mode": mode,
     }
     if reason:
@@ -234,13 +241,19 @@ def load_approval_log(case_dir: Path) -> list[dict]:
                 corrupt_lines += 1
                 continue
     if corrupt_lines:
-        print(f"Warning: {corrupt_lines} corrupt line(s) skipped in approvals.jsonl", file=sys.stderr)
+        print(
+            f"Warning: {corrupt_lines} corrupt line(s) skipped in approvals.jsonl",
+            file=sys.stderr,
+        )
     return entries
 
 
 # --- Item lookup ---
 
-def find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) -> dict | None:
+
+def find_draft_item(
+    item_id: str, findings: list[dict], timeline: list[dict]
+) -> dict | None:
     """Find a DRAFT item by ID in findings or timeline."""
     for f in findings:
         if f["id"] == item_id and f["status"] == "DRAFT":
@@ -254,9 +267,17 @@ def find_draft_item(item_id: str, findings: list[dict], timeline: list[dict]) ->
 # --- Content hashing ---
 
 _HASH_EXCLUDE_KEYS = {
-    "status", "approved_at", "approved_by", "rejected_at", "rejected_by",
-    "rejection_reason", "examiner_notes", "examiner_modifications",
-    "content_hash", "verification", "modified_at",
+    "status",
+    "approved_at",
+    "approved_by",
+    "rejected_at",
+    "rejected_by",
+    "rejection_reason",
+    "examiner_notes",
+    "examiner_modifications",
+    "content_hash",
+    "verification",
+    "modified_at",
 }
 
 
@@ -272,6 +293,7 @@ def compute_content_hash(item: dict) -> str:
 
 
 # --- Integrity verification ---
+
 
 def verify_approval_integrity(case_dir: Path) -> list[dict]:
     """Cross-reference findings against approvals.
@@ -319,6 +341,7 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
 
 # --- Export / Merge ---
 
+
 def export_bundle(case_dir: Path, since: str = "") -> dict:
     """Export findings + timeline as JSON for sharing."""
     meta = load_case_meta(case_dir)
@@ -326,8 +349,12 @@ def export_bundle(case_dir: Path, since: str = "") -> dict:
     timeline = load_timeline(case_dir)
 
     if since:
-        findings = [f for f in findings if f.get("modified_at", f.get("staged", "")) >= since]
-        timeline = [t for t in timeline if t.get("modified_at", t.get("staged", "")) >= since]
+        findings = [
+            f for f in findings if f.get("modified_at", f.get("staged", "")) >= since
+        ]
+        timeline = [
+            t for t in timeline if t.get("modified_at", t.get("staged", "")) >= since
+        ]
 
     return {
         "case_id": meta.get("case_id", ""),
@@ -371,7 +398,9 @@ def import_bundle(case_dir: Path, bundle: dict | list) -> dict:
     }
 
 
-def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: str) -> dict:
+def _merge_items(
+    case_dir: Path, filename: str, incoming: list[dict], id_field: str
+) -> dict:
     """Merge incoming items into a local JSON file using last-write-wins."""
     local_file = case_dir / filename
     local: list[dict] = []
@@ -388,7 +417,14 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
     protected = 0
 
     # Protected fields that cannot be smuggled via merge
-    _MERGE_PROTECTED_FIELDS = {"id", "status", "staged", "modified_at", "created_by", "examiner"}
+    _MERGE_PROTECTED_FIELDS = {
+        "id",
+        "status",
+        "staged",
+        "modified_at",
+        "created_by",
+        "examiner",
+    }
 
     for item in incoming:
         item_id = item.get(id_field, "")
@@ -421,4 +457,9 @@ def _merge_items(case_dir: Path, filename: str, incoming: list[dict], id_field: 
                 skipped += 1
 
     _atomic_write(local_file, json.dumps(local, indent=2, default=str))
-    return {"added": added, "updated": updated, "skipped": skipped, "protected": protected}
+    return {
+        "added": added,
+        "updated": updated,
+        "skipped": skipped,
+        "protected": protected,
+    }

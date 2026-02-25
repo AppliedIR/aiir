@@ -7,7 +7,7 @@ from pathlib import Path
 
 import yaml
 
-from aiir_cli.approval_auth import setup_pin, reset_pin
+from aiir_cli.approval_auth import reset_pin, setup_pin
 
 
 def cmd_config(args, identity: dict) -> None:
@@ -30,7 +30,9 @@ def cmd_config(args, identity: dict) -> None:
                 print(f"Failed to read configuration file: {e}", file=sys.stderr)
         else:
             print("No configuration file found.")
-            print(f"Current identity: {identity['examiner']} (source: {identity['examiner_source']})")
+            print(
+                f"Current identity: {identity['examiner']} (source: {identity['examiner_source']})"
+            )
         return
 
     examiner_val = getattr(args, "examiner", None)
@@ -38,7 +40,10 @@ def cmd_config(args, identity: dict) -> None:
         try:
             config_path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as e:
-            print(f"Failed to create config directory {config_path.parent}: {e}", file=sys.stderr)
+            print(
+                f"Failed to create config directory {config_path.parent}: {e}",
+                file=sys.stderr,
+            )
             return
 
         config = {}
@@ -47,10 +52,16 @@ def cmd_config(args, identity: dict) -> None:
                 with open(config_path) as f:
                     config = yaml.safe_load(f) or {}
             except yaml.YAMLError as e:
-                print(f"Warning: existing config is invalid YAML ({e}), overwriting.", file=sys.stderr)
+                print(
+                    f"Warning: existing config is invalid YAML ({e}), overwriting.",
+                    file=sys.stderr,
+                )
                 config = {}
             except OSError as e:
-                print(f"Warning: could not read existing config ({e}), creating new.", file=sys.stderr)
+                print(
+                    f"Warning: could not read existing config ({e}), creating new.",
+                    file=sys.stderr,
+                )
                 config = {}
 
         config["examiner"] = examiner_val
@@ -59,6 +70,7 @@ def cmd_config(args, identity: dict) -> None:
 
         try:
             from aiir_cli.case_io import _atomic_write
+
             _atomic_write(config_path, yaml.dump(config, default_flow_style=False))
         except (OSError, yaml.YAMLError) as e:
             print(f"Failed to write configuration: {e}", file=sys.stderr)
@@ -66,4 +78,6 @@ def cmd_config(args, identity: dict) -> None:
         print(f"Examiner identity set to: {examiner_val}")
         return
 
-    print("Use --examiner <name> to set identity, --show to view config, --setup-pin to configure PIN.")
+    print(
+        "Use --examiner <name> to set identity, --show to view config, --setup-pin to configure PIN."
+    )

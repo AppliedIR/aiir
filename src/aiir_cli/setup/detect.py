@@ -6,7 +6,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-
 # Known MCP server modules and their pip package names
 MCP_SERVERS = {
     "forensic-mcp": {"module": "forensic_mcp", "type": "stdio"},
@@ -18,7 +17,10 @@ MCP_SERVERS = {
 
 REMOTE_SERVERS = {
     "remnux-mcp": {"type": "http", "default_port": 8080},
-    "microsoft-learn": {"type": "http", "default_url": "https://learn.microsoft.com/api/mcp"},
+    "microsoft-learn": {
+        "type": "http",
+        "default_url": "https://learn.microsoft.com/api/mcp",
+    },
     "zeltser-ir-writing": {"type": "http", "default_url": "https://zeltser.com/mcp"},
 }
 
@@ -34,13 +36,15 @@ def detect_installed_mcps() -> list[dict]:
     for name, info in MCP_SERVERS.items():
         module = info["module"]
         available = _check_module(python_path, module)
-        results.append({
-            "name": name,
-            "module": module,
-            "type": info["type"],
-            "python_path": python_path,
-            "available": available,
-        })
+        results.append(
+            {
+                "name": name,
+                "module": module,
+                "type": info["type"],
+                "python_path": python_path,
+                "available": available,
+            }
+        )
 
     return results
 
@@ -56,14 +60,17 @@ def _check_module(python_path: str, module: str) -> bool:
         return result.returncode == 0
     except subprocess.TimeoutExpired:
         import logging
+
         logging.debug("Module check timed out: %s (via %s)", module, python_path)
         return False
     except FileNotFoundError:
         import logging
+
         logging.debug("Python not found at %s when checking %s", python_path, module)
         return False
     except OSError as e:
         import logging
+
         logging.debug("OS error checking module %s via %s: %s", module, python_path, e)
         return False
 
@@ -85,6 +92,7 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
         if manifest_path.is_file():
             try:
                 import json
+
                 manifest = json.loads(manifest_path.read_text())
                 venv_path = manifest.get("venv")
                 if venv_path:
@@ -93,12 +101,14 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
                         search_dirs.append(venv_parent)
             except Exception:
                 pass
-        search_dirs.extend([
-            Path.home() / ".aiir",
-            Path("/opt/aiir"),
-            Path.home() / "air-design",
-            Path.home() / "aiir",
-        ])
+        search_dirs.extend(
+            [
+                Path.home() / ".aiir",
+                Path("/opt/aiir"),
+                Path.home() / "air-design",
+                Path.home() / "aiir",
+            ]
+        )
 
     results = []
     for base_dir in search_dirs:
@@ -109,9 +119,13 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
         shared_python = None
         shared_path = None
         for candidate in [
-            base_dir / "venv" / "bin" / "python",            # ~/.aiir/venv/ (new installer)
-            base_dir / ".venv" / "bin" / "python",           # direct monorepo root
-            base_dir / "sift-mcp" / ".venv" / "bin" / "python",  # ~/aiir/sift-mcp/.venv/
+            base_dir / "venv" / "bin" / "python",  # ~/.aiir/venv/ (new installer)
+            base_dir / ".venv" / "bin" / "python",  # direct monorepo root
+            base_dir
+            / "sift-mcp"
+            / ".venv"
+            / "bin"
+            / "python",  # ~/aiir/sift-mcp/.venv/
         ]:
             if candidate.exists():
                 shared_python = candidate
@@ -122,12 +136,14 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
             for name, info in MCP_SERVERS.items():
                 available = _check_module(str(shared_python), info["module"])
                 if available:
-                    results.append({
-                        "name": name,
-                        "venv_path": str(shared_path),
-                        "python_path": str(shared_python),
-                        "available": True,
-                    })
+                    results.append(
+                        {
+                            "name": name,
+                            "venv_path": str(shared_path),
+                            "python_path": str(shared_python),
+                            "available": True,
+                        }
+                    )
             continue
 
         # Fallback: per-repo venvs (legacy layout)
@@ -135,11 +151,13 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
             venv_python = base_dir / name / ".venv" / "bin" / "python"
             if venv_python.exists():
                 available = _check_module(str(venv_python), info["module"])
-                results.append({
-                    "name": name,
-                    "venv_path": str(base_dir / name),
-                    "python_path": str(venv_python),
-                    "available": available,
-                })
+                results.append(
+                    {
+                        "name": name,
+                        "venv_path": str(base_dir / name),
+                        "python_path": str(venv_python),
+                        "available": available,
+                    }
+                )
 
     return results

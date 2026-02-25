@@ -1,20 +1,14 @@
 """Tests for aiir join and aiir setup join-code commands."""
 
-import json
-import os
 import sys
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-import pytest
 import yaml
 
 from aiir_cli.commands.join import (
-    cmd_join,
-    cmd_setup_join_code,
-    _write_config,
-    _get_local_gateway_url,
     _get_local_gateway_token,
+    _get_local_gateway_url,
+    _write_config,
 )
 
 
@@ -82,12 +76,16 @@ class TestWintoolsJoinNoGatewayToken:
         mock_requests = _make_mock_requests(200, json_data)
         write_config_mock = MagicMock()
 
-        with patch.dict(sys.modules, {"requests": mock_requests}), \
-             patch("aiir_cli.commands.join._detect_wintools", return_value=False), \
-             patch("aiir_cli.commands.join._find_ca_cert", return_value=None), \
-             patch("aiir_cli.commands.join._write_config", write_config_mock):
+        with (
+            patch.dict(sys.modules, {"requests": mock_requests}),
+            patch("aiir_cli.commands.join._detect_wintools", return_value=False),
+            patch("aiir_cli.commands.join._find_ca_cert", return_value=None),
+            patch("aiir_cli.commands.join._write_config", write_config_mock),
+        ):
             import importlib
+
             import aiir_cli.commands.join as join_mod
+
             importlib.reload(join_mod)
             join_mod.cmd_join(args, {"examiner": "tester"})
 
@@ -114,13 +112,17 @@ class TestUrlNormalization:
 
         mock_requests = _make_mock_requests(200, json_data)
 
-        with patch.dict(sys.modules, {"requests": mock_requests}), \
-             patch("aiir_cli.commands.join._detect_wintools", return_value=False), \
-             patch("aiir_cli.commands.join._find_ca_cert", return_value=None), \
-             patch("aiir_cli.commands.join._write_config"):
+        with (
+            patch.dict(sys.modules, {"requests": mock_requests}),
+            patch("aiir_cli.commands.join._detect_wintools", return_value=False),
+            patch("aiir_cli.commands.join._find_ca_cert", return_value=None),
+            patch("aiir_cli.commands.join._write_config"),
+        ):
             # Need to reimport to pick up the patched requests
             import importlib
+
             import aiir_cli.commands.join as join_mod
+
             importlib.reload(join_mod)
             join_mod.cmd_join(args, {"examiner": "tester"})
 
@@ -148,17 +150,30 @@ class TestJoinCodeCommand:
         args = MagicMock()
         args.expires = 2
 
-        mock_requests = _make_mock_requests(200, {
-            "code": "ABCD-EFGH",
-            "expires_hours": 2,
-            "instructions": "aiir join --sift 10.0.0.5:4508 --code ABCD-EFGH",
-        })
+        mock_requests = _make_mock_requests(
+            200,
+            {
+                "code": "ABCD-EFGH",
+                "expires_hours": 2,
+                "instructions": "aiir join --sift 10.0.0.5:4508 --code ABCD-EFGH",
+            },
+        )
 
-        with patch.dict(sys.modules, {"requests": mock_requests}), \
-             patch("aiir_cli.commands.join._get_local_gateway_url", return_value="http://127.0.0.1:4508"), \
-             patch("aiir_cli.commands.join._get_local_gateway_token", return_value="aiir_gw_test"):
+        with (
+            patch.dict(sys.modules, {"requests": mock_requests}),
+            patch(
+                "aiir_cli.commands.join._get_local_gateway_url",
+                return_value="http://127.0.0.1:4508",
+            ),
+            patch(
+                "aiir_cli.commands.join._get_local_gateway_token",
+                return_value="aiir_gw_test",
+            ),
+        ):
             import importlib
+
             import aiir_cli.commands.join as join_mod
+
             importlib.reload(join_mod)
             join_mod.cmd_setup_join_code(args, {"examiner": "steve"})
 

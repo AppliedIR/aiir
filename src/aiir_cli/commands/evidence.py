@@ -44,7 +44,10 @@ def cmd_evidence(args, identity: dict) -> None:
     elif action == "unlock":
         cmd_unlock_evidence(args, identity)
     else:
-        print("Usage: aiir evidence {register|list|verify|log|lock|unlock}", file=sys.stderr)
+        print(
+            "Usage: aiir evidence {register|list|verify|log|lock|unlock}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
@@ -70,7 +73,14 @@ def cmd_lock_evidence(args, identity: dict) -> None:
 
     # Also make the directory itself read-only
     try:
-        evidence_dir.chmod(stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)  # 555
+        evidence_dir.chmod(
+            stat.S_IRUSR
+            | stat.S_IXUSR
+            | stat.S_IRGRP
+            | stat.S_IXGRP
+            | stat.S_IROTH
+            | stat.S_IXOTH
+        )  # 555
     except OSError as e:
         print(f"  Warning: could not chmod evidence directory: {e}", file=sys.stderr)
         errors += 1
@@ -79,7 +89,7 @@ def cmd_lock_evidence(args, identity: dict) -> None:
     print(f"Locked evidence directory: {count} file(s) set to read-only (444)")
     if errors:
         print(f"  {errors} file(s) could not be locked (see warnings above)")
-    print(f"Directory set to 555 (no writes)")
+    print("Directory set to 555 (no writes)")
 
 
 def cmd_unlock_evidence(args, identity: dict) -> None:
@@ -92,7 +102,7 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
         sys.exit(1)
 
     # Confirm via /dev/tty (blocks AI-via-Bash from piping "y")
-    print(f"WARNING: Unlocking evidence directory allows writes.")
+    print("WARNING: Unlocking evidence directory allows writes.")
     print(f"  Path: {evidence_dir}")
     if not require_tty_confirmation("Unlock evidence directory? [y/N]: "):
         print("Cancelled.")
@@ -100,7 +110,9 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
 
     # Restore write permissions on directory
     try:
-        evidence_dir.chmod(stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)  # 755
+        evidence_dir.chmod(
+            stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH
+        )  # 755
     except OSError as e:
         print(f"Failed to unlock evidence directory: {e}", file=sys.stderr)
         sys.exit(1)
@@ -110,8 +122,9 @@ def cmd_unlock_evidence(args, identity: dict) -> None:
     print("Use 'aiir evidence register <path>' after adding new files.")
 
 
-def register_evidence_data(case_dir, path: str, examiner: str,
-                           description: str = "") -> dict:
+def register_evidence_data(
+    case_dir, path: str, examiner: str, description: str = ""
+) -> dict:
     """Register an evidence file and return structured data.
 
     Validates path, computes SHA-256, sets chmod 444, writes registry.
@@ -141,7 +154,10 @@ def register_evidence_data(case_dir, path: str, examiner: str,
     # Validate path is within case directory
     resolved = evidence_path.resolve()
     case_resolved = case_dir.resolve()
-    if not str(resolved).startswith(str(case_resolved) + os.sep) and resolved != case_resolved:
+    if (
+        not str(resolved).startswith(str(case_resolved) + os.sep)
+        and resolved != case_resolved
+    ):
         raise ValueError(
             f"Evidence path must be within the case directory.\n"
             f"  Evidence file:     {resolved}\n"
@@ -207,15 +223,18 @@ def cmd_register_evidence(args, identity: dict) -> None:
         sys.exit(1)
 
     # Log access
-    _log_evidence_action(case_dir, "register", data["path"], identity, sha256=data["sha256"])
+    _log_evidence_action(
+        case_dir, "register", data["path"], identity, sha256=data["sha256"]
+    )
 
     print(f"Registered: {data['path']}")
     print(f"  SHA256: {data['sha256']}")
-    print(f"  Permissions: 444 (read-only)")
+    print("  Permissions: 444 (read-only)")
 
 
-def _log_evidence_action(case_dir: Path, action: str, detail: str,
-                         identity: dict, **extra) -> None:
+def _log_evidence_action(
+    case_dir: Path, action: str, detail: str, identity: dict, **extra
+) -> None:
     """Write evidence action to access log."""
     try:
         log_file = case_dir / "evidence_access.jsonl"
@@ -321,8 +340,14 @@ def verify_evidence_data(case_dir) -> dict:
         expected_hash = entry.get("sha256", "")
 
         if not path.exists():
-            results.append({"path": str(path), "status": "MISSING",
-                            "expected_hash": expected_hash, "actual_hash": None})
+            results.append(
+                {
+                    "path": str(path),
+                    "status": "MISSING",
+                    "expected_hash": expected_hash,
+                    "actual_hash": None,
+                }
+            )
             missing += 1
             continue
 
@@ -333,19 +358,37 @@ def verify_evidence_data(case_dir) -> dict:
                     sha.update(chunk)
             actual_hash = sha.hexdigest()
         except OSError as e:
-            results.append({"path": str(path), "status": "ERROR",
-                            "expected_hash": expected_hash, "actual_hash": None,
-                            "error": str(e)})
+            results.append(
+                {
+                    "path": str(path),
+                    "status": "ERROR",
+                    "expected_hash": expected_hash,
+                    "actual_hash": None,
+                    "error": str(e),
+                }
+            )
             errors += 1
             continue
 
         if actual_hash == expected_hash:
-            results.append({"path": str(path), "status": "OK",
-                            "expected_hash": expected_hash, "actual_hash": actual_hash})
+            results.append(
+                {
+                    "path": str(path),
+                    "status": "OK",
+                    "expected_hash": expected_hash,
+                    "actual_hash": actual_hash,
+                }
+            )
             verified += 1
         else:
-            results.append({"path": str(path), "status": "MODIFIED",
-                            "expected_hash": expected_hash, "actual_hash": actual_hash})
+            results.append(
+                {
+                    "path": str(path),
+                    "status": "MODIFIED",
+                    "expected_hash": expected_hash,
+                    "actual_hash": actual_hash,
+                }
+            )
             modified += 1
 
     return {
@@ -383,7 +426,9 @@ def cmd_verify_evidence(args, identity: dict) -> None:
         elif r["status"] == "ERROR" and r.get("error"):
             print(f"             Error: {r['error']}")
 
-    print(f"\n{data['verified']} verified, {data['modified']} MODIFIED, {data['missing']} missing, {data['errors']} errors")
+    print(
+        f"\n{data['verified']} verified, {data['modified']} MODIFIED, {data['missing']} missing, {data['errors']} errors"
+    )
     if data["modified"]:
         print("ALERT: Evidence files have been modified since registration.")
         sys.exit(2)

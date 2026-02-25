@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from aiir_cli.commands.report import cmd_report
 from aiir_cli.case_io import save_findings, save_timeline, save_todos
+from aiir_cli.commands.report import cmd_report
 
 
 @pytest.fixture
@@ -130,8 +130,18 @@ def sample_timeline(case_dir):
 @pytest.fixture
 def sample_todos(case_dir):
     todos = [
-        {"todo_id": "TODO-001", "status": "open", "description": "Check logs", "priority": "high"},
-        {"todo_id": "TODO-002", "status": "completed", "description": "Review registry", "priority": "medium"},
+        {
+            "todo_id": "TODO-001",
+            "status": "open",
+            "description": "Check logs",
+            "priority": "high",
+        },
+        {
+            "todo_id": "TODO-002",
+            "status": "completed",
+            "description": "Review registry",
+            "priority": "medium",
+        },
     ]
     save_todos(case_dir, todos)
     return todos
@@ -156,7 +166,9 @@ def _make_args(**kwargs):
 
 
 class TestReportFull:
-    def test_full_report_outputs_json(self, case_dir, sample_findings, sample_timeline, identity, capsys):
+    def test_full_report_outputs_json(
+        self, case_dir, sample_findings, sample_timeline, identity, capsys
+    ):
         cmd_report(_make_args(full=True), identity)
         output = capsys.readouterr().out
         data = json.loads(output.strip())
@@ -167,7 +179,9 @@ class TestReportFull:
         assert len(data["approved_findings"]) == 1
         assert data["approved_findings"][0]["id"] == "F-tester-001"
 
-    def test_full_report_includes_iocs(self, case_dir, sample_findings, identity, capsys):
+    def test_full_report_includes_iocs(
+        self, case_dir, sample_findings, identity, capsys
+    ):
         cmd_report(_make_args(full=True), identity)
         output = capsys.readouterr().out
         data = json.loads(output.strip())
@@ -190,7 +204,9 @@ class TestReportFull:
 
 
 class TestReportExecutiveSummary:
-    def test_executive_summary_shows_counts(self, case_dir, sample_findings, sample_timeline, sample_todos, identity, capsys):
+    def test_executive_summary_shows_counts(
+        self, case_dir, sample_findings, sample_timeline, sample_todos, identity, capsys
+    ):
         cmd_report(_make_args(executive_summary=True), identity)
         output = capsys.readouterr().out
         assert "EXECUTIVE SUMMARY" in output
@@ -199,7 +215,9 @@ class TestReportExecutiveSummary:
         assert "DRAFT: 1" in output
         assert "Open TODOs: 1" in output
 
-    def test_executive_summary_ioc_count(self, case_dir, sample_findings, identity, capsys):
+    def test_executive_summary_ioc_count(
+        self, case_dir, sample_findings, identity, capsys
+    ):
         cmd_report(_make_args(executive_summary=True), identity)
         output = capsys.readouterr().out
         assert "IOCs" in output
@@ -219,19 +237,30 @@ class TestReportTimeline:
         assert "Total: 3 events" in output
 
     def test_timeline_filter_from(self, case_dir, sample_timeline, identity, capsys):
-        cmd_report(_make_args(report_timeline=True, from_date="2026-02-19T10:30:00Z"), identity)
+        cmd_report(
+            _make_args(report_timeline=True, from_date="2026-02-19T10:30:00Z"), identity
+        )
         output = capsys.readouterr().out
         assert "T-tester-001" not in output
         assert "T-tester-002" in output
 
     def test_timeline_filter_to(self, case_dir, sample_timeline, identity, capsys):
-        cmd_report(_make_args(report_timeline=True, to_date="2026-02-19T10:30:00Z"), identity)
+        cmd_report(
+            _make_args(report_timeline=True, to_date="2026-02-19T10:30:00Z"), identity
+        )
         output = capsys.readouterr().out
         assert "T-tester-001" in output
         assert "T-tester-003" not in output
 
     def test_timeline_filter_range(self, case_dir, sample_timeline, identity, capsys):
-        cmd_report(_make_args(report_timeline=True, from_date="2026-02-19T10:30:00Z", to_date="2026-02-19T12:00:00Z"), identity)
+        cmd_report(
+            _make_args(
+                report_timeline=True,
+                from_date="2026-02-19T10:30:00Z",
+                to_date="2026-02-19T12:00:00Z",
+            ),
+            identity,
+        )
         output = capsys.readouterr().out
         assert "T-tester-002" in output
         assert "T-tester-001" not in output
@@ -250,7 +279,9 @@ class TestReportTimeline:
 
 
 class TestReportIOC:
-    def test_ioc_report_approved_only(self, case_dir, sample_findings, identity, capsys):
+    def test_ioc_report_approved_only(
+        self, case_dir, sample_findings, identity, capsys
+    ):
         cmd_report(_make_args(ioc=True), identity)
         output = capsys.readouterr().out
         assert "IOC REPORT" in output
@@ -260,9 +291,18 @@ class TestReportIOC:
         assert "172.16.0.99" not in output
 
     def test_ioc_report_no_approved(self, case_dir, identity, capsys):
-        save_findings(case_dir, [
-            {"id": "F-tester-010", "status": "DRAFT", "title": "Test", "observation": "", "interpretation": ""},
-        ])
+        save_findings(
+            case_dir,
+            [
+                {
+                    "id": "F-tester-010",
+                    "status": "DRAFT",
+                    "title": "Test",
+                    "observation": "",
+                    "interpretation": "",
+                },
+            ],
+        )
         cmd_report(_make_args(ioc=True), identity)
         output = capsys.readouterr().out
         assert "No IOCs" in output or "No approved" in output
@@ -297,20 +337,27 @@ class TestReportFindings:
         with pytest.raises(SystemExit):
             cmd_report(_make_args(report_findings="F-tester-999"), identity)
 
-    def test_rejected_finding_shows_reason(self, case_dir, sample_findings, identity, capsys):
+    def test_rejected_finding_shows_reason(
+        self, case_dir, sample_findings, identity, capsys
+    ):
         cmd_report(_make_args(report_findings="F-tester-003"), identity)
         output = capsys.readouterr().out
         assert "Rejected:" in output
         assert "False positive" in output
 
     def test_findings_save(self, case_dir, sample_findings, identity, capsys):
-        cmd_report(_make_args(report_findings="F-tester-001", save="finding-detail.txt"), identity)
+        cmd_report(
+            _make_args(report_findings="F-tester-001", save="finding-detail.txt"),
+            identity,
+        )
         saved = case_dir / "reports" / "finding-detail.txt"
         assert saved.exists()
 
 
 class TestReportStatusBrief:
-    def test_status_brief(self, case_dir, sample_findings, sample_timeline, sample_todos, identity, capsys):
+    def test_status_brief(
+        self, case_dir, sample_findings, sample_timeline, sample_todos, identity, capsys
+    ):
         cmd_report(_make_args(status_brief=True), identity)
         output = capsys.readouterr().out
         assert "INC-2026-TEST" in output
@@ -337,7 +384,9 @@ class TestReportNoFlag:
 
 
 class TestReportSavePathSecurity:
-    def test_save_absolute_path_outside_case_rejected(self, case_dir, sample_findings, identity, tmp_path):
+    def test_save_absolute_path_outside_case_rejected(
+        self, case_dir, sample_findings, identity, tmp_path
+    ):
         abs_path = str(tmp_path / "absolute-report.json")
         with pytest.raises(SystemExit):
             cmd_report(_make_args(full=True, save=abs_path), identity)

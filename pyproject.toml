@@ -37,10 +37,32 @@ Repository = "https://github.com/AppliedIR/aiir"
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
+    "ruff>=0.4",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aiir_cli"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (let formatter handle)
+    "SIM105", # contextlib.suppress — verbose for existing code
+    "SIM108", # ternary operator — readability preference
+    "SIM115", # context manager for open — not always applicable
+    "SIM117", # combine with statements — verbose for existing code
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

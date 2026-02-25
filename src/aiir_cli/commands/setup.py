@@ -12,15 +12,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from aiir_cli.setup.config_gen import (
+    generate_gateway_yaml,
+    generate_mcp_json,
+)
 from aiir_cli.setup.detect import detect_installed_mcps, detect_venv_mcps
 from aiir_cli.setup.wizard import (
+    wizard_clients,
     wizard_opencti,
     wizard_remnux,
-    wizard_clients,
-)
-from aiir_cli.setup.config_gen import (
-    generate_mcp_json,
-    generate_gateway_yaml,
 )
 
 
@@ -34,18 +34,21 @@ def cmd_setup(args, identity: dict) -> None:
 
     if action == "client":
         from aiir_cli.commands.client_setup import cmd_setup_client
+
         cmd_setup_client(args, identity)
         return
 
     if action == "join-code":
         from aiir_cli.commands.join import cmd_setup_join_code
+
         cmd_setup_join_code(args, identity)
         return
 
-    print("WARNING: 'aiir setup' is deprecated. Use 'aiir setup client' instead.",
-          file=sys.stderr)
+    print(
+        "WARNING: 'aiir setup' is deprecated. Use 'aiir setup client' instead.",
+        file=sys.stderr,
+    )
 
-    force = getattr(args, "force_reprompt", False)
     non_interactive = getattr(args, "non_interactive", False)
 
     print("=" * 60)
@@ -90,7 +93,9 @@ def cmd_setup(args, identity: dict) -> None:
 
     if not non_interactive:
         try:
-            want_remnux = input("\nConfigure REMnux MCP (remote)? [y/N]: ").strip().lower()
+            want_remnux = (
+                input("\nConfigure REMnux MCP (remote)? [y/N]: ").strip().lower()
+            )
         except EOFError:
             want_remnux = "n"
         if want_remnux == "y":
@@ -125,7 +130,10 @@ def cmd_setup(args, identity: dict) -> None:
         elif client_type == "openwebui":
             output = Path.cwd() / "gateway.yaml"
             generate_gateway_yaml(
-                available, output, opencti_config, remnux_config,
+                available,
+                output,
+                opencti_config,
+                remnux_config,
             )
             print(f"  Generated: {output}")
 
@@ -177,14 +185,20 @@ def _run_connectivity_test() -> None:
         try:
             result = subprocess.run(
                 [python_path, "-c", f"import {module}; print('ok')"],
-                capture_output=True, timeout=15, text=True,
+                capture_output=True,
+                timeout=15,
+                text=True,
             )
             elapsed = (time.time() - start) * 1000
             if result.returncode == 0:
                 print(f"  {name:25s} OK ({elapsed:.0f}ms)")
                 ok_count += 1
             else:
-                err = result.stderr.strip().split("\n")[-1] if result.stderr else "unknown error"
+                err = (
+                    result.stderr.strip().split("\n")[-1]
+                    if result.stderr
+                    else "unknown error"
+                )
                 print(f"  {name:25s} FAIL ({err})")
                 fail_count += 1
         except subprocess.TimeoutExpired:
@@ -202,15 +216,22 @@ def _run_connectivity_test() -> None:
             fk_checked.add(python_path)
             try:
                 fk_result = subprocess.run(
-                    [python_path, "-c",
-                     "import forensic_knowledge; print(len(forensic_knowledge.loader.list_tools()))"],
-                    capture_output=True, timeout=15, text=True,
+                    [
+                        python_path,
+                        "-c",
+                        "import forensic_knowledge; print(len(forensic_knowledge.loader.list_tools()))",
+                    ],
+                    capture_output=True,
+                    timeout=15,
+                    text=True,
                 )
                 if fk_result.returncode == 0:
                     tool_count = fk_result.stdout.strip()
                     print(f"  {'forensic-knowledge':25s} {tool_count} tools loaded")
                 else:
-                    print(f"  {'forensic-knowledge':25s} WARNING: not available in this venv")
+                    print(
+                        f"  {'forensic-knowledge':25s} WARNING: not available in this venv"
+                    )
             except subprocess.TimeoutExpired:
                 print(f"  {'forensic-knowledge':25s} WARNING: import timed out")
             except OSError as e:

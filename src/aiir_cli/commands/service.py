@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import json
 import sys
-import urllib.request
 import urllib.error
+import urllib.request
 from pathlib import Path
 
 
@@ -56,7 +56,10 @@ def _resolve_gateway(args) -> tuple[str, str | None]:
         url = "http://127.0.0.1:4508"
 
     if not token:
-        print("Warning: No gateway token found. Check ~/.aiir/config.yaml", file=sys.stderr)
+        print(
+            "Warning: No gateway token found. Check ~/.aiir/config.yaml",
+            file=sys.stderr,
+        )
     return url.rstrip("/"), token if token else None
 
 
@@ -67,6 +70,7 @@ def _load_config() -> dict:
         return {}
     try:
         import yaml
+
         return yaml.safe_load(config_file.read_text()) or {}
     except Exception:
         return {}
@@ -132,7 +136,9 @@ def _service_action(args, action: str) -> None:
 
     if name:
         # Single backend
-        data = _api_request(f"{url}/api/v1/services/{name}/{action}", token, method="POST")
+        data = _api_request(
+            f"{url}/api/v1/services/{name}/{action}", token, method="POST"
+        )
         if data is None:
             sys.exit(1)
         if "error" in data:
@@ -151,7 +157,9 @@ def _service_action(args, action: str) -> None:
         errors = 0
         for s in services:
             sname = s["name"]
-            data = _api_request(f"{url}/api/v1/services/{sname}/{action}", token, method="POST")
+            data = _api_request(
+                f"{url}/api/v1/services/{sname}/{action}", token, method="POST"
+            )
             if data and "error" not in data:
                 print(f"{sname}: {data.get('status', 'unknown')}")
             else:

@@ -34,6 +34,7 @@ _MSLEARN_MCP = {
 # Public entry point
 # ---------------------------------------------------------------------------
 
+
 def cmd_setup_client(args, identity: dict) -> None:
     """Generate LLM client configuration for AIIR endpoints."""
     if getattr(args, "remote", False):
@@ -132,6 +133,7 @@ def cmd_setup_client(args, identity: dict) -> None:
 # ---------------------------------------------------------------------------
 # Parameter resolution
 # ---------------------------------------------------------------------------
+
 
 def _resolve_client(args, auto: bool) -> str:
     val = getattr(args, "client", None)
@@ -247,6 +249,7 @@ def _resolve_examiner(args, identity: dict) -> str:
 # Interactive wizard
 # ---------------------------------------------------------------------------
 
+
 def _wizard_client() -> str:
     print("\n=== AIIR Client Configuration ===")
     print("Which LLM client will connect to your AIIR endpoints?\n")
@@ -293,6 +296,7 @@ def _prompt_yn(message: str, default: bool = True) -> bool:
 # ---------------------------------------------------------------------------
 # Config generation
 # ---------------------------------------------------------------------------
+
 
 def _generate_config(client: str, servers: dict, examiner: str) -> None:
     config = {"mcpServers": servers}
@@ -370,9 +374,14 @@ def _merge_and_write(path: Path, config: dict) -> None:
         try:
             existing = json.loads(path.read_text())
         except json.JSONDecodeError as e:
-            print(f"Warning: existing config {path} has invalid JSON ({e}), overwriting.", file=sys.stderr)
+            print(
+                f"Warning: existing config {path} has invalid JSON ({e}), overwriting.",
+                file=sys.stderr,
+            )
         except OSError as e:
-            print(f"Warning: could not read existing config {path}: {e}", file=sys.stderr)
+            print(
+                f"Warning: could not read existing config {path}: {e}", file=sys.stderr
+            )
 
     # Merge: existing servers are preserved, AIIR servers overwritten
     existing_servers = existing.get("mcpServers", {})
@@ -395,13 +404,13 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
         if "url" not in info:
             continue
         lines.append(f"  {name}:")
-        lines.append(f"    type: \"{info['type']}\"")
-        lines.append(f"    url: \"{info['url']}\"")
+        lines.append(f'    type: "{info["type"]}"')
+        lines.append(f'    url: "{info["url"]}"')
         headers = info.get("headers")
         if headers:
             lines.append("    headers:")
             for hk, hv in headers.items():
-                lines.append(f"      {hk}: \"{hv}\"")
+                lines.append(f'      {hk}: "{hv}"')
         lines.append("    timeout: 60000")
         lines.append("    serverInstructions: true")
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -437,14 +446,18 @@ def _copy_agents_md(target: Path) -> None:
         except OSError as e:
             print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
     else:
-        print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
+        print(
+            "  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo."
+        )
 
 
 def _write_cursor_rules() -> None:
     """Write .cursor/rules/aiir.mdc (modern) + .cursorrules (legacy fallback)."""
     src = _find_agents_md()
     if not src:
-        print("  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo.")
+        print(
+            "  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo."
+        )
         return
 
     content = src.read_text()
@@ -476,6 +489,7 @@ def _write_cursor_rules() -> None:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _read_local_token() -> str | None:
     """Read the first api_key from ~/.aiir/gateway.yaml.
 
@@ -491,6 +505,7 @@ def _read_local_token() -> str | None:
         return None
     try:
         import yaml
+
         config = yaml.safe_load(config_path.read_text()) or {}
         api_keys = config.get("api_keys", {})
         if isinstance(api_keys, dict) and api_keys:
@@ -528,6 +543,7 @@ def _probe_health(base_url: str) -> bool:
     """Try to reach a /health endpoint."""
     try:
         import urllib.request
+
         url = f"{base_url.rstrip('/')}/health"
         req = urllib.request.Request(url, method="GET")
         with urllib.request.urlopen(req, timeout=5) as resp:
@@ -535,10 +551,12 @@ def _probe_health(base_url: str) -> bool:
     except OSError as e:
         # Network/connection errors (includes URLError, socket.error)
         import logging
+
         logging.debug("Health probe failed for %s: %s", base_url, e)
         return False
     except Exception as e:
         import logging
+
         logging.debug("Health probe unexpected error for %s: %s", base_url, e)
         return False
 
@@ -546,6 +564,7 @@ def _probe_health(base_url: str) -> bool:
 # ---------------------------------------------------------------------------
 # Remote setup mode
 # ---------------------------------------------------------------------------
+
 
 def _cmd_setup_client_remote(args, identity: dict) -> None:
     """Generate client config pointing at a remote AIIR gateway.
@@ -606,7 +625,9 @@ def _cmd_setup_client_remote(args, identity: dict) -> None:
     for s in running:
         name = s["name"]
         servers[name] = _format_server_entry(
-            client, f"{gateway_url}/mcp/{name}", token,
+            client,
+            f"{gateway_url}/mcp/{name}",
+            token,
         )
 
     # 6. Windows / internet MCPs (same as local)
@@ -661,8 +682,13 @@ def _format_server_entry(client: str, url: str, token: str | None) -> dict:
             )
         return {
             "command": "npx",
-            "args": ["-y", "mcp-remote", url,
-                     "--header", "Authorization:${AUTH_HEADER}"],
+            "args": [
+                "-y",
+                "mcp-remote",
+                url,
+                "--header",
+                "Authorization:${AUTH_HEADER}",
+            ],
             "env": {"AUTH_HEADER": f"Bearer {token}"},
         }
 
@@ -687,6 +713,7 @@ def _probe_health_with_auth(base_url: str, token: str | None) -> dict | None:
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status == 200:
                 import json as _json
+
                 return _json.loads(resp.read())
     except OSError:
         pass
@@ -707,6 +734,7 @@ def _discover_services(base_url: str, token: str | None) -> list | None:
         with urllib.request.urlopen(req, timeout=5) as resp:
             if resp.status == 200:
                 import json as _json
+
                 data = _json.loads(resp.read())
                 return data.get("services", [])
     except OSError:

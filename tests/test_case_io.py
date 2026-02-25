@@ -1,7 +1,6 @@
 """Tests for shared case I/O module."""
 
 import json
-import os
 from argparse import Namespace
 from pathlib import Path
 
@@ -14,8 +13,8 @@ from aiir_cli.case_io import (
     get_case_dir,
     import_bundle,
     load_findings,
-    save_findings,
     load_timeline,
+    save_findings,
     save_timeline,
     verify_approval_integrity,
     write_approval_log,
@@ -67,7 +66,13 @@ class TestTimelineIO:
         assert load_timeline(case_dir) == []
 
     def test_save_and_load(self, case_dir):
-        events = [{"id": "T-tester-001", "status": "DRAFT", "timestamp": "2026-01-01T00:00:00Z"}]
+        events = [
+            {
+                "id": "T-tester-001",
+                "status": "DRAFT",
+                "timestamp": "2026-01-01T00:00:00Z",
+            }
+        ]
         save_timeline(case_dir, events)
         loaded = load_timeline(case_dir)
         assert len(loaded) == 1
@@ -81,14 +86,26 @@ class TestNoMarkdownGeneration:
         assert not (case_dir / "FINDINGS.md").exists()
 
     def test_save_timeline_does_not_create_md(self, case_dir):
-        events = [{"id": "T-tester-001", "status": "DRAFT", "timestamp": "2026-01-01T00:00:00Z"}]
+        events = [
+            {
+                "id": "T-tester-001",
+                "status": "DRAFT",
+                "timestamp": "2026-01-01T00:00:00Z",
+            }
+        ]
         save_timeline(case_dir, events)
         assert not (case_dir / "TIMELINE.md").exists()
 
 
 class TestApprovalLog:
     def test_write_approval(self, case_dir):
-        identity = {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
+        identity = {
+            "os_user": "testuser",
+            "examiner": "analyst1",
+            "examiner_source": "flag",
+            "analyst": "analyst1",
+            "analyst_source": "flag",
+        }
         write_approval_log(case_dir, "F-tester-001", "APPROVED", identity)
         log_file = case_dir / "approvals.jsonl"
         assert log_file.exists()
@@ -97,8 +114,16 @@ class TestApprovalLog:
         assert entry["action"] == "APPROVED"
 
     def test_write_rejection_with_reason(self, case_dir):
-        identity = {"os_user": "testuser", "examiner": "analyst1", "examiner_source": "flag", "analyst": "analyst1", "analyst_source": "flag"}
-        write_approval_log(case_dir, "F-tester-002", "REJECTED", identity, reason="Bad evidence")
+        identity = {
+            "os_user": "testuser",
+            "examiner": "analyst1",
+            "examiner_source": "flag",
+            "analyst": "analyst1",
+            "analyst_source": "flag",
+        }
+        write_approval_log(
+            case_dir, "F-tester-002", "REJECTED", identity, reason="Bad evidence"
+        )
         log_file = case_dir / "approvals.jsonl"
         entry = json.loads(log_file.read_text().strip())
         assert entry["reason"] == "Bad evidence"
@@ -125,13 +150,21 @@ class TestPathTraversal:
     def test_import_bundle_merges(self, case_dir, monkeypatch):
         """import_bundle merges incoming items using last-write-wins."""
         import yaml
+
         monkeypatch.setenv("AIIR_EXAMINER", "tester")
         meta_file = case_dir / "CASE.yaml"
         meta_file.write_text(yaml.dump({"case_id": "INC-001"}))
         bundle = {
             "case_id": "INC-001",
             "examiner": "alice",
-            "findings": [{"id": "F-alice-001", "title": "Alice's finding", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-alice-001",
+                    "title": "Alice's finding",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                }
+            ],
             "timeline": [],
         }
         result = import_bundle(case_dir, bundle)
@@ -141,11 +174,17 @@ class TestPathTraversal:
     def test_import_bundle_bare_array(self, case_dir, monkeypatch):
         """import_bundle accepts bare array (forensic-mcp export format)."""
         import yaml
+
         monkeypatch.setenv("AIIR_EXAMINER", "tester")
         meta_file = case_dir / "CASE.yaml"
         meta_file.write_text(yaml.dump({"case_id": "INC-001"}))
         bare_array = [
-            {"id": "F-bob-001", "title": "Bob's finding", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"},
+            {
+                "id": "F-bob-001",
+                "title": "Bob's finding",
+                "status": "DRAFT",
+                "staged": "2026-01-01T00:00:00Z",
+            },
         ]
         result = import_bundle(case_dir, bare_array)
         assert result["status"] == "merged"
@@ -163,6 +202,7 @@ class TestIdentityLowercase:
     def test_uppercase_examiner_lowercased(self, monkeypatch):
         monkeypatch.setenv("AIIR_EXAMINER", "Jane.Doe")
         from aiir_cli.identity import get_examiner_identity
+
         identity = get_examiner_identity()
         assert identity["examiner"] == "jane-doe"
 
@@ -170,6 +210,7 @@ class TestIdentityLowercase:
         monkeypatch.delenv("AIIR_EXAMINER", raising=False)
         monkeypatch.delenv("AIIR_ANALYST", raising=False)
         from aiir_cli.identity import get_examiner_identity
+
         identity = get_examiner_identity(flag_override="ALICE")
         assert identity["examiner"] == "alice"
 
@@ -185,8 +226,14 @@ class TestContentHash:
     def test_excludes_volatile_fields(self):
         base = {"id": "F-tester-001", "title": "Test", "observation": "something"}
         h1 = compute_content_hash(base)
-        with_volatile = dict(base, status="APPROVED", approved_at="2026-01-01",
-                             approved_by="tester", content_hash="old", modified_at="2026-01-02")
+        with_volatile = dict(
+            base,
+            status="APPROVED",
+            approved_at="2026-01-01",
+            approved_by="tester",
+            content_hash="old",
+            modified_at="2026-01-02",
+        )
         h2 = compute_content_hash(with_volatile)
         assert h1 == h2
 
@@ -205,11 +252,23 @@ class TestContentHashIntegrity:
     """
 
     def test_verify_detects_tampering(self, case_dir, monkeypatch):
-        identity = {"os_user": "testuser", "examiner": "tester",
-                    "examiner_source": "env"}
+        identity = {
+            "os_user": "testuser",
+            "examiner": "tester",
+            "examiner_source": "env",
+        }
         # Save DRAFT finding
-        save_findings(case_dir, [{"id": "F-tester-001", "title": "Test",
-                                  "observation": "original", "status": "DRAFT"}])
+        save_findings(
+            case_dir,
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "original",
+                    "status": "DRAFT",
+                }
+            ],
+        )
         # Simulate approve: load, compute hash, save back
         findings = load_findings(case_dir)
         findings[0]["content_hash"] = compute_content_hash(findings[0])
@@ -226,11 +285,23 @@ class TestContentHashIntegrity:
         assert results[0]["verification"] == "tampered"
 
     def test_verify_confirmed_with_hash(self, case_dir, monkeypatch):
-        identity = {"os_user": "testuser", "examiner": "tester",
-                    "examiner_source": "env"}
+        identity = {
+            "os_user": "testuser",
+            "examiner": "tester",
+            "examiner_source": "env",
+        }
         # Save DRAFT finding
-        save_findings(case_dir, [{"id": "F-tester-001", "title": "Test",
-                                  "observation": "original", "status": "DRAFT"}])
+        save_findings(
+            case_dir,
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "original",
+                    "status": "DRAFT",
+                }
+            ],
+        )
         # Simulate approve: load, compute hash, save back
         findings = load_findings(case_dir)
         findings[0]["content_hash"] = compute_content_hash(findings[0])
@@ -245,10 +316,22 @@ class TestContentHashIntegrity:
 class TestExportBundle:
     def test_export_includes_data(self, case_dir, monkeypatch):
         import yaml
+
         monkeypatch.setenv("AIIR_EXAMINER", "tester")
         (case_dir / "CASE.yaml").write_text(yaml.dump({"case_id": "INC-001"}))
-        save_findings(case_dir, [{"id": "F-tester-001", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"}])
-        save_timeline(case_dir, [{"id": "T-tester-001", "timestamp": "2026-01-01T00:00:00Z"}])
+        save_findings(
+            case_dir,
+            [
+                {
+                    "id": "F-tester-001",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                }
+            ],
+        )
+        save_timeline(
+            case_dir, [{"id": "T-tester-001", "timestamp": "2026-01-01T00:00:00Z"}]
+        )
         bundle = export_bundle(case_dir)
         assert bundle["case_id"] == "INC-001"
         assert bundle["examiner"] == "tester"
@@ -257,12 +340,24 @@ class TestExportBundle:
 
     def test_export_since_filter(self, case_dir, monkeypatch):
         import yaml
+
         monkeypatch.setenv("AIIR_EXAMINER", "tester")
         (case_dir / "CASE.yaml").write_text(yaml.dump({"case_id": "INC-001"}))
-        save_findings(case_dir, [
-            {"id": "F-tester-001", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"},
-            {"id": "F-tester-002", "status": "DRAFT", "staged": "2026-06-01T00:00:00Z"},
-        ])
+        save_findings(
+            case_dir,
+            [
+                {
+                    "id": "F-tester-001",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                },
+                {
+                    "id": "F-tester-002",
+                    "status": "DRAFT",
+                    "staged": "2026-06-01T00:00:00Z",
+                },
+            ],
+        )
         bundle = export_bundle(case_dir, since="2026-03-01T00:00:00Z")
         assert len(bundle["findings"]) == 1
         assert bundle["findings"][0]["id"] == "F-tester-002"
@@ -271,7 +366,14 @@ class TestExportBundle:
 class TestImportBundle:
     def test_merge_adds_new(self, case_dir):
         bundle = {
-            "findings": [{"id": "F-alice-001", "title": "New", "status": "DRAFT", "staged": "2026-01-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-alice-001",
+                    "title": "New",
+                    "status": "DRAFT",
+                    "staged": "2026-01-01T00:00:00Z",
+                }
+            ],
             "timeline": [],
         }
         result = import_bundle(case_dir, bundle)
@@ -279,9 +381,18 @@ class TestImportBundle:
         assert result["findings"]["added"] == 1
 
     def test_merge_updates_newer(self, case_dir):
-        save_findings(case_dir, [{"id": "F-alice-001", "title": "Old", "staged": "2026-01-01T00:00:00Z"}])
+        save_findings(
+            case_dir,
+            [{"id": "F-alice-001", "title": "Old", "staged": "2026-01-01T00:00:00Z"}],
+        )
         bundle = {
-            "findings": [{"id": "F-alice-001", "title": "Updated", "staged": "2026-06-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-alice-001",
+                    "title": "Updated",
+                    "staged": "2026-06-01T00:00:00Z",
+                }
+            ],
         }
         result = import_bundle(case_dir, bundle)
         assert result["findings"]["updated"] == 1
@@ -289,9 +400,18 @@ class TestImportBundle:
         assert loaded[0]["title"] == "Updated"
 
     def test_merge_skips_older(self, case_dir):
-        save_findings(case_dir, [{"id": "F-alice-001", "title": "Newer", "staged": "2026-06-01T00:00:00Z"}])
+        save_findings(
+            case_dir,
+            [{"id": "F-alice-001", "title": "Newer", "staged": "2026-06-01T00:00:00Z"}],
+        )
         bundle = {
-            "findings": [{"id": "F-alice-001", "title": "Older", "staged": "2026-01-01T00:00:00Z"}],
+            "findings": [
+                {
+                    "id": "F-alice-001",
+                    "title": "Older",
+                    "staged": "2026-01-01T00:00:00Z",
+                }
+            ],
         }
         result = import_bundle(case_dir, bundle)
         assert result["findings"]["skipped"] == 1
@@ -312,11 +432,15 @@ class TestCaseList:
         case1 = cases_dir / "INC-2026-001"
         case1.mkdir()
         with open(case1 / "CASE.yaml", "w") as f:
-            yaml.dump({"case_id": "INC-2026-001", "name": "Phishing", "status": "open"}, f)
+            yaml.dump(
+                {"case_id": "INC-2026-001", "name": "Phishing", "status": "open"}, f
+            )
         case2 = cases_dir / "INC-2026-002"
         case2.mkdir()
         with open(case2 / "CASE.yaml", "w") as f:
-            yaml.dump({"case_id": "INC-2026-002", "name": "Ransomware", "status": "closed"}, f)
+            yaml.dump(
+                {"case_id": "INC-2026-002", "name": "Ransomware", "status": "closed"}, f
+            )
 
         monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
         monkeypatch.chdir(tmp_path)
@@ -338,7 +462,9 @@ class TestCaseList:
         case1 = cases_dir / "INC-2026-001"
         case1.mkdir()
         with open(case1 / "CASE.yaml", "w") as f:
-            yaml.dump({"case_id": "INC-2026-001", "name": "Active Case", "status": "open"}, f)
+            yaml.dump(
+                {"case_id": "INC-2026-001", "name": "Active Case", "status": "open"}, f
+            )
 
         # Set active case — monkeypatch HOME so _case_list_data reads from tmp_path
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
@@ -385,7 +511,9 @@ class TestCaseList:
         case1 = cases_dir / "INC-2026-001"
         case1.mkdir()
         with open(case1 / "CASE.yaml", "w") as f:
-            yaml.dump({"case_id": "INC-2026-001", "name": "Real Case", "status": "open"}, f)
+            yaml.dump(
+                {"case_id": "INC-2026-001", "name": "Real Case", "status": "open"}, f
+            )
 
         monkeypatch.setenv("AIIR_CASES_DIR", str(cases_dir))
         monkeypatch.chdir(tmp_path)
