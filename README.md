@@ -2,8 +2,8 @@
 
 Artificial Intelligence Incident Response platform. CLI and architecture reference.
 
-**[Platform Documentation](https://appliedir.github.io/sift-mcp/)** ·
-[CLI Reference](https://appliedir.github.io/sift-mcp/cli-reference/)
+**[Platform Documentation](https://appliedir.github.io/aiir/)** ·
+[CLI Reference](https://appliedir.github.io/aiir/cli-reference/)
 
 ## Platform Architecture
 

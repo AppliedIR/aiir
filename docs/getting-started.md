@@ -1,0 +1,157 @@
+# Getting Started
+
+## Prerequisites
+
+- SIFT Workstation (Ubuntu-based) or any Ubuntu 22.04+ system
+- Python 3.11+
+- An LLM client with MCP support (Claude Code, Claude Desktop, Cursor, etc.)
+
+## Installation
+
+### SIFT Workstation (All Components)
+
+The quickstart installs all MCP servers, the gateway, and the aiir CLI:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
+```
+
+This runs `sift-install.sh` (MCP servers + gateway) and `aiir-install.sh` (CLI + client config) in sequence.
+
+### Step by Step
+
+```bash
+# Clone and install MCP servers
+git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
+./sift-install.sh
+
+# Clone and install CLI
+cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
+./aiir-install.sh
+```
+
+The installer prompts for:
+
+- **Installation tier**: Quick (core only), Recommended (core + RAG + triage), or Custom
+- **Examiner identity**: Your name slug (e.g., `alice`)
+- **Client type**: Claude Code, Claude Desktop, Cursor, or generic
+- **Remote access**: Whether to enable TLS and bearer token auth
+
+### Windows Forensic Workstation (Optional)
+
+If you have a Windows forensic VM for Zimmerman tools and Hayabusa:
+
+```powershell
+git clone https://github.com/AppliedIR/wintools-mcp.git
+cd wintools-mcp
+.\scripts\setup-windows.ps1
+```
+
+The Windows installer generates a bearer token. Copy it to your SIFT gateway configuration or LLM client setup.
+
+## First Case
+
+### 1. Initialize a Case
+
+```bash
+aiir case init "Suspicious Activity Investigation"
+```
+
+This creates a case directory under `~/.aiir/cases/` with a unique case ID (e.g., `INC-2026-0225`) and activates it.
+
+### 2. Connect Your LLM Client
+
+If you ran `aiir setup client` during installation, your LLM client is already configured. Start your client — it will connect to the gateway at `http://127.0.0.1:4508/mcp`.
+
+### 3. Start Investigating
+
+Ask your LLM client to analyze evidence:
+
+```text
+"Parse the Amcache hive at /cases/evidence/Amcache.hve"
+"What tools should I use to investigate lateral movement?"
+"Run hayabusa against the evtx logs and show critical alerts"
+```
+
+The LLM will use MCP tools to execute forensic tools, record findings, and build a timeline.
+
+### 4. Review and Approve
+
+Findings stage as DRAFT. Review them:
+
+```bash
+aiir review --findings
+```
+
+Approve individual findings:
+
+```bash
+aiir approve F-alice-001 F-alice-002
+```
+
+Or use interactive review mode:
+
+```bash
+aiir approve
+```
+
+### 5. Generate a Report
+
+```bash
+aiir report --full --save report.json
+```
+
+Or ask the LLM to generate a report using report-mcp:
+
+```text
+"Generate an executive summary report for this case"
+```
+
+## Key Concepts
+
+### Examiner Identity
+
+Every action is attributed to an examiner. Set your identity:
+
+```bash
+aiir config --examiner alice
+```
+
+Resolution order: `--examiner` flag > `AIIR_EXAMINER` env var > `~/.aiir/config.yaml` > OS username.
+
+### Case Directory
+
+Each case has a flat directory with all data files:
+
+```text
+cases/INC-2026-0225/
+├── CASE.yaml              # Case metadata
+├── findings.json          # Investigation findings
+├── timeline.json          # Incident timeline
+├── todos.json             # Investigation TODOs
+├── evidence.json          # Evidence registry
+├── evidence/              # Evidence files (read-only after registration)
+├── extractions/           # Tool output and extracted artifacts
+├── reports/               # Generated reports
+├── approvals.jsonl        # Approval audit trail
+└── audit/                 # Per-backend tool execution logs
+```
+
+### Human-in-the-Loop
+
+The AI cannot approve its own work. All findings and timeline events stage as DRAFT. Only the aiir CLI (which requires a human at a terminal) can move them to APPROVED or REJECTED. This is enforced structurally — there is no MCP tool for approval.
+
+### Evidence IDs
+
+Every tool execution generates a unique evidence ID: `{backend}-{examiner}-{YYYYMMDD}-{NNN}`. These IDs link findings to the specific tool executions that produced them.
+
+### Provenance Tiers
+
+Findings are classified by how their evidence was gathered:
+
+| Tier | Source | Meaning |
+|------|--------|---------|
+| MCP | MCP audit log | Evidence from an MCP tool (system-witnessed) |
+| HOOK | Claude Code hook log | Evidence from Bash with hook capture (framework-witnessed) |
+| SHELL | `supporting_commands` parameter | Evidence from direct shell (self-reported) |
+| NONE | No audit record | No evidence trail — finding is rejected |

@@ -25,6 +25,9 @@ cases/
 .claude/
 CLAUDE.md
 
+# MkDocs
+site/
+
 # IDE
 .vscode/
 .idea/
