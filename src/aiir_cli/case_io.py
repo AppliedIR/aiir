@@ -69,18 +69,27 @@ def get_case_dir(case_id: str | None = None) -> Path:
     # Check AIIR_CASE_DIR env var
     env_dir = os.environ.get("AIIR_CASE_DIR")
     if env_dir:
-        return Path(env_dir)
+        case_dir = Path(env_dir)
+        if not case_dir.is_dir():
+            print(f"Error: case directory does not exist: {case_dir}", file=sys.stderr)
+            sys.exit(1)
+        return case_dir
 
     # Check ~/.aiir/active_case pointer (absolute path or legacy bare ID)
     active_file = Path.home() / ".aiir" / "active_case"
     if active_file.exists():
         content = active_file.read_text().strip()
         if os.path.isabs(content):
-            return Path(content)
-        # Legacy: bare case ID — resolve via AIIR_CASES_DIR
-        _validate_case_id(content)
-        cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
-        return cases_dir / content
+            case_dir = Path(content)
+        else:
+            # Legacy: bare case ID — resolve via AIIR_CASES_DIR
+            _validate_case_id(content)
+            cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
+            case_dir = cases_dir / content
+        if not case_dir.is_dir():
+            print(f"Error: case directory does not exist: {case_dir}", file=sys.stderr)
+            sys.exit(1)
+        return case_dir
 
     print("No active case. Use --case <id> or set AIIR_CASE_DIR.", file=sys.stderr)
     sys.exit(1)
