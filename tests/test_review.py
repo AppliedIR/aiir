@@ -135,7 +135,7 @@ class TestFindingsTable:
         )
         cmd_review(args, {})
         output = capsys.readouterr().out
-        assert "F-tester-001" in output
+        # Summary view: Title, Confidence, Provenance, Status (ID moved to detail)
         assert "APPROVED" in output
         assert "HIGH" in output
         assert "Lateral movement" in output
