@@ -498,7 +498,6 @@ Generate Streamable HTTP config for your LLM client:
 aiir setup client                                                          # Interactive wizard
 aiir setup client --client=claude-code --sift=http://127.0.0.1:4508 -y    # Local solo
 aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT + Windows
-aiir setup client --no-zeltser -y                                          # Exclude optional MCPs
 ```
 
 For remote orchestrator setups (Path 2), use the `--remote` flag:

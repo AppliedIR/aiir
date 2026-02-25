@@ -118,7 +118,6 @@ class TestCmdSetupClient:
             "windows": None,
             "remnux": None,
             "examiner": "testuser",
-            "no_zeltser": False,
             "no_mslearn": False,
             "yes": True,
         }
@@ -139,15 +138,6 @@ class TestCmdSetupClient:
         assert data["mcpServers"]["aiir"]["type"] == "streamable-http"
         # Zeltser included by default
         assert "zeltser-ir-writing" in data["mcpServers"]
-
-    def test_no_zeltser_flag(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        args = self._make_args(no_zeltser=True)
-        identity = {"examiner": "testuser"}
-        cmd_setup_client(args, identity)
-
-        data = json.loads((tmp_path / ".mcp.json").read_text())
-        assert "zeltser-ir-writing" not in data["mcpServers"]
 
     def test_mslearn_included_by_default(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -170,16 +160,6 @@ class TestCmdSetupClient:
         assert "microsoft-learn" not in data["mcpServers"]
         # Zeltser still present
         assert "zeltser-ir-writing" in data["mcpServers"]
-
-    def test_no_both_internet_mcps(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        args = self._make_args(no_zeltser=True, no_mslearn=True)
-        identity = {"examiner": "testuser"}
-        cmd_setup_client(args, identity)
-
-        data = json.loads((tmp_path / ".mcp.json").read_text())
-        assert "zeltser-ir-writing" not in data["mcpServers"]
-        assert "microsoft-learn" not in data["mcpServers"]
 
     def test_windows_endpoint(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -224,16 +204,6 @@ class TestCmdSetupClient:
 
         config_path = tmp_path / ".config" / "claude" / "claude_desktop_config.json"
         assert config_path.is_file()
-
-    def test_no_endpoints_does_nothing(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        args = self._make_args(sift=None, no_zeltser=True, no_mslearn=True)
-        # Need to set sift to empty via the flag path
-        args.sift = ""
-        identity = {"examiner": "testuser"}
-        cmd_setup_client(args, identity)
-
-        assert not (tmp_path / ".mcp.json").exists()
 
     def test_merge_preserves_existing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -378,7 +348,6 @@ class TestRemoteSetup:
             "windows": None,
             "remnux": None,
             "examiner": "testuser",
-            "no_zeltser": True,
             "no_mslearn": True,
             "yes": True,
             "remote": True,
@@ -562,7 +531,6 @@ class TestLocalModeTokenThreading:
             "windows": None,
             "remnux": None,
             "examiner": "testuser",
-            "no_zeltser": True,
             "no_mslearn": True,
             "yes": True,
         }
