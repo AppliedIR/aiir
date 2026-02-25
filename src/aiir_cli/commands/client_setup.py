@@ -216,26 +216,22 @@ def _resolve_remnux(args, auto: bool) -> str:
 
 def _resolve_internet_mcps(args, auto: bool) -> tuple[bool, bool]:
     """Resolve which internet MCPs to include. Returns (zeltser, mslearn)."""
-    no_zeltser = getattr(args, "no_zeltser", False)
     no_mslearn = getattr(args, "no_mslearn", False)
 
-    if auto or (no_zeltser or no_mslearn):
-        return (not no_zeltser, not no_mslearn)
+    if auto:
+        return (True, not no_mslearn)
 
     print("\n--- Internet MCPs (public, no auth required) ---")
     print("These connect your LLM client directly to public knowledge servers.")
     print()
+    print("  Zeltser IR Writing   Required for the IR reporting feature")
 
-    include_zeltser = _prompt_yn(
-        "  Zeltser IR Writing   Helps write and improve IR reports",
-        default=True,
-    )
     include_mslearn = _prompt_yn(
         "  Microsoft Learn      Search Microsoft docs and code samples",
         default=True,
     )
 
-    return (include_zeltser, include_mslearn)
+    return (True, include_mslearn)
 
 
 def _resolve_examiner(args, identity: dict) -> str:
