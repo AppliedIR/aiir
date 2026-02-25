@@ -304,6 +304,12 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         _deploy_claude_code_assets(Path.cwd())
         print(f"  Generated: {output}")
         print(f"  Examiner:  {examiner}")
+        print("")
+        print("  Forensic controls deployed:")
+        print("    Sandbox:     enabled (Bash writes restricted)")
+        print("    Audit hook:  forensic-audit.sh (captures all Bash commands)")
+        print("    Provenance:  enforced (findings require evidence trail)")
+        print("    Discipline:  FORENSIC_DISCIPLINE.md + TOOL_REFERENCE.md")
 
     elif client == "claude-desktop":
         output = Path.home() / ".config" / "claude" / "claude_desktop_config.json"

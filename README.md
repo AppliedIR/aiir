@@ -307,10 +307,12 @@ cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
 ./aiir-install.sh          # Install aiir CLI + configure client
 ```
 
-We recommend using an LLM client that does not have the ability to directly interface with your system's shell. Tools like Claude Code are amazingly effective, but difficult to constrain. Our system is designed to require the LLM to go through existing MCPs to ensure proper audit trail when accessing forensic tooling. However, your use case may be different. If you prefer to move fast, break things, and let Claude take the wheel:
+Claude Code is the most controlled client option. When selected during `aiir setup client`, the installer deploys a full forensic control stack: kernel-level sandbox (restricts Bash writes), PostToolUse audit hook (captures every Bash command to the case audit trail), provenance enforcement (findings without an evidence trail are rejected), and PIN-gated human approval. Other clients (Claude Desktop, Cursor, etc.) receive MCP configuration only — no sandbox, no hooks, no provenance enforcement.
+
+If you don't need direct Bash access to forensic tools, a non-shell client is simpler — the MCP tools provide the same forensic capabilities with a smaller attack surface.
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash -s -- --ccode
+curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
 ```
 
 The quickstart installs all core components, starts the gateway, and runs the aiir setup wizard. For tier selection (quick, recommended, custom) or remote access, run `sift-install.sh` directly.
@@ -512,7 +514,7 @@ Remote mode prompts for the gateway URL, bearer token, and optional Windows VM a
 
 | Client | Config file | Extras |
 |--------|-------------|--------|
-| Claude Code | `.mcp.json` | Copies `AGENTS.md` as `CLAUDE.md` |
+| Claude Code | `.mcp.json` | `CLAUDE.md`, `settings.json` (hooks + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
 | Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
 | Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |
