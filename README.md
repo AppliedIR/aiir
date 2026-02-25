@@ -240,7 +240,9 @@ graph LR
     end
 
     subgraph remnux ["REMnux Workstation"]
-        RM[remnux-mcp]
+        RAPI["remnux-mcp API<br/>:3000"]
+        RMX["remnux-mcp<br/>Malware analysis"]
+        RAPI --> RMX
     end
 
     subgraph internet ["Internet"]
@@ -250,7 +252,7 @@ graph LR
 
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
-    CC -->|"streamable-http"| RM
+    CC -->|"streamable-http"| RAPI
     CC -->|"HTTPS"| ML
     CC -->|"HTTPS"| ZE
     OC -->|"HTTP(S)"| OCTI
