@@ -14,6 +14,8 @@ Supports multiple view modes:
 
 from __future__ import annotations
 
+_EM_DASH = "\u2014"
+
 import json
 import re
 import sys
@@ -139,7 +141,7 @@ def _show_findings_table(case_dir: Path) -> None:
         if len(title) > 37:
             title = title[:37] + "..."
         confidence = f.get("confidence", "?")
-        provenance = f.get("provenance", "\u2014")
+        provenance = f.get("provenance", _EM_DASH)
         status = f.get("status", "?")
         print(f"{title:<40} {confidence:<12} {provenance:<12} {status:<10}")
 
@@ -162,7 +164,7 @@ def _show_findings_detail(case_dir: Path) -> None:
         print(f"  Confidence:   {f.get('confidence', '?')}")
         if f.get("confidence_justification"):
             print(f"  Justification: {f['confidence_justification']}")
-        print(f"  Provenance:   {f.get('provenance', '\u2014')}")
+        print(f"  Provenance:   {f.get('provenance', _EM_DASH)}")
         print(f"  Evidence:     {', '.join(f.get('evidence_ids', []))}")
         print(f"  Observation:  {f.get('observation', '')}")
         print(f"  Interpretation: {f.get('interpretation', '')}")
@@ -187,19 +189,19 @@ def _show_findings_detail(case_dir: Path) -> None:
                     ts = entry.get("ts", "")[:19]
                     if source_file == "claude-code.jsonl":
                         cmd = entry.get("command", "?")
-                        print(f"    [HOOK]  {eid} \u2014 \"{cmd}\" @ {ts}")
+                        print(f"    [HOOK]  {eid} {_EM_DASH} \"{cmd}\" @ {ts}")
                     elif eid.startswith("shell-"):
                         cmd = entry.get("params", {}).get("command", "?")
-                        print(f"    [SHELL] {eid} \u2014 \"{cmd}\"")
+                        print(f"    [SHELL] {eid} {_EM_DASH} \"{cmd}\"")
                     else:
                         tool = entry.get("tool", "?")
                         params = entry.get("params", {})
                         params_summary = ", ".join(
                             f"{k}={v}" for k, v in list(params.items())[:3]
                         )
-                        print(f"    [MCP]   {eid} \u2014 {tool}({params_summary}) @ {ts}")
+                        print(f"    [MCP]   {eid} {_EM_DASH} {tool}({params_summary}) @ {ts}")
                 else:
-                    print(f"    [NONE]  {eid} \u2014 no audit record")
+                    print(f"    [NONE]  {eid} {_EM_DASH} no audit record")
 
         # Supporting commands
         supporting = f.get("supporting_commands", [])
