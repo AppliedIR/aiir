@@ -55,7 +55,9 @@ def _resolve_gateway(args) -> tuple[str, str | None]:
     if not url:
         url = "http://127.0.0.1:4508"
 
-    return url.rstrip("/"), token or None
+    if not token:
+        print("Warning: No gateway token found. Check ~/.aiir/config.yaml", file=sys.stderr)
+    return url.rstrip("/"), token if token else None
 
 
 def _load_config() -> dict:
