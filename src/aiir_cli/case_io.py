@@ -198,6 +198,7 @@ def write_approval_log(
     identity: dict,
     reason: str = "",
     mode: str = "interactive",
+    content_hash: str = "",
 ) -> None:
     """Write approval/rejection record to approvals.jsonl."""
     log_file = case_dir / "approvals.jsonl"
@@ -214,6 +215,8 @@ def write_approval_log(
     }
     if reason:
         entry["reason"] = reason
+    if content_hash:
+        entry["content_hash"] = content_hash
     try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
@@ -278,6 +281,7 @@ _HASH_EXCLUDE_KEYS = {
     "content_hash",
     "verification",
     "modified_at",
+    "provenance",
 }
 
 
@@ -303,6 +307,9 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
     - 'tampered': APPROVED/REJECTED but content hash does not match
     - 'no approval record': APPROVED/REJECTED but no matching record
     - 'draft': still in DRAFT status
+
+    Cross-file check: if the approval record also has a content_hash, both
+    findings.json and approvals.jsonl hashes must match the recomputed hash.
     """
     findings = load_findings(case_dir)
     approvals = load_approval_log(case_dir)
@@ -322,13 +329,16 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
             result["verification"] = "draft"
         elif record:
             if record["action"] == status:
-                # Check content hash if present
-                if f.get("content_hash"):
-                    expected = compute_content_hash(f)
-                    if expected != f["content_hash"]:
-                        result["verification"] = "tampered"
-                    else:
-                        result["verification"] = "confirmed"
+                recomputed = compute_content_hash(f)
+                # Check findings.json content hash
+                if f.get("content_hash") and recomputed != f["content_hash"]:
+                    result["verification"] = "tampered"
+                # Cross-file check: approval record content hash
+                elif (
+                    record.get("content_hash")
+                    and recomputed != record["content_hash"]
+                ):
+                    result["verification"] = "tampered"
                 else:
                     result["verification"] = "confirmed"
             else:
@@ -337,6 +347,38 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
             result["verification"] = "no approval record"
         results.append(result)
     return results
+
+
+# --- Audit Index ---
+
+
+def load_audit_index(case_dir: Path) -> dict[str, dict]:
+    """Scan audit/*.jsonl and build {evidence_id: {**entry, "_source_file": filename}}.
+
+    Used by review --detail to resolve evidence chains.
+    """
+    audit_dir = case_dir / "audit"
+    index: dict[str, dict] = {}
+    if not audit_dir.is_dir():
+        return index
+    for jsonl_file in sorted(audit_dir.glob("*.jsonl")):
+        try:
+            with open(jsonl_file, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        eid = entry.get("evidence_id", "")
+                        if eid:
+                            entry["_source_file"] = jsonl_file.name
+                            index[eid] = entry
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            continue
+    return index
 
 
 # --- Export / Merge ---

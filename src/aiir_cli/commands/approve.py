@@ -113,11 +113,21 @@ def _approve_specific(
 
     now = datetime.now(timezone.utc).isoformat()
     for item in to_approve:
-        item["content_hash"] = compute_content_hash(item)
+        staging_hash = item.get("content_hash", "")
+        new_hash = compute_content_hash(item)
+        if staging_hash and staging_hash != new_hash:
+            print(
+                f"  NOTE: Finding {item['id']} was modified since staging "
+                f"(content hash changed)."
+            )
+        item["content_hash"] = new_hash
         item["status"] = "APPROVED"
         item["approved_at"] = now
         item["approved_by"] = identity["examiner"]
-        write_approval_log(case_dir, item["id"], "APPROVED", identity, mode=mode)
+        write_approval_log(
+            case_dir, item["id"], "APPROVED", identity,
+            mode=mode, content_hash=new_hash,
+        )
 
     # Update modified_at on approve
     for item in to_approve:
@@ -251,11 +261,21 @@ def _interactive_review(
     # Apply approvals
     for item in all_items:
         if item["id"] in approvals:
-            item["content_hash"] = compute_content_hash(item)
+            staging_hash = item.get("content_hash", "")
+            new_hash = compute_content_hash(item)
+            if staging_hash and staging_hash != new_hash:
+                print(
+                    f"  NOTE: Finding {item['id']} was modified since staging "
+                    f"(content hash changed)."
+                )
+            item["content_hash"] = new_hash
             item["status"] = "APPROVED"
             item["approved_at"] = now
             item["approved_by"] = identity["examiner"]
-            write_approval_log(case_dir, item["id"], "APPROVED", identity, mode=mode)
+            write_approval_log(
+                case_dir, item["id"], "APPROVED", identity,
+                mode=mode, content_hash=new_hash,
+            )
 
     # Apply rejections
     for item in all_items:
