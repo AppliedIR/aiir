@@ -329,7 +329,7 @@ cases/INC-2026-0219/
 
 ```bash
 # One-command quickstart (SIFT workstation)
-curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
+curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
 ```
 
 Or step by step:
@@ -552,7 +552,7 @@ Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remot
 
 | Client | Config file | Extras |
 |--------|-------------|--------|
-| Claude Code | `.mcp.json` (remote) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (hooks + permissions + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
+| Claude Code | `~/aiir/.mcp.json` (non-SIFT) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (hooks + permissions + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
 | Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
 | Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |

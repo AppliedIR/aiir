@@ -1,8 +1,9 @@
 """Generate LLM client configuration pointing at AIIR API servers.
 
-All entries use ``type: streamable-http`` — no stdio.  Runs on the
-machine where the human sits; points at gateway / wintools / REMnux
-endpoints wherever they are.
+On SIFT, MCP entries use ``type: http`` in global ``~/.claude.json``.
+On remote clients, entries use ``type: streamable-http`` in project
+``.mcp.json``.  Runs on the machine where the human sits; points at
+gateway / wintools / REMnux endpoints wherever they are.
 """
 
 from __future__ import annotations
@@ -29,7 +30,12 @@ _MSLEARN_MCP = {
     "url": "https://learn.microsoft.com/api/mcp",
 }
 
-# AIIR backend names — used for uninstall identification
+# Forensic deny rules — must match claude-code/settings.json source template
+_FORENSIC_DENY_RULES = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
+
+# AIIR backend names — used for uninstall identification.
+# External MCPs (zeltser-ir-writing, microsoft-learn) are intentionally excluded
+# so uninstall does not remove MCPs the user may have configured independently.
 _AIIR_BACKEND_NAMES = {
     "forensic-mcp",
     "case-mcp",
@@ -887,32 +893,58 @@ def _uninstall_project() -> None:
     mcp_json = project_dir / ".mcp.json"
 
     files_to_remove = []
-    for name in ("CLAUDE.md", "AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
+    for name in ("AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
         p = project_dir / name
         if p.is_file():
             files_to_remove.append(p)
     if mcp_json.is_file():
         files_to_remove.append(mcp_json)
 
-    dirs_to_remove = []
-    if claude_dir.is_dir():
-        dirs_to_remove.append(claude_dir)
+    claude_md = project_dir / "CLAUDE.md"
+    has_claude_md = claude_md.is_file()
+    if has_claude_md:
+        files_to_remove.append(claude_md)
 
-    if not files_to_remove and not dirs_to_remove:
+    # Surgical .claude/ removal — only remove AIIR files, not user settings
+    claude_files_to_remove: list[Path] = []
+    if claude_dir.is_dir():
+        settings_file = claude_dir / "settings.json"
+        hooks_dir = claude_dir / "hooks"
+        hook_file = hooks_dir / "forensic-audit.sh"
+        if hook_file.is_file():
+            claude_files_to_remove.append(hook_file)
+        if settings_file.is_file():
+            claude_files_to_remove.append(settings_file)
+
+    if not files_to_remove and not claude_files_to_remove:
         print("  No AIIR files found in current directory.")
         return
 
     print("  Files to remove:")
     for p in files_to_remove:
         print(f"    {p}")
-    for d in dirs_to_remove:
-        print(f"    {d}/ (settings, hooks)")
+    for p in claude_files_to_remove:
+        print(f"    {p}")
 
     if _prompt_yn("  Remove all?", default=False):
         for p in files_to_remove:
             p.unlink()
-        for d in dirs_to_remove:
-            shutil.rmtree(d)
+        # Restore CLAUDE.md backup if exists
+        if has_claude_md:
+            bak = claude_md.with_suffix(".md.bak")
+            if bak.is_file():
+                bak.rename(claude_md)
+                print("  Restored CLAUDE.md from backup.")
+        # Surgical settings removal instead of rmtree
+        for p in claude_files_to_remove:
+            if p.name == "settings.json":
+                _remove_forensic_settings(p)
+            else:
+                p.unlink()
+        # Clean up empty hooks dir
+        hooks_dir = claude_dir / "hooks"
+        if hooks_dir.is_dir() and not any(hooks_dir.iterdir()):
+            hooks_dir.rmdir()
         print("  Removed.")
     else:
         print("  Skipped.")
@@ -957,8 +989,7 @@ def _remove_forensic_settings(path: Path) -> None:
     # Remove forensic deny rules
     perms = data.get("permissions", {})
     deny = perms.get("deny", [])
-    forensic_deny = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
-    perms["deny"] = [r for r in deny if r not in forensic_deny]
+    perms["deny"] = [r for r in deny if r not in _FORENSIC_DENY_RULES]
     if not perms["deny"]:
         perms.pop("deny", None)
     if not perms:

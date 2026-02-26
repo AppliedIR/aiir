@@ -541,7 +541,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 SETTINGS
 )
 
-    if [[ -f "$SETTINGS_FILE" ]]; then
+    if [[ -f "$SETTINGS_FILE" ]] && command -v python3 &>/dev/null; then
         info "Existing settings.json found. Merging..."
         # Use Python for JSON merge (available on most Linux systems)
         SETTINGS_FILE="$SETTINGS_FILE" SETTINGS_CONTENT="$SETTINGS_CONTENT" python3 << 'PYMERGE'
@@ -598,6 +598,10 @@ with open(target_path, "w") as f:
     f.write("\n")
 PYMERGE
         ok "settings.json (merged)"
+    elif [[ -f "$SETTINGS_FILE" ]]; then
+        warn "python3 not found. Overwriting existing settings.json."
+        echo "$SETTINGS_CONTENT" > "$SETTINGS_FILE"
+        ok "settings.json (overwritten)"
     else
         echo "$SETTINGS_CONTENT" > "$SETTINGS_FILE"
         ok "settings.json (hooks + permissions + sandbox)"

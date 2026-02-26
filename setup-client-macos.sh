@@ -358,6 +358,10 @@ with open(target_path, "w") as f:
     f.write("\n")
 PYMERGE
     ok "settings.json (merged)"
+elif [[ -f "$SETTINGS_FILE" ]]; then
+    warn "python3 not found. Overwriting existing settings.json."
+    echo "$SETTINGS_CONTENT" > "$SETTINGS_FILE"
+    ok "settings.json (overwritten)"
 else
     echo "$SETTINGS_CONTENT" > "$SETTINGS_FILE"
     ok "settings.json (hooks + permissions + sandbox)"

@@ -42,7 +42,7 @@ function Write-Err   { param([string]$Msg) Write-Host "[ERROR] $Msg" -Foreground
 
 function Prompt-YN {
     param([string]$Msg, [bool]$Default = $true)
-    $suffix = if ($Default) { "[Y/n]" } else { "[y/N]" }
+    if ($Default) { $suffix = "[Y/n]" } else { $suffix = "[y/N]" }
     $answer = Read-Host "$Msg $suffix"
     if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
     return ($answer.Trim().ToLower() -eq "y")
@@ -353,15 +353,7 @@ $assets = @(
 foreach ($asset in $assets) {
     Write-Info "Fetching $($asset.Name)..."
     try {
-        $fetchParams = @{
-            Uri = $asset.Url
-            OutFile = $asset.Dest
-            UseBasicParsing = $true
-        }
-        if ($PSVersionTable.PSVersion.Major -ge 6) {
-            $fetchParams["SkipCertificateCheck"] = $true
-        }
-        Invoke-WebRequest @fetchParams
+        Invoke-WebRequest -Uri $asset.Url -OutFile $asset.Dest -UseBasicParsing
         Write-Ok $asset.Name
     } catch {
         Write-Warn "Could not fetch $($asset.Name)"

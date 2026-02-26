@@ -133,7 +133,7 @@ mkdir ~/aiir/cases/INC-2026-001              # organize by case
 cd ~/aiir/cases/INC-2026-001 && claude       # case-specific session
 ```
 
-To uninstall, re-run the setup script with `--uninstall` (Linux/macOS) or `-Uninstall` (Windows).
+To uninstall, re-run the setup script with `--uninstall` (Linux/macOS) or `-Uninstall` (Windows). On SIFT, use `aiir setup client --uninstall`.
 
 Your LLM client must run locally on your machine to reach the SIFT gateway. Cloud-hosted LLM services cannot connect to internal network addresses.
 
