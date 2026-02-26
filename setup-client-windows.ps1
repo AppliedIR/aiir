@@ -74,6 +74,12 @@ $Sift = $Sift.TrimEnd('/')
 # Join Gateway
 # =============================================================================
 
+# Validate join code format
+if ($Code -notmatch '^[A-Za-z0-9_-]+$') {
+    Write-Err "Invalid join code format (alphanumeric, dash, underscore only)"
+    exit 1
+}
+
 Write-Info "Joining gateway at $Sift..."
 
 $hostname = [System.Net.Dns]::GetHostName()
@@ -129,8 +135,8 @@ if (-not (Test-Path $aiirDir)) {
 
 $configFile = Join-Path $aiirDir "config.yaml"
 @"
-gateway_url: $gatewayUrl
-gateway_token: $gatewayToken
+gateway_url: "$gatewayUrl"
+gateway_token: "$gatewayToken"
 "@ | Set-Content -Path $configFile -Encoding UTF8
 
 Write-Ok "Credentials saved to $configFile"

@@ -183,8 +183,15 @@ elif [[ "$SIFT_URL" == https* ]]; then
     fi
 fi
 
-info "Joining gateway at $SIFT_URL..."
+# Sanitize inputs for JSON interpolation
+if [[ ! "$JOIN_CODE" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    err "Invalid join code format (alphanumeric, dash, underscore only)"
+    exit 1
+fi
 HOSTNAME_VAL=$(hostname 2>/dev/null || echo "unknown")
+HOSTNAME_VAL=$(echo "$HOSTNAME_VAL" | tr -cd 'A-Za-z0-9._-')
+
+info "Joining gateway at $SIFT_URL..."
 
 JOIN_RESPONSE=$(curl "${CURL_OPTS[@]}" -X POST "$SIFT_URL/api/v1/setup/join" \
     -H "Content-Type: application/json" \
@@ -230,8 +237,8 @@ info "Token: ${GATEWAY_TOKEN:0:12}..."
 mkdir -p "$HOME/.aiir" && chmod 700 "$HOME/.aiir"
 AIIR_CONFIG="$HOME/.aiir/config.yaml"
 {
-    echo "gateway_url: $GATEWAY_URL"
-    echo "gateway_token: $GATEWAY_TOKEN"
+    echo "gateway_url: \"$GATEWAY_URL\""
+    echo "gateway_token: \"$GATEWAY_TOKEN\""
 } > "$AIIR_CONFIG"
 chmod 600 "$AIIR_CONFIG"
 ok "Credentials saved to $AIIR_CONFIG"
