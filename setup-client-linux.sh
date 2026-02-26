@@ -544,12 +544,9 @@ SETTINGS
     if [[ -f "$SETTINGS_FILE" ]]; then
         info "Existing settings.json found. Merging..."
         # Use Python for JSON merge (available on most Linux systems)
-        python3 << 'PYMERGE'
-import json, sys
+        SETTINGS_FILE="$SETTINGS_FILE" SETTINGS_CONTENT="$SETTINGS_CONTENT" python3 << 'PYMERGE'
+import json, sys, os
 
-target_path = sys.argv[1] if len(sys.argv) > 1 else None
-# Read paths from environment since we can't pass args easily in heredoc
-import os
 target_path = os.environ.get("SETTINGS_FILE", "")
 incoming_str = os.environ.get("SETTINGS_CONTENT", "{}")
 
