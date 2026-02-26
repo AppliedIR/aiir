@@ -879,7 +879,14 @@ def _uninstall_sift() -> None:
             print(f"      {f}")
         if _prompt_yn("      Remove?", default=False):
             for f in existing_project:
-                (Path.cwd() / f).unlink()
+                p = Path.cwd() / f
+                p.unlink()
+                # Restore backup if exists
+                if f == "CLAUDE.md":
+                    bak = p.with_suffix(".md.bak")
+                    if bak.is_file():
+                        bak.rename(p)
+                        print("      Restored CLAUDE.md from backup.")
             print("      Removed.")
         else:
             print("      Skipped.")
