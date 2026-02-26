@@ -883,6 +883,18 @@ def _uninstall_sift() -> None:
             print("      Removed.")
         else:
             print("      Skipped.")
+    print()
+
+    # [6] Gateway credentials (~/.aiir/config.yaml)
+    config_yaml = Path.home() / ".aiir" / "config.yaml"
+    if config_yaml.is_file():
+        print("  [6] Gateway credentials (~/.aiir/config.yaml)")
+        print("      Contains bearer token for gateway authentication.")
+        if _prompt_yn("      Remove?", default=False):
+            config_yaml.unlink()
+            print("      Removed.")
+        else:
+            print("      Skipped.")
 
     print("\nUninstall complete.")
 
@@ -954,6 +966,12 @@ def _uninstall_project() -> None:
         print("  Removed.")
     else:
         print("  Skipped.")
+
+    # Remove gateway credentials
+    config_yaml = Path.home() / ".aiir" / "config.yaml"
+    if config_yaml.is_file():
+        config_yaml.unlink()
+        print("  Removed ~/.aiir/config.yaml")
 
     print("\nUninstall complete.")
 

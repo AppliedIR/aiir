@@ -140,6 +140,7 @@ if $UNINSTALL; then
 
     if prompt_yn "  Remove entire AIIR workspace ($DEPLOY_DIR)?" "n"; then
         rm -rf "$DEPLOY_DIR"
+        rm -f "$HOME/.aiir/config.yaml"
         ok "Removed $DEPLOY_DIR"
     else
         echo ""

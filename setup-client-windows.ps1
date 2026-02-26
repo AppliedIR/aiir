@@ -96,6 +96,8 @@ if ($Uninstall) {
 
     if (Prompt-YN "  Remove entire AIIR workspace ($deployDir)?" $false) {
         Remove-Item -Path $deployDir -Recurse -Force
+        $configYaml = Join-Path $HOME ".aiir" "config.yaml"
+        if (Test-Path $configYaml) { Remove-Item -Path $configYaml -Force }
         Write-Ok "Removed $deployDir"
     } else {
         Write-Host ""
@@ -202,6 +204,20 @@ $configFile = Join-Path $aiirDir "config.yaml"
 gateway_url: "$gatewayUrl"
 gateway_token: "$gatewayToken"
 "@ | Set-Content -Path $configFile -Encoding UTF8
+
+# Restrict config.yaml to current user only
+try {
+    $acl = Get-Acl $configFile
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.Access | ForEach-Object { $acl.RemoveAccessRule($_) } | Out-Null
+    $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+        [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,
+        "FullControl", "Allow")
+    $acl.AddAccessRule($rule)
+    Set-Acl -Path $configFile -AclObject $acl
+} catch {
+    Write-Warn "Could not restrict permissions on $configFile"
+}
 
 Write-Ok "Credentials saved to $configFile"
 
