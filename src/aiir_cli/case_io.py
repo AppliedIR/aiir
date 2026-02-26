@@ -55,6 +55,24 @@ def _atomic_write(path: Path, content: str) -> None:
         raise
 
 
+def _protected_write(path: Path, content: str) -> None:
+    """Write to a chmod-444-protected case data file.
+
+    Unlocks (0o644) before write, locks (0o444) after. Defense-in-depth
+    speed bump — combined with deny rules and PreToolUse hook.
+    """
+    try:
+        if path.exists():
+            os.chmod(path, 0o644)
+    except OSError:
+        pass
+    _atomic_write(path, content)
+    try:
+        os.chmod(path, 0o444)
+    except OSError:
+        pass
+
+
 def get_case_dir(case_id: str | None = None) -> Path:
     """Resolve the active case directory."""
     if case_id:
@@ -151,7 +169,7 @@ def load_findings(case_dir: Path) -> list[dict]:
 
 def save_findings(case_dir: Path, findings: list[dict]) -> None:
     """Save findings to case root."""
-    _atomic_write(
+    _protected_write(
         case_dir / "findings.json",
         json.dumps(findings, indent=2, default=str),
     )
@@ -171,7 +189,7 @@ def load_timeline(case_dir: Path) -> list[dict]:
 
 def save_timeline(case_dir: Path, timeline: list[dict]) -> None:
     """Save timeline to case root."""
-    _atomic_write(
+    _protected_write(
         case_dir / "timeline.json",
         json.dumps(timeline, indent=2, default=str),
     )
@@ -227,12 +245,21 @@ def write_approval_log(
     if content_hash:
         entry["content_hash"] = content_hash
     try:
+        if log_file.exists():
+            os.chmod(log_file, 0o644)
+    except OSError:
+        pass
+    try:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
             f.flush()
             os.fsync(f.fileno())
     except OSError:
         print(f"WARNING: Failed to write approval log: {log_file}", file=sys.stderr)
+    try:
+        os.chmod(log_file, 0o444)
+    except OSError:
+        pass
 
 
 def load_approval_log(case_dir: Path) -> list[dict]:

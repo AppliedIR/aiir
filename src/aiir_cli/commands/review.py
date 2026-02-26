@@ -58,7 +58,8 @@ def cmd_review(args, identity: dict) -> None:
         detail = getattr(args, "detail", False)
         verify = getattr(args, "verify", False)
         if verify:
-            _show_findings_verify(case_dir)
+            mine_only = getattr(args, "mine", False)
+            _show_findings_verify(case_dir, identity=identity, mine_only=mine_only)
         elif detail:
             _show_findings_detail(case_dir)
         else:
@@ -218,13 +219,19 @@ def _show_findings_detail(case_dir: Path) -> None:
                     print(f"       Output:  {display}")
 
 
-def _show_findings_verify(case_dir: Path) -> None:
-    """Cross-check findings against approvals.jsonl."""
+def _show_findings_verify(
+    case_dir: Path,
+    identity: dict | None = None,
+    mine_only: bool = False,
+) -> None:
+    """Cross-check findings against approvals.jsonl and verification ledger."""
     results = verify_approval_integrity(case_dir)
     if not results:
         print("No findings recorded.")
         return
 
+    # --- Content hash verification (existing) ---
+    print("Content Hash Verification")
     print(f"{'ID':<20} {'Status':<12} {'Verification':<22} Title")
     print("-" * 80)
     for f in results:
@@ -258,6 +265,117 @@ def _show_findings_verify(case_dir: Path) -> None:
         print("ALERT: Content was modified after approval. Investigate immediately.")
     if unverified:
         print("WARNING: Some findings have status changes without approval records.")
+
+    # --- Ledger reconciliation (no PIN needed) ---
+    _show_ledger_reconciliation(case_dir)
+
+    # --- HMAC verification (requires PIN) ---
+    _show_hmac_verification(case_dir, identity=identity, mine_only=mine_only)
+
+
+def _show_ledger_reconciliation(case_dir: Path) -> None:
+    """Show reconciliation between approved items and verification ledger."""
+    try:
+        from aiir_cli.verification import read_ledger
+    except ImportError:
+        return
+
+    meta = load_case_meta(case_dir)
+    case_id = meta.get("case_id", case_dir.name)
+
+    ledger = read_ledger(case_id)
+    if not ledger:
+        print(f"\nVerification Ledger: no entries for case {case_id}")
+        return
+
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
+    approved_findings = [f for f in findings if f.get("status") == "APPROVED"]
+    approved_timeline = [t for t in timeline if t.get("status") == "APPROVED"]
+    all_approved = approved_findings + approved_timeline
+
+    items_by_id = {i["id"]: i for i in all_approved}
+    ledger_by_id = {e["finding_id"]: e for e in ledger}
+    all_ids = sorted(set(items_by_id) | set(ledger_by_id))
+
+    print(f"\nVerification Ledger Reconciliation ({len(ledger)} entries)")
+    print(f"{'ID':<20} {'Reconciliation':<25}")
+    print("-" * 50)
+
+    alerts = 0
+    for item_id in all_ids:
+        item = items_by_id.get(item_id)
+        entry = ledger_by_id.get(item_id)
+        if item and not entry:
+            print(f"{item_id:<20} APPROVED_NO_VERIFICATION")
+            alerts += 1
+        elif entry and not item:
+            print(f"{item_id:<20} VERIFICATION_NO_FINDING")
+            alerts += 1
+        elif item and entry:
+            desc = item.get("description", "")
+            snap = entry.get("description_snapshot", "")
+            if desc != snap:
+                print(f"{item_id:<20} DESCRIPTION_MISMATCH")
+                alerts += 1
+            else:
+                print(f"{item_id:<20} VERIFIED")
+
+    if alerts:
+        print(f"\n{alerts} alert(s) found. Run 'aiir review --findings --verify' with PIN for full HMAC check.")
+
+
+def _show_hmac_verification(
+    case_dir: Path,
+    identity: dict | None = None,
+    mine_only: bool = False,
+) -> None:
+    """Perform full HMAC verification with PIN prompt."""
+    try:
+        from aiir_cli.approval_auth import get_analyst_salt
+        from aiir_cli.approval_auth import getpass_prompt
+        from aiir_cli.verification import read_ledger, verify_items
+    except ImportError:
+        return
+
+    meta = load_case_meta(case_dir)
+    case_id = meta.get("case_id", case_dir.name)
+    config_path = Path.home() / ".aiir" / "config.yaml"
+
+    ledger = read_ledger(case_id)
+    if not ledger:
+        return
+
+    # Group entries by examiner
+    examiners = sorted(set(e.get("approved_by", "") for e in ledger if e.get("approved_by")))
+    if not examiners:
+        return
+
+    if mine_only and identity:
+        examiners = [e for e in examiners if e == identity.get("examiner")]
+
+    print(f"\nHMAC Verification (PIN required)")
+    print(f"Examiners with ledger entries: {', '.join(examiners)}")
+
+    for examiner in examiners:
+        try:
+            print(f"\n  Verifying entries for examiner '{examiner}':")
+            pin = getpass_prompt(f"  Enter PIN for '{examiner}': ")
+            salt = get_analyst_salt(config_path, examiner)
+            results = verify_items(case_id, pin, salt, examiner)
+
+            confirmed = sum(1 for r in results if r["verified"])
+            failed = sum(1 for r in results if not r["verified"])
+
+            for r in results:
+                status = "CONFIRMED" if r["verified"] else "TAMPERED"
+                print(f"    {r['finding_id']:<20} {status}")
+
+            print(f"  {confirmed} confirmed, {failed} failed")
+            if failed:
+                print("  ALERT: HMAC mismatch detected. Findings may have been tampered with.")
+        except (ValueError, RuntimeError) as e:
+            print(f"  Skipped: {e}")
 
 
 def _show_iocs(case_dir: Path) -> None:

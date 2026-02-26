@@ -143,6 +143,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Cross-check findings against approval records",
     )
     p_review.add_argument(
+        "--mine",
+        action="store_true",
+        help="Filter HMAC verification to current examiner only",
+    )
+    p_review.add_argument(
         "--iocs",
         action="store_true",
         help="Extract IOCs from findings grouped by status",
@@ -725,6 +730,34 @@ def _case_init_data(
         f.flush()
         os.fsync(f.fileno())
 
+    # chmod 444 on protected case data files
+    fs_warning = ""
+    try:
+        import subprocess
+
+        result = subprocess.run(
+            ["stat", "-f", "-c", "%T", str(case_dir)],
+            capture_output=True, text=True,
+        )
+        fs_type = result.stdout.strip().lower()
+        _NON_POSIX = {"fuseblk", "vfat", "exfat", "ntfs"}
+        if fs_type in _NON_POSIX:
+            fs_warning = (
+                f"Filesystem ({fs_type}) does not support POSIX permissions. "
+                "chmod 444 protection will not be enforced."
+            )
+    except (OSError, FileNotFoundError):
+        pass
+
+    if not fs_warning:
+        for fname in (
+            "findings.json", "timeline.json", "todos.json", "CASE.yaml",
+        ):
+            try:
+                os.chmod(case_dir / fname, 0o444)
+            except OSError:
+                pass
+
     # Set active case pointer
     try:
         aiir_dir = Path.home() / ".aiir"
@@ -733,12 +766,15 @@ def _case_init_data(
     except OSError:
         pass  # non-fatal — CLI wrapper will warn
 
-    return {
+    result = {
         "case_id": case_id,
         "case_dir": str(case_dir),
         "examiner": examiner,
         "created": ts.isoformat(),
     }
+    if fs_warning:
+        result["fs_warning"] = fs_warning
+    return result
 
 
 def _case_init(args, identity: dict) -> None:
@@ -760,6 +796,8 @@ def _case_init(args, identity: dict) -> None:
     print(f"  Name: {args.name}")
     print(f"  Examiner: {data['examiner']}")
     print(f"  Path: {data['case_dir']}")
+    if data.get("fs_warning"):
+        print(f"  WARNING: {data['fs_warning']}")
     print()
     print("Next steps:")
     print(f"  1. Copy evidence into: {data['case_dir']}/evidence/")
@@ -857,6 +895,13 @@ def _case_close(args, identity: dict) -> None:
     from aiir_cli.case_io import _atomic_write as _aw
 
     _aw(meta_file, yaml.dump(meta, default_flow_style=False))
+
+    # Copy verification ledger into case directory
+    try:
+        from aiir_cli.verification import copy_ledger_to_case
+        copy_ledger_to_case(case_id, case_dir)
+    except (ImportError, OSError):
+        pass  # Non-fatal — ledger may not exist
 
     # Clear active case pointer if this was the active case
     active_file = Path.home() / ".aiir" / "active_case"

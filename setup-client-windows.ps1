@@ -295,6 +295,17 @@ $settingsObj = @{
                 )
             }
         )
+        PreToolUse = @(
+            @{
+                matcher = "Bash"
+                hooks = @(
+                    @{
+                        type = "command"
+                        command = (Join-Path $hooksDir "pre-bash-guard.sh").Replace('\', '/')
+                    }
+                )
+            }
+        )
         PostToolUse = @(
             @{
                 matcher = "Bash"
@@ -309,9 +320,22 @@ $settingsObj = @{
     }
     permissions = @{
         deny = @(
-            "Bash(rm -rf *)",
-            "Bash(mkfs*)",
-            "Bash(dd *)"
+            "Edit(**/findings.json)",
+            "Edit(**/timeline.json)",
+            "Edit(**/approvals.jsonl)",
+            "Edit(**/todos.json)",
+            "Edit(**/CASE.yaml)",
+            "Edit(**/actions.jsonl)",
+            "Edit(**/audit/*.jsonl)",
+            "Write(**/findings.json)",
+            "Write(**/timeline.json)",
+            "Write(**/approvals.jsonl)",
+            "Write(**/todos.json)",
+            "Write(**/CASE.yaml)",
+            "Write(**/actions.jsonl)",
+            "Write(**/audit/*.jsonl)",
+            "Bash(aiir approve*)",
+            "Bash(aiir reject*)"
         )
     }
     sandbox = @{
@@ -329,7 +353,7 @@ if (Test-Path $settingsPath) {
         if (-not $existing.hooks) {
             $existing | Add-Member -NotePropertyName hooks -NotePropertyValue $settingsObj.hooks
         } else {
-            foreach ($hookType in @("UserPromptSubmit", "PostToolUse")) {
+            foreach ($hookType in @("UserPromptSubmit", "PreToolUse", "PostToolUse")) {
                 if (-not $existing.hooks.$hookType) {
                     $existing.hooks | Add-Member -NotePropertyName $hookType -NotePropertyValue $settingsObj.hooks.$hookType
                 }
@@ -343,6 +367,10 @@ if (Test-Path $settingsPath) {
             $existing.permissions | Add-Member -NotePropertyName deny -NotePropertyValue $settingsObj.permissions.deny
         } else {
             $existingDeny = [System.Collections.Generic.HashSet[string]]::new([string[]]$existing.permissions.deny)
+            # Remove old forensic rules on re-deploy
+            foreach ($old in @("Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)")) {
+                [void]$existingDeny.Remove($old)
+            }
             foreach ($rule in $settingsObj.permissions.deny) {
                 [void]$existingDeny.Add($rule)
             }
@@ -376,7 +404,8 @@ $assets = @(
     @{ Name = "AGENTS.md"; Url = "$githubRaw/sift-mcp/main/AGENTS.md"; Dest = (Join-Path $deployDir "AGENTS.md") },
     @{ Name = "FORENSIC_DISCIPLINE.md"; Url = "$githubRaw/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md"; Dest = (Join-Path $deployDir "FORENSIC_DISCIPLINE.md") },
     @{ Name = "TOOL_REFERENCE.md"; Url = "$githubRaw/sift-mcp/main/claude-code/TOOL_REFERENCE.md"; Dest = (Join-Path $deployDir "TOOL_REFERENCE.md") },
-    @{ Name = "forensic-audit.sh"; Url = "$githubRaw/sift-mcp/main/claude-code/hooks/forensic-audit.sh"; Dest = $hookPath }
+    @{ Name = "forensic-audit.sh"; Url = "$githubRaw/sift-mcp/main/claude-code/hooks/forensic-audit.sh"; Dest = $hookPath },
+    @{ Name = "pre-bash-guard.sh"; Url = "$githubRaw/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh"; Dest = (Join-Path $hooksDir "pre-bash-guard.sh") }
 )
 
 foreach ($asset in $assets) {

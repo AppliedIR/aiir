@@ -32,8 +32,11 @@ _LOCKOUT_SECONDS = 900  # 15 minutes
 _LOCKOUT_FILE = Path.home() / ".aiir" / ".pin_lockout"
 
 
-def require_confirmation(config_path: Path, analyst: str) -> str:
-    """Require PIN confirmation. Returns 'pin'.
+def require_confirmation(config_path: Path, analyst: str) -> tuple[str, str | None]:
+    """Require PIN confirmation. Returns (mode, pin).
+
+    Returns ('pin', raw_pin_string) on success. The raw PIN is needed
+    for HMAC derivation in the verification ledger.
 
     PIN must be configured for the analyst. If not, prints setup
     instructions and exits.
@@ -47,7 +50,7 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
         )
         sys.exit(1)
     _check_lockout(analyst)
-    pin = _getpass_prompt("Enter PIN to confirm: ")
+    pin = getpass_prompt("Enter PIN to confirm: ")
     if not verify_pin(config_path, analyst, pin):
         _record_failure(analyst)
         remaining = _MAX_PIN_ATTEMPTS - _recent_failure_count(analyst)
@@ -60,7 +63,7 @@ def require_confirmation(config_path: Path, analyst: str) -> str:
             print(f"Incorrect PIN. {remaining} attempt(s) remaining.", file=sys.stderr)
         sys.exit(1)
     _clear_failures(analyst)
-    return "pin"
+    return ("pin", pin)
 
 
 def require_tty_confirmation(prompt: str) -> bool:
@@ -107,13 +110,16 @@ def verify_pin(config_path: Path, analyst: str, pin: str) -> bool:
     return secrets.compare_digest(computed, stored_hash)
 
 
-def setup_pin(config_path: Path, analyst: str) -> None:
-    """Set up a new PIN for the analyst. Prompts twice to confirm."""
-    pin1 = _getpass_prompt("Enter new PIN: ")
+def setup_pin(config_path: Path, analyst: str) -> str:
+    """Set up a new PIN for the analyst. Prompts twice to confirm.
+
+    Returns the raw PIN string (needed for HMAC re-signing during rotation).
+    """
+    pin1 = getpass_prompt("Enter new PIN: ")
     if not pin1:
         print("PIN cannot be empty.", file=sys.stderr)
         sys.exit(1)
-    pin2 = _getpass_prompt("Confirm new PIN: ")
+    pin2 = getpass_prompt("Confirm new PIN: ")
     if pin1 != pin2:
         print("PINs do not match.", file=sys.stderr)
         sys.exit(1)
@@ -131,10 +137,15 @@ def setup_pin(config_path: Path, analyst: str) -> None:
 
     _save_config(config_path, config)
     print(f"PIN configured for analyst '{analyst}'.")
+    return pin1
 
 
 def reset_pin(config_path: Path, analyst: str) -> None:
-    """Reset PIN. Requires current PIN first."""
+    """Reset PIN. Requires current PIN first.
+
+    After changing the PIN, re-signs all verification ledger entries
+    for this analyst with the new key.
+    """
     if not has_pin(config_path, analyst):
         print(
             f"No PIN configured for analyst '{analyst}'. Use --setup-pin first.",
@@ -142,12 +153,41 @@ def reset_pin(config_path: Path, analyst: str) -> None:
         )
         sys.exit(1)
 
-    current = _getpass_prompt("Enter current PIN: ")
+    current = getpass_prompt("Enter current PIN: ")
     if not verify_pin(config_path, analyst, current):
         print("Incorrect current PIN.", file=sys.stderr)
         sys.exit(1)
 
-    setup_pin(config_path, analyst)
+    # Read old salt before setup_pin overwrites it
+    old_salt = get_analyst_salt(config_path, analyst)
+
+    new_pin = setup_pin(config_path, analyst)
+
+    # Re-HMAC verification ledger entries with new key
+    new_salt = get_analyst_salt(config_path, analyst)
+    try:
+        from aiir_cli.verification import VERIFICATION_DIR, rehmac_entries
+
+        if VERIFICATION_DIR.is_dir():
+            for ledger_file in VERIFICATION_DIR.glob("*.jsonl"):
+                case_id = ledger_file.stem
+                count = rehmac_entries(
+                    case_id, analyst, current, old_salt, new_pin, new_salt
+                )
+                if count:
+                    print(f"  Re-signed {count} ledger entry/entries for case {case_id}.")
+    except (ImportError, OSError) as e:
+        print(f"  Warning: could not re-sign ledger entries: {e}", file=sys.stderr)
+
+
+def get_analyst_salt(config_path: Path, analyst: str) -> bytes:
+    """Get the analyst's PBKDF2 salt from config. Raises ValueError if missing."""
+    config = _load_config(config_path)
+    pins = config.get("pins", {})
+    entry = pins.get(analyst)
+    if not entry or "salt" not in entry:
+        raise ValueError(f"No salt found for analyst '{analyst}'")
+    return bytes.fromhex(entry["salt"])
 
 
 def _load_failures() -> dict[str, list[float]]:
@@ -219,7 +259,7 @@ def _clear_failures(analyst: str) -> None:
         _save_failures(data)
 
 
-def _getpass_prompt(prompt: str) -> str:
+def getpass_prompt(prompt: str) -> str:
     """Read PIN from /dev/tty with masked input (shows * per keystroke).
 
     Raises RuntimeError if /dev/tty or termios is unavailable.

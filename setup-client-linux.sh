@@ -509,6 +509,15 @@ if [[ "$CLIENT" == "claude-code" ]]; then
         ERRORS=$((ERRORS + 1))
     fi
 
+    info "Fetching pre-bash-guard.sh..."
+    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh" -o "$HOOKS_DIR/pre-bash-guard.sh" 2>/dev/null; then
+        chmod 755 "$HOOKS_DIR/pre-bash-guard.sh"
+        ok "pre-bash-guard.sh"
+    else
+        warn "Could not fetch pre-bash-guard.sh"
+        ERRORS=$((ERRORS + 1))
+    fi
+
     # Generate settings.json with all 4 blocks
     SETTINGS_DIR="$DEPLOY_DIR/.claude"
     mkdir -p "$SETTINGS_DIR"
@@ -532,6 +541,17 @@ if [[ "$CLIENT" == "claude-code" ]]; then
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$DEPLOY_DIR/.claude/hooks/pre-bash-guard.sh"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
@@ -546,9 +566,22 @@ if [[ "$CLIENT" == "claude-code" ]]; then
   },
   "permissions": {
     "deny": [
-      "Bash(rm -rf *)",
-      "Bash(mkfs*)",
-      "Bash(dd *)"
+      "Edit(**/findings.json)",
+      "Edit(**/timeline.json)",
+      "Edit(**/approvals.jsonl)",
+      "Edit(**/todos.json)",
+      "Edit(**/CASE.yaml)",
+      "Edit(**/actions.jsonl)",
+      "Edit(**/audit/*.jsonl)",
+      "Write(**/findings.json)",
+      "Write(**/timeline.json)",
+      "Write(**/approvals.jsonl)",
+      "Write(**/todos.json)",
+      "Write(**/CASE.yaml)",
+      "Write(**/actions.jsonl)",
+      "Write(**/audit/*.jsonl)",
+      "Bash(aiir approve*)",
+      "Bash(aiir reject*)"
     ]
   },
   "sandbox": {
@@ -603,6 +636,8 @@ if "permissions" in incoming:
     existing_perms = existing.setdefault("permissions", {})
     if "deny" in incoming["permissions"]:
         existing_deny = set(existing_perms.get("deny", []))
+        # Remove old forensic rules on re-deploy
+        existing_deny -= {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
         for rule in incoming["permissions"]["deny"]:
             existing_deny.add(rule)
         existing_perms["deny"] = sorted(existing_deny)

@@ -109,7 +109,7 @@ def _approve_specific(
             _apply_note(item, note, identity)
 
     print(f"\n{len(to_approve)} item(s) to approve.")
-    mode = require_confirmation(config_path, identity["examiner"])
+    mode, pin = require_confirmation(config_path, identity["examiner"])
 
     now = datetime.now(timezone.utc).isoformat()
     for item in to_approve:
@@ -128,6 +128,11 @@ def _approve_specific(
             case_dir, item["id"], "APPROVED", identity,
             mode=mode, content_hash=new_hash,
         )
+
+    # Write HMAC verification ledger entries
+    _write_verification_entries(
+        case_dir, to_approve, identity, config_path, pin, now
+    )
 
     # Update modified_at on approve
     for item in to_approve:
@@ -171,7 +176,7 @@ def _interactive_review(
     print(f"Reviewing {len(all_items)} DRAFT item(s)...\n")
 
     # Authenticate before review so examiner doesn't lose work on PIN failure
-    mode = require_confirmation(config_path, identity["examiner"])
+    mode, pin = require_confirmation(config_path, identity["examiner"])
 
     # Collect dispositions
     dispositions: dict[str, tuple] = {}  # id -> (action, extra_data)
@@ -277,6 +282,12 @@ def _interactive_review(
                 mode=mode, content_hash=new_hash,
             )
 
+    # Write HMAC verification ledger entries for approved items
+    approved_items = [item for item in all_items if item["id"] in approvals]
+    _write_verification_entries(
+        case_dir, approved_items, identity, config_path, pin, now
+    )
+
     # Apply rejections
     for item in all_items:
         disp = dispositions.get(item["id"])
@@ -305,6 +316,68 @@ def _interactive_review(
         _create_todos(case_dir, todos_to_create, identity)
 
     print(f"Committed {len(approvals) + len(rejections)} disposition(s).")
+
+
+def _write_verification_entries(
+    case_dir: Path,
+    items: list[dict],
+    identity: dict,
+    config_path: Path,
+    pin: str | None,
+    now: str,
+) -> None:
+    """Write HMAC verification ledger entries for approved items."""
+    if not pin:
+        return  # No PIN available (shouldn't happen, but guard)
+
+    try:
+        from aiir_cli.approval_auth import get_analyst_salt
+        from aiir_cli.verification import (
+            compute_hmac,
+            derive_hmac_key,
+            write_ledger_entry,
+        )
+    except ImportError:
+        return  # verification module not installed
+
+    try:
+        salt = get_analyst_salt(config_path, identity["examiner"])
+    except (ValueError, OSError):
+        return  # salt not available
+
+    derived_key = derive_hmac_key(pin, salt)
+
+    # Resolve case_id from CASE.yaml
+    case_id = ""
+    try:
+        meta_file = case_dir / "CASE.yaml"
+        if meta_file.exists():
+            import yaml
+
+            meta = yaml.safe_load(meta_file.read_text()) or {}
+            case_id = meta.get("case_id", "")
+    except Exception:
+        pass
+    if not case_id:
+        case_id = case_dir.name
+
+    for item in items:
+        desc = item.get("description", "")
+        item_id = item.get("id", "")
+        item_type = "timeline" if item_id.startswith("T-") else "finding"
+        entry = {
+            "finding_id": item_id,
+            "type": item_type,
+            "hmac": compute_hmac(derived_key, desc),
+            "description_snapshot": desc,
+            "approved_by": identity["examiner"],
+            "approved_at": now,
+            "case_id": case_id,
+        }
+        try:
+            write_ledger_entry(case_id, entry)
+        except OSError:
+            pass  # Non-fatal — verification dir may not exist yet
 
 
 def _prompt_choice() -> str:

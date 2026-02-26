@@ -31,7 +31,27 @@ _MSLEARN_MCP = {
 }
 
 # Forensic deny rules — must match claude-code/settings.json source template
-_FORENSIC_DENY_RULES = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
+_FORENSIC_DENY_RULES = {
+    "Edit(**/findings.json)",
+    "Edit(**/timeline.json)",
+    "Edit(**/approvals.jsonl)",
+    "Edit(**/todos.json)",
+    "Edit(**/CASE.yaml)",
+    "Edit(**/actions.jsonl)",
+    "Edit(**/audit/*.jsonl)",
+    "Write(**/findings.json)",
+    "Write(**/timeline.json)",
+    "Write(**/approvals.jsonl)",
+    "Write(**/todos.json)",
+    "Write(**/CASE.yaml)",
+    "Write(**/actions.jsonl)",
+    "Write(**/audit/*.jsonl)",
+    "Bash(aiir approve*)",
+    "Bash(aiir reject*)",
+}
+
+# Old forensic deny rules — removed during migration re-deploy
+_OLD_FORENSIC_DENY_RULES = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
 
 # AIIR backend names — used for uninstall identification.
 # External MCPs (zeltser-ir-writing, microsoft-learn) are intentionally excluded
@@ -511,6 +531,7 @@ def _merge_settings(target: Path, source: Path) -> None:
         existing_perms = existing.setdefault("permissions", {})
         if "deny" in incoming["permissions"]:
             existing_deny = set(existing_perms.get("deny", []))
+            existing_deny -= _OLD_FORENSIC_DENY_RULES  # Remove old forensic rules
             for rule in incoming["permissions"]["deny"]:
                 existing_deny.add(rule)
             existing_perms["deny"] = sorted(existing_deny)
@@ -599,12 +620,13 @@ def _deploy_claude_code_assets(project_dir: Path) -> None:
             # Post-merge fixup: replace $CLAUDE_PROJECT_DIR hook path with absolute
             _fixup_global_hook_path(settings_target)
 
-        # Deploy hook script to ~/.aiir/hooks/
-        hook_src = assets_dir / "hooks" / "forensic-audit.sh"
-        if hook_src.is_file():
-            hook_target = Path.home() / ".aiir" / "hooks" / "forensic-audit.sh"
-            _deploy_hook(hook_src, hook_target)
-            print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+        # Deploy hook scripts to ~/.aiir/hooks/
+        for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
+            hook_src = assets_dir / "hooks" / hook_name
+            if hook_src.is_file():
+                hook_target = Path.home() / ".aiir" / "hooks" / hook_name
+                _deploy_hook(hook_src, hook_target)
+                print(f"  Deployed:  {hook_name} -> {hook_target}")
 
         # Deploy CLAUDE.md globally
         _deploy_claude_md(assets_dir, Path.home() / ".claude" / "CLAUDE.md")
@@ -632,12 +654,13 @@ def _deploy_claude_code_assets(project_dir: Path) -> None:
             _merge_settings(settings_target, settings_src)
             print(f"  Merged:    settings.json -> {settings_target}")
 
-        # Deploy hook script to project
-        hook_src = assets_dir / "hooks" / "forensic-audit.sh"
-        if hook_src.is_file():
-            hook_target = project_dir / ".claude" / "hooks" / "forensic-audit.sh"
-            _deploy_hook(hook_src, hook_target)
-            print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+        # Deploy hook scripts to project
+        for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
+            hook_src = assets_dir / "hooks" / hook_name
+            if hook_src.is_file():
+                hook_target = project_dir / ".claude" / "hooks" / hook_name
+                _deploy_hook(hook_src, hook_target)
+                print(f"  Deployed:  {hook_name} -> {hook_target}")
 
         # Deploy CLAUDE.md to project root
         _deploy_claude_md(assets_dir, project_dir / "CLAUDE.md")
@@ -665,16 +688,18 @@ def _fixup_global_hook_path(settings_path: Path) -> None:
     except (json.JSONDecodeError, OSError):
         return
 
-    abs_hook = str(Path.home() / ".aiir" / "hooks" / "forensic-audit.sh")
+    hooks_dir = Path.home() / ".aiir" / "hooks"
     changed = False
 
-    for hook_type in ("PostToolUse", "UserPromptSubmit"):
+    for hook_type in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
         entries = data.get("hooks", {}).get(hook_type, [])
         for entry in entries:
             for h in entry.get("hooks", []):
                 cmd = h.get("command", "")
-                if "$CLAUDE_PROJECT_DIR" in cmd and "forensic-audit.sh" in cmd:
-                    h["command"] = abs_hook
+                if "$CLAUDE_PROJECT_DIR" in cmd and cmd.endswith(".sh"):
+                    # Extract the script filename from the path
+                    script_name = cmd.rsplit("/", 1)[-1]
+                    h["command"] = str(hooks_dir / script_name)
                     changed = True
 
     if changed:
@@ -844,12 +869,15 @@ def _uninstall_sift() -> None:
             print("      Skipped.")
     print()
 
-    # [3] Hook script
-    hook = Path.home() / ".aiir" / "hooks" / "forensic-audit.sh"
-    if hook.is_file():
-        print("  [3] Audit hook script (~/.aiir/hooks/forensic-audit.sh)")
+    # [3] Hook scripts
+    hooks_dir = Path.home() / ".aiir" / "hooks"
+    hook_scripts = ["forensic-audit.sh", "pre-bash-guard.sh"]
+    existing_hooks = [h for h in hook_scripts if (hooks_dir / h).is_file()]
+    if existing_hooks:
+        print(f"  [3] Hook scripts (~/.aiir/hooks/: {', '.join(existing_hooks)})")
         if _prompt_yn_strict("      Remove?"):
-            hook.unlink()
+            for h in existing_hooks:
+                (hooks_dir / h).unlink()
             print("      Removed.")
         else:
             print("      Skipped.")
@@ -1019,11 +1047,12 @@ def _remove_forensic_settings(path: Path) -> None:
 
     # Remove forensic hooks
     hooks = data.get("hooks", {})
-    for hook_type in ("PostToolUse", "UserPromptSubmit"):
+    for hook_type in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
         entries = hooks.get(hook_type, [])
         hooks[hook_type] = [
             e for e in entries
             if not any("forensic-audit" in h.get("command", "") for h in e.get("hooks", []))
+            and not any("pre-bash-guard" in h.get("command", "") for h in e.get("hooks", []))
             and not any("forensic-rules" in h.get("command", "") for h in e.get("hooks", []))
         ]
         if not hooks[hook_type]:
@@ -1031,10 +1060,11 @@ def _remove_forensic_settings(path: Path) -> None:
     if not hooks:
         data.pop("hooks", None)
 
-    # Remove forensic deny rules
+    # Remove forensic deny rules (both current and old/migrated)
     perms = data.get("permissions", {})
     deny = perms.get("deny", [])
-    perms["deny"] = [r for r in deny if r not in _FORENSIC_DENY_RULES]
+    all_forensic_rules = _FORENSIC_DENY_RULES | _OLD_FORENSIC_DENY_RULES
+    perms["deny"] = [r for r in deny if r not in all_forensic_rules]
     if not perms["deny"]:
         perms.pop("deny", None)
     if not perms:

@@ -61,7 +61,7 @@ def config_path(tmp_path):
 @pytest.fixture
 def pin_config(config_path):
     """Set up a PIN for analyst1 and return config_path."""
-    with patch("aiir_cli.approval_auth._getpass_prompt", side_effect=["1234", "1234"]):
+    with patch("aiir_cli.approval_auth.getpass_prompt", side_effect=["1234", "1234"]):
         setup_pin(config_path, "analyst1")
     return config_path
 
@@ -117,7 +117,7 @@ def staged_timeline(case_dir):
 
 class TestApproveSpecific:
     def test_approve_finding(self, case_dir, identity, staged_finding, pin_config):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(case_dir, ["F-tester-001"], identity, pin_config)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
@@ -126,7 +126,7 @@ class TestApproveSpecific:
     def test_approve_timeline_event(
         self, case_dir, identity, staged_timeline, pin_config
     ):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(case_dir, ["T-tester-001"], identity, pin_config)
         timeline = load_timeline(case_dir)
         assert timeline[0]["status"] == "APPROVED"
@@ -141,14 +141,14 @@ class TestApproveSpecific:
     def test_approve_already_approved(
         self, case_dir, identity, staged_finding, pin_config
     ):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(case_dir, ["F-tester-001"], identity, pin_config)
         _approve_specific(case_dir, ["F-tester-001"], identity, pin_config)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "APPROVED"
 
     def test_approval_log_written(self, case_dir, identity, staged_finding, pin_config):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(case_dir, ["F-tester-001"], identity, pin_config)
         log = load_approval_log(case_dir)
         assert len(log) == 1
@@ -167,7 +167,7 @@ class TestApproveSpecific:
         assert "No approval PIN configured" in captured.err
 
     def test_approve_with_note(self, case_dir, identity, staged_finding, pin_config):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(
                 case_dir,
                 ["F-tester-001"],
@@ -186,7 +186,7 @@ class TestApproveSpecific:
     def test_approve_with_interpretation_override(
         self, case_dir, identity, staged_finding, pin_config
     ):
-        with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+        with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
             _approve_specific(
                 case_dir,
                 ["F-tester-001"],
@@ -242,7 +242,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
@@ -267,7 +267,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
@@ -293,7 +293,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
@@ -319,7 +319,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
@@ -346,7 +346,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         # Finding stays DRAFT
@@ -379,7 +379,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         # Only T-tester-001 (by jane) approved, F-tester-001 (by steve) stays DRAFT
@@ -407,7 +407,7 @@ class TestApproveInteractive:
                 "aiir_cli.commands.approve.Path.home", return_value=case_dir.parent
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_approve(args, identity)
         findings = load_findings(case_dir)
@@ -425,7 +425,7 @@ class TestReject:
             analyst=None,
         )
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+            with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
                 cmd_reject(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"
@@ -438,7 +438,7 @@ class TestReject:
             ids=["F-tester-001"], reason="Bad data", case=None, analyst=None
         )
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+            with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
                 cmd_reject(args, identity)
         log = load_approval_log(case_dir)
         assert log[0]["action"] == "REJECTED"
@@ -457,7 +457,7 @@ class TestReject:
     def test_reject_no_reason(self, case_dir, identity, staged_finding, pin_config):
         args = Namespace(ids=["F-tester-001"], reason="", case=None, analyst=None)
         with patch("aiir_cli.commands.reject.Path.home", return_value=case_dir.parent):
-            with patch("aiir_cli.approval_auth._getpass_prompt", return_value="1234"):
+            with patch("aiir_cli.approval_auth.getpass_prompt", return_value="1234"):
                 cmd_reject(args, identity)
         findings = load_findings(case_dir)
         assert findings[0]["status"] == "REJECTED"
@@ -494,7 +494,7 @@ class TestReject:
                 side_effect=confirm_and_add_finding,
             ):
                 with patch(
-                    "aiir_cli.approval_auth._getpass_prompt", return_value="1234"
+                    "aiir_cli.approval_auth.getpass_prompt", return_value="1234"
                 ):
                     cmd_reject(args, identity)
 

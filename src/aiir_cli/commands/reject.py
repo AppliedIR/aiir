@@ -46,7 +46,7 @@ def cmd_reject(args, identity: dict) -> None:
     if reason:
         print(f"  Reason: {reason}")
 
-    mode = require_confirmation(config_path, identity["examiner"])
+    mode, _pin = require_confirmation(config_path, identity["examiner"])
 
     # Reload from disk to preserve any concurrent MCP writes
     reject_ids = [item["id"] for item in to_reject]
