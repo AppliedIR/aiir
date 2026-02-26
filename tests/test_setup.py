@@ -282,12 +282,39 @@ class TestCmdSetup:
         args = MagicMock()
         args.setup_action = "test"
 
-        with (
-            patch("aiir_cli.commands.setup.detect_installed_mcps", return_value=[]),
-            patch("aiir_cli.commands.setup.detect_venv_mcps", return_value=[]),
-        ):
+        health_resp = json.dumps({
+            "status": "ok",
+            "backends": {
+                "forensic-mcp": {"status": "ok", "tools": 15},
+                "sift-mcp": {"status": "ok", "tools": 6},
+            },
+            "tools_count": 21,
+        }).encode()
+
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = health_resp
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
             cmd_setup(args, identity)
 
         output = capsys.readouterr().out
         assert "Connectivity Test" in output
-        assert "No MCP servers detected" in output
+        assert "forensic-mcp" in output
+        assert "OK" in output
+
+    def test_setup_test_gateway_offline(self, identity, capsys):
+        args = MagicMock()
+        args.setup_action = "test"
+
+        import urllib.error
+
+        with patch(
+            "urllib.request.urlopen",
+            side_effect=urllib.error.URLError("Connection refused"),
+        ):
+            cmd_setup(args, identity)
+
+        output = capsys.readouterr().out
+        assert "OFFLINE" in output

@@ -141,103 +141,81 @@ def cmd_setup(args, identity: dict) -> None:
 
 
 def _run_connectivity_test() -> None:
-    """Test connectivity to all detected MCP servers."""
-    import subprocess
+    """Test connectivity to the gateway and all MCP backends."""
+    import json
     import time
+    import urllib.error
+    import urllib.request
 
     print("=" * 60)
     print("  AIIR Connectivity Test")
     print("=" * 60)
 
-    mcps = detect_installed_mcps()
-    venv_mcps = detect_venv_mcps()
+    # Resolve gateway URL
+    gateway_url = "http://127.0.0.1:4508"
+    config_path = Path.home() / ".aiir" / "gateway.yaml"
+    if config_path.is_file():
+        try:
+            import yaml
 
-    # Merge
-    mcp_map: dict[str, dict] = {}
-    for mcp in mcps:
-        mcp_map[mcp["name"]] = mcp
-    for mcp in venv_mcps:
-        if mcp["available"]:
-            mcp_map[mcp["name"]] = mcp
+            config = yaml.safe_load(config_path.read_text()) or {}
+            host = config.get("host", "127.0.0.1")
+            port = config.get("port", 4508)
+            scheme = "https" if config.get("tls", {}).get("enabled") else "http"
+            gateway_url = f"{scheme}://{host}:{port}"
+        except Exception:
+            pass
 
-    if not mcp_map:
-        print("\nNo MCP servers detected.")
+    health_url = f"{gateway_url}/health"
+    print(f"\n  Gateway: {gateway_url}")
+
+    # Fetch health with one retry for startup delay
+    data = None
+    for attempt in range(2):
+        try:
+            req = urllib.request.Request(health_url)
+            start = time.time()
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                elapsed = (time.time() - start) * 1000
+                data = json.loads(resp.read())
+            break
+        except urllib.error.URLError:
+            if attempt == 0:
+                print("  Gateway not responding, retrying in 3s...")
+                time.sleep(3)
+            else:
+                print("  Gateway: OFFLINE — is the gateway running?")
+                print("    Start with: aiir service start")
+                return
+        except Exception as e:
+            print(f"  Gateway: ERROR ({e})")
+            return
+
+    status = data.get("status", "unknown")
+    tools_count = data.get("tools_count", 0)
+    print(f"  Status: {status} ({tools_count} tools, {elapsed:.0f}ms)")
+
+    backends = data.get("backends", {})
+    if not backends:
+        print("\n  No backends configured.")
         return
 
     ok_count = 0
     fail_count = 0
 
-    # Track which python paths we've tested FK on (avoid duplicate checks)
-    fk_checked: set[str] = set()
-
-    for name, info in sorted(mcp_map.items()):
-        python_path = info.get("python_path", "python")
-        module = info.get("module", "")
-        available = info.get("available", False)
-
-        if not available:
-            print(f"  {name:25s} NOT INSTALLED")
-            fail_count += 1
-            continue
-
-        # Try importing and creating server
-        start = time.time()
-        try:
-            result = subprocess.run(
-                [python_path, "-c", f"import {module}; print('ok')"],
-                capture_output=True,
-                timeout=15,
-                text=True,
-            )
-            elapsed = (time.time() - start) * 1000
-            if result.returncode == 0:
-                print(f"  {name:25s} OK ({elapsed:.0f}ms)")
-                ok_count += 1
-            else:
-                err = (
-                    result.stderr.strip().split("\n")[-1]
-                    if result.stderr
-                    else "unknown error"
-                )
-                print(f"  {name:25s} FAIL ({err})")
-                fail_count += 1
-        except subprocess.TimeoutExpired:
-            print(f"  {name:25s} TIMEOUT (import took >15s)")
-            fail_count += 1
-        except FileNotFoundError:
-            print(f"  {name:25s} ERROR (Python not found at {python_path})")
-            fail_count += 1
-        except OSError as e:
-            print(f"  {name:25s} ERROR (OS error: {e})")
+    print()
+    for name, health in sorted(backends.items()):
+        bstatus = health.get("status", "unknown")
+        if bstatus == "ok":
+            tools = health.get("tools", "?")
+            print(f"  {name:25s} OK ({tools} tools)")
+            ok_count += 1
+        else:
+            err = health.get("error", "unknown error")
+            print(f"  {name:25s} FAIL ({err})")
             fail_count += 1
 
-        # FK availability check for MCPs that use it
-        if module in ("forensic_mcp", "sift_mcp") and python_path not in fk_checked:
-            fk_checked.add(python_path)
-            try:
-                fk_result = subprocess.run(
-                    [
-                        python_path,
-                        "-c",
-                        "import forensic_knowledge; print(len(forensic_knowledge.loader.list_tools()))",
-                    ],
-                    capture_output=True,
-                    timeout=15,
-                    text=True,
-                )
-                if fk_result.returncode == 0:
-                    tool_count = fk_result.stdout.strip()
-                    print(f"  {'forensic-knowledge':25s} {tool_count} tools loaded")
-                else:
-                    print(
-                        f"  {'forensic-knowledge':25s} WARNING: not available in this venv"
-                    )
-            except subprocess.TimeoutExpired:
-                print(f"  {'forensic-knowledge':25s} WARNING: import timed out")
-            except OSError as e:
-                print(f"  {'forensic-knowledge':25s} WARNING: check failed ({e})")
-
-    print(f"\n{ok_count} of {ok_count + fail_count} MCPs operational.", end="")
+    print(f"\n{ok_count} of {ok_count + fail_count} backends operational.", end="")
     if fail_count:
         print(f" {fail_count} failed.")
     else:
