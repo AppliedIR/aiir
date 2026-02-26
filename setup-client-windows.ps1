@@ -108,6 +108,8 @@ if ($Uninstall) {
             $fp = Join-Path $deployDir $f
             if (Test-Path $fp) { Remove-Item -Path $fp -Force }
         }
+        $configYaml = Join-Path $HOME ".aiir" "config.yaml"
+        if (Test-Path $configYaml) { Remove-Item -Path $configYaml -Force }
         Write-Ok "Config files removed. $casesDir preserved."
     }
 
@@ -162,12 +164,13 @@ try {
         $response = Invoke-WebRequest -Uri "$Sift/api/v1/setup/join" `
             -Method Post -ContentType "application/json" -Body $body `
             -UseBasicParsing
-        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
     }
 } catch {
     Write-Err "Failed to connect to gateway at $Sift"
     Write-Host "  $($_.Exception.Message)" -ForegroundColor Red
     exit 1
+} finally {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $null
 }
 
 $json = $response.Content | ConvertFrom-Json

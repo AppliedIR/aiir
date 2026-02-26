@@ -798,6 +798,8 @@ def _cmd_uninstall(args) -> None:
 
     if sift:
         _uninstall_sift()
+        print("\nTo remove the full SIFT platform (gateway, venv, source):")
+        print("  setup-sift.sh --uninstall")
     else:
         _uninstall_project()
 
@@ -896,13 +898,13 @@ def _uninstall_project() -> None:
         p = project_dir / name
         if p.is_file():
             files_to_remove.append(p)
-    if mcp_json.is_file():
-        files_to_remove.append(mcp_json)
 
     claude_md = project_dir / "CLAUDE.md"
     has_claude_md = claude_md.is_file()
     if has_claude_md:
         files_to_remove.append(claude_md)
+
+    has_mcp_json = mcp_json.is_file()
 
     # Surgical .claude/ removal — only remove AIIR files, not user settings
     claude_files_to_remove: list[Path] = []
@@ -915,19 +917,24 @@ def _uninstall_project() -> None:
         if settings_file.is_file():
             claude_files_to_remove.append(settings_file)
 
-    if not files_to_remove and not claude_files_to_remove:
+    if not files_to_remove and not claude_files_to_remove and not has_mcp_json:
         print("  No AIIR files found in current directory.")
         return
 
     print("  Files to remove:")
     for p in files_to_remove:
         print(f"    {p}")
+    if has_mcp_json:
+        print(f"    {mcp_json} (AIIR entries only)")
     for p in claude_files_to_remove:
         print(f"    {p}")
 
     if _prompt_yn("  Remove all?", default=False):
         for p in files_to_remove:
             p.unlink()
+        # Surgical .mcp.json removal — only AIIR entries
+        if has_mcp_json:
+            _remove_aiir_mcp_entries(mcp_json)
         # Restore CLAUDE.md backup if exists
         if has_claude_md:
             bak = claude_md.with_suffix(".md.bak")

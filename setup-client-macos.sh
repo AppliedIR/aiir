@@ -65,7 +65,7 @@ prompt_yn() {
     if [[ "$default" == "y" ]]; then suffix="[Y/n]"; else suffix="[y/N]"; fi
     read -rp "$(echo -e "${BOLD}$msg${NC} $suffix: ")" answer
     answer="${answer:-$default}"
-    [[ "${answer,,}" == "y" ]]
+    [[ "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" == "y" ]]
 }
 
 # =============================================================================
@@ -110,6 +110,7 @@ if $UNINSTALL; then
         for f in CLAUDE.md AGENTS.md FORENSIC_DISCIPLINE.md TOOL_REFERENCE.md; do
             rm -f "$DEPLOY_DIR/$f"
         done
+        rm -f "$HOME/.aiir/config.yaml"
         ok "Config files removed. $DEPLOY_DIR/cases/ preserved."
     fi
 
@@ -177,6 +178,10 @@ if ! echo "$JOIN_RESPONSE" | grep -q '"gateway_token"'; then
 fi
 
 GATEWAY_TOKEN=$(echo "$JOIN_RESPONSE" | sed 's/.*"gateway_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+if [[ -z "$GATEWAY_TOKEN" ]] || [[ "$GATEWAY_TOKEN" == "$JOIN_RESPONSE" ]]; then
+    err "Could not extract gateway token from response"
+    exit 1
+fi
 GATEWAY_URL=$(echo "$JOIN_RESPONSE" | sed 's/.*"gateway_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
 BACKENDS_RAW=$(echo "$JOIN_RESPONSE" | sed 's/.*"backends"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/')
 BACKENDS=$(echo "$BACKENDS_RAW" | tr ',' '\n' | sed 's/[[:space:]]*"//g')
