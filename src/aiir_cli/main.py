@@ -270,6 +270,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Remote setup mode (gateway on another host)",
     )
     p_client.add_argument("--token", help="Bearer token for gateway authentication")
+    p_client.add_argument(
+        "--uninstall",
+        action="store_true",
+        help="Remove AIIR forensic controls",
+    )
 
     p_join_code = setup_sub.add_parser(
         "join-code", help="Generate a join code for remote machines"

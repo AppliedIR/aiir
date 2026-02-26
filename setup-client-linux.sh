@@ -6,10 +6,15 @@
 #   Local (on SIFT): delegates to aiir setup client
 #   Remote:          pure bash — curl join, config generation, asset deployment
 #
+# All remote deployments target ~/aiir/ as a fixed workspace directory.
+# Forensic controls (hooks, permissions, sandbox) only apply when Claude Code
+# is launched from within ~/aiir/ or a subdirectory.
+#
 # Usage:
 #   ./setup-client-linux.sh                                   # Auto-detect mode
 #   ./setup-client-linux.sh --client=claude-code -y           # Local, non-interactive
 #   ./setup-client-linux.sh --sift=https://IP:4508 --code=XX  # Remote mode
+#   ./setup-client-linux.sh --uninstall                       # Remove AIIR workspace
 #   ./setup-client-linux.sh -h                                # Help
 #
 set -euo pipefail
@@ -24,6 +29,7 @@ EXAMINER_NAME=""
 SIFT_URL=""
 JOIN_CODE=""
 CA_CERT=""
+UNINSTALL=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -33,6 +39,7 @@ for arg in "$@"; do
         --sift=*)          SIFT_URL="${arg#*=}" ;;
         --code=*)          JOIN_CODE="${arg#*=}" ;;
         --ca-cert=*)       CA_CERT="${arg#*=}" ;;
+        --uninstall)       UNINSTALL=true ;;
         -h|--help)
             echo "Usage: setup-client-linux.sh [OPTIONS]"
             echo ""
@@ -42,6 +49,7 @@ for arg in "$@"; do
             echo "  --sift=URL         Gateway URL (forces remote mode)"
             echo "  --code=CODE        Join code (remote mode)"
             echo "  --ca-cert=PATH     CA certificate for TLS verification"
+            echo "  --uninstall        Remove AIIR workspace and forensic controls"
             echo "  -y, --yes          Accept all defaults (non-interactive)"
             echo "  -h, --help         Show this help"
             exit 0
@@ -85,6 +93,19 @@ prompt() {
     fi
 }
 
+prompt_yn() {
+    local msg="$1" default="${2:-y}"
+    if $AUTO_YES; then
+        [[ "$default" == "y" ]]
+        return
+    fi
+    local suffix
+    if [[ "$default" == "y" ]]; then suffix="[Y/n]"; else suffix="[y/N]"; fi
+    read -rp "$(echo -e "${BOLD}$msg${NC} $suffix: ")" answer
+    answer="${answer:-$default}"
+    [[ "${answer,,}" == "y" ]]
+}
+
 # =============================================================================
 # Banner
 # =============================================================================
@@ -95,6 +116,45 @@ echo -e "${BOLD}  AIIR — LLM Client Setup (Linux)${NC}"
 echo -e "${BOLD}  Artificial Intelligence Incident Response${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
+
+# =============================================================================
+# Uninstall
+# =============================================================================
+
+if $UNINSTALL; then
+    DEPLOY_DIR="$HOME/aiir"
+    header "AIIR Forensic Controls — Uninstall"
+
+    if [[ ! -d "$DEPLOY_DIR" ]]; then
+        info "No AIIR workspace found at $DEPLOY_DIR."
+        exit 0
+    fi
+
+    echo "  AIIR workspace: $DEPLOY_DIR"
+    if [[ -d "$DEPLOY_DIR/cases" ]]; then
+        echo ""
+        echo -e "  ${YELLOW}WARNING: $DEPLOY_DIR/cases/ contains case data.${NC}"
+        echo "  Back up case data before removing the workspace."
+    fi
+    echo ""
+
+    if prompt_yn "  Remove entire AIIR workspace ($DEPLOY_DIR)?" "n"; then
+        rm -rf "$DEPLOY_DIR"
+        ok "Removed $DEPLOY_DIR"
+    else
+        echo ""
+        echo "  Removing config files only (preserving cases/)..."
+        rm -rf "$DEPLOY_DIR/.claude" "$DEPLOY_DIR/.mcp.json"
+        for f in CLAUDE.md AGENTS.md FORENSIC_DISCIPLINE.md TOOL_REFERENCE.md; do
+            rm -f "$DEPLOY_DIR/$f"
+        done
+        ok "Config files removed. $DEPLOY_DIR/cases/ preserved."
+    fi
+
+    echo ""
+    echo "Uninstall complete."
+    exit 0
+fi
 
 # =============================================================================
 # Mode Detection
@@ -293,9 +353,12 @@ fi
 
 ok "Client: $CLIENT"
 
-# ---- Phase 5: MCP Config Generation ----
+# ---- Phase 5: Workspace + MCP Config Generation ----
 
-header "MCP Configuration"
+header "AIIR Workspace"
+
+DEPLOY_DIR="$HOME/aiir"
+mkdir -p "$DEPLOY_DIR/cases"
 
 # Build MCP server entries from backends
 # Each backend gets its own endpoint: GATEWAY_URL/mcp/BACKEND_NAME
@@ -309,6 +372,16 @@ build_mcp_entry() {
       "headers": {
         "Authorization": "Bearer $token"
       }
+    }
+ENTRY
+}
+
+build_mcp_entry_noauth() {
+    local name="$1" url="$2"
+    cat << ENTRY
+    "$name": {
+      "type": "streamable-http",
+      "url": "$url"
     }
 ENTRY
 }
@@ -329,7 +402,10 @@ done <<< "$BACKENDS"
 
 # Add external MCPs
 MCP_ENTRIES="$MCP_ENTRIES,
-$(build_mcp_entry "zeltser-ir-writing" "https://website-mcp.zeltser.com/mcp" "")"
+$(build_mcp_entry_noauth "zeltser-ir-writing" "https://website-mcp.zeltser.com/mcp")"
+
+MCP_ENTRIES="$MCP_ENTRIES,
+$(build_mcp_entry_noauth "microsoft-learn" "https://learn.microsoft.com/api/mcp")"
 
 MCP_JSON="{
   \"mcpServers\": {
@@ -337,10 +413,10 @@ $MCP_ENTRIES
   }
 }"
 
-# Write config to client-specific location
+# Write config to workspace
 case "$CLIENT" in
     claude-code)
-        CONFIG_FILE=".mcp.json"
+        CONFIG_FILE="$DEPLOY_DIR/.mcp.json"
         echo "$MCP_JSON" > "$CONFIG_FILE"
         ok "Written: $CONFIG_FILE"
         ;;
@@ -352,7 +428,7 @@ case "$CLIENT" in
         ok "Written: $CONFIG_FILE"
         ;;
     *)
-        CONFIG_FILE="$HOME/.aiir/mcp-config.json"
+        CONFIG_FILE="$DEPLOY_DIR/.mcp.json"
         echo "$MCP_JSON" > "$CONFIG_FILE"
         ok "Written: $CONFIG_FILE (reference config)"
         info "Configure your LLM client using the entries in this file."
@@ -365,8 +441,16 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     header "Claude Code Forensic Controls"
 
     GITHUB_RAW="https://raw.githubusercontent.com/AppliedIR"
-    DEPLOY_DIR="$(pwd)"
     ERRORS=0
+
+    # Fetch the real CLAUDE.md (245+ lines with session-start check)
+    info "Fetching CLAUDE.md..."
+    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/CLAUDE.md" -o "$DEPLOY_DIR/CLAUDE.md" 2>/dev/null; then
+        ok "CLAUDE.md"
+    else
+        warn "Could not fetch CLAUDE.md"
+        ERRORS=$((ERRORS + 1))
+    fi
 
     # Fetch AGENTS.md
     info "Fetching AGENTS.md..."
@@ -407,24 +491,36 @@ if [[ "$CLIENT" == "claude-code" ]]; then
         ERRORS=$((ERRORS + 1))
     fi
 
-    # Generate settings.json with hooks and sandbox config
+    # Generate settings.json with all 4 blocks
     SETTINGS_DIR="$DEPLOY_DIR/.claude"
     mkdir -p "$SETTINGS_DIR"
     SETTINGS_FILE="$SETTINGS_DIR/settings.json"
 
-    if [[ -f "$SETTINGS_FILE" ]]; then
-        info "Existing settings.json found, preserving"
-    else
-        cat > "$SETTINGS_FILE" << 'SETTINGS'
+    # Unquoted delimiter: $DEPLOY_DIR expands at write time to absolute path.
+    # WARNING: If you add $ variables to the rules text below, they will be
+    # expanded by bash. The cat << 'EOF' inside the JSON string is literal text
+    # and does not cause issues because it has no $ variables.
+    SETTINGS_CONTENT=$(cat << SETTINGS
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat << 'EOF'\n<forensic-rules>\nPLAN before 3+ steps | EVIDENCE for claims | APPROVAL before conclusions\nRECORD actions via forensic-mcp | NO DELETE without approval\n</forensic-rules>\nEOF"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/forensic-audit.sh"
+            "command": "$DEPLOY_DIR/.claude/hooks/forensic-audit.sh"
           }
         ]
       }
@@ -436,23 +532,78 @@ if [[ "$CLIENT" == "claude-code" ]]; then
       "Bash(mkfs*)",
       "Bash(dd *)"
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false
   }
 }
 SETTINGS
-        ok "settings.json (hooks + permissions)"
-    fi
+)
 
-    # Generate CLAUDE.md
-    CLAUDE_MD="$DEPLOY_DIR/CLAUDE.md"
-    if [[ ! -f "$CLAUDE_MD" ]]; then
-        cat > "$CLAUDE_MD" << 'CLAUDEMD'
-# AIIR Forensic Investigation
+    if [[ -f "$SETTINGS_FILE" ]]; then
+        info "Existing settings.json found. Merging..."
+        # Use Python for JSON merge (available on most Linux systems)
+        python3 << 'PYMERGE'
+import json, sys
 
-@AGENTS.md
-@FORENSIC_DISCIPLINE.md
-@TOOL_REFERENCE.md
-CLAUDEMD
-        ok "CLAUDE.md"
+target_path = sys.argv[1] if len(sys.argv) > 1 else None
+# Read paths from environment since we can't pass args easily in heredoc
+import os
+target_path = os.environ.get("SETTINGS_FILE", "")
+incoming_str = os.environ.get("SETTINGS_CONTENT", "{}")
+
+if not target_path:
+    sys.exit(1)
+
+try:
+    with open(target_path) as f:
+        existing = json.load(f)
+except (json.JSONDecodeError, FileNotFoundError):
+    existing = {}
+
+try:
+    incoming = json.loads(incoming_str)
+except json.JSONDecodeError:
+    sys.exit(1)
+
+# Merge hooks
+if "hooks" in incoming:
+    existing_hooks = existing.setdefault("hooks", {})
+    for hook_type, entries in incoming["hooks"].items():
+        if hook_type not in existing_hooks:
+            existing_hooks[hook_type] = entries
+        else:
+            existing_cmds = set()
+            for entry in existing_hooks[hook_type]:
+                for h in entry.get("hooks", []):
+                    existing_cmds.add(h.get("command", ""))
+            for entry in entries:
+                new_cmds = [h.get("command", "") for h in entry.get("hooks", [])]
+                if not any(c in existing_cmds for c in new_cmds):
+                    existing_hooks[hook_type].append(entry)
+
+# Merge permissions.deny
+if "permissions" in incoming:
+    existing_perms = existing.setdefault("permissions", {})
+    if "deny" in incoming["permissions"]:
+        existing_deny = set(existing_perms.get("deny", []))
+        for rule in incoming["permissions"]["deny"]:
+            existing_deny.add(rule)
+        existing_perms["deny"] = sorted(existing_deny)
+
+# Merge sandbox
+if "sandbox" in incoming:
+    existing.setdefault("sandbox", {}).update(incoming["sandbox"])
+
+with open(target_path, "w") as f:
+    json.dump(existing, f, indent=2)
+    f.write("\n")
+PYMERGE
+        ok "settings.json (merged)"
+    else
+        echo "$SETTINGS_CONTENT" > "$SETTINGS_FILE"
+        ok "settings.json (hooks + permissions + sandbox)"
     fi
 
     echo ""
@@ -470,6 +621,7 @@ header "Setup Complete"
 echo "Gateway:     $GATEWAY_URL"
 echo "Examiner:    $EXAMINER_NAME"
 echo "Client:      $CLIENT"
+echo "Workspace:   $DEPLOY_DIR"
 if [[ -n "${CONFIG_FILE:-}" ]]; then
     echo "MCP config:  $CONFIG_FILE"
 fi
@@ -495,6 +647,20 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     echo ""
     echo "  Alternatively, use an MCP-only client (Claude Desktop, LibreChat)"
     echo "  which can only interact with SIFT through audited MCP tools."
+
+    echo ""
+    echo -e "${BOLD}AIIR workspace created at ~/aiir/${NC}"
+    echo ""
+    echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} Always launch Claude Code from ~/aiir/ or a subdirectory."
+    echo "Forensic controls (audit logging, guardrails, MCP tools) only apply"
+    echo "when Claude Code is started from within this directory."
+    echo ""
+    echo "  cd ~/aiir && claude"
+    echo ""
+    echo "To organize case work while maintaining controls:"
+    echo ""
+    echo "  mkdir ~/aiir/cases/INC-2026-001"
+    echo "  cd ~/aiir/cases/INC-2026-001 && claude"
 fi
 
 echo ""

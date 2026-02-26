@@ -29,6 +29,20 @@ _MSLEARN_MCP = {
     "url": "https://learn.microsoft.com/api/mcp",
 }
 
+# AIIR backend names — used for uninstall identification
+_AIIR_BACKEND_NAMES = {
+    "forensic-mcp",
+    "case-mcp",
+    "sift-mcp",
+    "report-mcp",
+    "forensic-rag-mcp",
+    "windows-triage-mcp",
+    "opencti-mcp",
+    "wintools-mcp",
+    "remnux-mcp",
+    "aiir",
+}
+
 
 # ---------------------------------------------------------------------------
 # Public entry point
@@ -37,6 +51,10 @@ _MSLEARN_MCP = {
 
 def cmd_setup_client(args, identity: dict) -> None:
     """Generate LLM client configuration for AIIR endpoints."""
+    if getattr(args, "uninstall", False):
+        _cmd_uninstall(args)
+        return
+
     if getattr(args, "remote", False):
         _cmd_setup_client_remote(args, identity)
         return
@@ -128,6 +146,16 @@ def cmd_setup_client(args, identity: dict) -> None:
         print("  Internet MCPs:")
         for name, url in internet_mcps:
             print(f"    {name:<25s}{url}")
+
+
+# ---------------------------------------------------------------------------
+# SIFT detection
+# ---------------------------------------------------------------------------
+
+
+def _is_sift() -> bool:
+    """Return True if running on a SIFT workstation (gateway.yaml exists)."""
+    return (Path.home() / ".aiir" / "gateway.yaml").is_file()
 
 
 # ---------------------------------------------------------------------------
@@ -296,13 +324,27 @@ def _prompt_yn(message: str, default: bool = True) -> bool:
 
 def _generate_config(client: str, servers: dict, examiner: str) -> None:
     config = {"mcpServers": servers}
+    sift = _is_sift()
 
     if client == "claude-code":
-        output = Path.cwd() / ".mcp.json"
-        _merge_and_write(output, config)
-        _copy_agents_md(Path.cwd() / "CLAUDE.md")
+        if sift:
+            # SIFT: write MCP servers globally to ~/.claude.json
+            global_config = Path.home() / ".claude.json"
+            # Transform type to "http" for global scope
+            global_servers = {}
+            for name, entry in servers.items():
+                g_entry = dict(entry)
+                g_entry["type"] = "http"
+                global_servers[name] = g_entry
+            _merge_and_write(global_config, {"mcpServers": global_servers})
+            print(f"  Generated: {global_config} (global MCP servers)")
+        else:
+            # Non-SIFT: write .mcp.json to cwd
+            output = Path.cwd() / ".mcp.json"
+            _merge_and_write(output, config)
+            print(f"  Generated: {output}")
+
         _deploy_claude_code_assets(Path.cwd())
-        print(f"  Generated: {output}")
         print(f"  Examiner:  {examiner}")
         print("")
         print("  Forensic controls deployed:")
@@ -310,6 +352,12 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         print("    Audit hook:  forensic-audit.sh (captures all Bash commands)")
         print("    Provenance:  enforced (findings require evidence trail)")
         print("    Discipline:  FORENSIC_DISCIPLINE.md + TOOL_REFERENCE.md")
+
+        if sift:
+            print("")
+            print("  Forensic controls deployed globally.")
+            print("  Claude Code can be launched from any directory on this machine.")
+            print("  Audit logging, permission guardrails, and MCP tools will always apply.")
 
     elif client == "claude-desktop":
         output = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
@@ -406,7 +454,7 @@ def _find_claude_code_assets() -> Path | None:
 
 
 def _merge_settings(target: Path, source: Path) -> None:
-    """Deep-merge hooks and sandbox keys from source into target settings.json."""
+    """Deep-merge hooks, permissions, and sandbox keys from source into target."""
     existing = {}
     if target.is_file():
         try:
@@ -439,6 +487,15 @@ def _merge_settings(target: Path, source: Path) -> None:
                     if not any(c in existing_cmds for c in new_cmds):
                         existing_hooks[hook_type].append(entry)
 
+    # Merge permissions.deny (additive, preserve allow/ask/defaultMode)
+    if "permissions" in incoming:
+        existing_perms = existing.setdefault("permissions", {})
+        if "deny" in incoming["permissions"]:
+            existing_deny = set(existing_perms.get("deny", []))
+            for rule in incoming["permissions"]["deny"]:
+                existing_deny.add(rule)
+            existing_perms["deny"] = sorted(existing_deny)
+
     # Merge sandbox config
     if "sandbox" in incoming:
         existing.setdefault("sandbox", {}).update(incoming["sandbox"])
@@ -454,10 +511,51 @@ def _deploy_hook(source: Path, target: Path) -> None:
     target.chmod(0o755)
 
 
+def _deploy_claude_md(assets_dir: Path, target: Path) -> None:
+    """Copy the real CLAUDE.md from assets directory to target."""
+    src = assets_dir / "CLAUDE.md"
+    if not src.is_file():
+        print("  Warning: CLAUDE.md not found in assets.", file=sys.stderr)
+        return
+    if target.is_file():
+        backup = target.with_suffix(".md.bak")
+        shutil.copy2(target, backup)
+        print(f"  Backed up: {target.name} -> {backup.name}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, target)
+    print(f"  Deployed:  CLAUDE.md -> {target}")
+
+
+def _deploy_global_rules(assets_dir: Path) -> None:
+    """Deploy discipline docs to ~/.claude/rules/ (SIFT only)."""
+    rules_dir = Path.home() / ".claude" / "rules"
+    rules_dir.mkdir(parents=True, exist_ok=True)
+
+    # FORENSIC_DISCIPLINE.md
+    src = assets_dir / "FORENSIC_DISCIPLINE.md"
+    if src.is_file():
+        shutil.copy2(src, rules_dir / "FORENSIC_DISCIPLINE.md")
+        print(f"  Copied:    FORENSIC_DISCIPLINE.md -> {rules_dir}")
+
+    # TOOL_REFERENCE.md
+    src = assets_dir / "TOOL_REFERENCE.md"
+    if src.is_file():
+        shutil.copy2(src, rules_dir / "TOOL_REFERENCE.md")
+        print(f"  Copied:    TOOL_REFERENCE.md -> {rules_dir}")
+
+    # AGENTS.md
+    agents = _find_agents_md()
+    if agents:
+        shutil.copy2(agents, rules_dir / "AGENTS.md")
+        print(f"  Copied:    AGENTS.md -> {rules_dir}")
+
+
 def _deploy_claude_code_assets(project_dir: Path) -> None:
     """Deploy settings.json, hooks, and doc files for Claude Code.
 
     Sources from sift-mcp/claude-code/ directory.
+    On SIFT: deploys globally (settings to ~/.claude/, hook to ~/.aiir/hooks/).
+    On non-SIFT: deploys to project directory.
     """
     assets_dir = _find_claude_code_assets()
     if not assets_dir:
@@ -467,33 +565,101 @@ def _deploy_claude_code_assets(project_dir: Path) -> None:
         )
         return
 
-    # Deploy settings.json
-    settings_src = assets_dir / "settings.json"
-    if settings_src.is_file():
-        settings_target = project_dir / ".claude" / "settings.json"
-        _merge_settings(settings_target, settings_src)
-        print(f"  Merged:    settings.json -> {settings_target}")
+    sift = _is_sift()
 
-    # Deploy hook script
-    hook_src = assets_dir / "hooks" / "forensic-audit.sh"
-    if hook_src.is_file():
-        hook_target = project_dir / ".claude" / "hooks" / "forensic-audit.sh"
-        _deploy_hook(hook_src, hook_target)
-        print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+    if sift:
+        # --- SIFT global deployment ---
 
-    # Deploy FORENSIC_DISCIPLINE.md
-    discipline_src = assets_dir / "FORENSIC_DISCIPLINE.md"
-    if discipline_src.is_file():
-        discipline_target = project_dir / "FORENSIC_DISCIPLINE.md"
-        shutil.copy2(discipline_src, discipline_target)
-        print(f"  Copied:    FORENSIC_DISCIPLINE.md")
+        # Deploy settings.json to ~/.claude/settings.json
+        settings_src = assets_dir / "settings.json"
+        if settings_src.is_file():
+            settings_target = Path.home() / ".claude" / "settings.json"
+            _merge_settings(settings_target, settings_src)
+            print(f"  Merged:    settings.json -> {settings_target}")
 
-    # Deploy TOOL_REFERENCE.md
-    toolref_src = assets_dir / "TOOL_REFERENCE.md"
-    if toolref_src.is_file():
-        toolref_target = project_dir / "TOOL_REFERENCE.md"
-        shutil.copy2(toolref_src, toolref_target)
-        print(f"  Copied:    TOOL_REFERENCE.md")
+            # Post-merge fixup: replace $CLAUDE_PROJECT_DIR hook path with absolute
+            _fixup_global_hook_path(settings_target)
+
+        # Deploy hook script to ~/.aiir/hooks/
+        hook_src = assets_dir / "hooks" / "forensic-audit.sh"
+        if hook_src.is_file():
+            hook_target = Path.home() / ".aiir" / "hooks" / "forensic-audit.sh"
+            _deploy_hook(hook_src, hook_target)
+            print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+
+        # Deploy CLAUDE.md globally
+        _deploy_claude_md(assets_dir, Path.home() / ".claude" / "CLAUDE.md")
+
+        # Deploy discipline docs to ~/.claude/rules/
+        _deploy_global_rules(assets_dir)
+
+        # Also deploy docs to project root (contextual, harmless)
+        for doc_name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
+            doc_src = assets_dir / doc_name
+            if doc_src.is_file():
+                shutil.copy2(doc_src, project_dir / doc_name)
+                print(f"  Copied:    {doc_name}")
+
+        # Copy AGENTS.md to project root for non-Claude-Code clients
+        _copy_agents_md(project_dir / "AGENTS.md")
+
+    else:
+        # --- Non-SIFT project-level deployment ---
+
+        # Deploy settings.json to project
+        settings_src = assets_dir / "settings.json"
+        if settings_src.is_file():
+            settings_target = project_dir / ".claude" / "settings.json"
+            _merge_settings(settings_target, settings_src)
+            print(f"  Merged:    settings.json -> {settings_target}")
+
+        # Deploy hook script to project
+        hook_src = assets_dir / "hooks" / "forensic-audit.sh"
+        if hook_src.is_file():
+            hook_target = project_dir / ".claude" / "hooks" / "forensic-audit.sh"
+            _deploy_hook(hook_src, hook_target)
+            print(f"  Deployed:  forensic-audit.sh -> {hook_target}")
+
+        # Deploy CLAUDE.md to project root
+        _deploy_claude_md(assets_dir, project_dir / "CLAUDE.md")
+
+        # Copy AGENTS.md to project root
+        _copy_agents_md(project_dir / "AGENTS.md")
+
+        # Deploy FORENSIC_DISCIPLINE.md
+        discipline_src = assets_dir / "FORENSIC_DISCIPLINE.md"
+        if discipline_src.is_file():
+            shutil.copy2(discipline_src, project_dir / "FORENSIC_DISCIPLINE.md")
+            print(f"  Copied:    FORENSIC_DISCIPLINE.md")
+
+        # Deploy TOOL_REFERENCE.md
+        toolref_src = assets_dir / "TOOL_REFERENCE.md"
+        if toolref_src.is_file():
+            shutil.copy2(toolref_src, project_dir / "TOOL_REFERENCE.md")
+            print(f"  Copied:    TOOL_REFERENCE.md")
+
+
+def _fixup_global_hook_path(settings_path: Path) -> None:
+    """Replace $CLAUDE_PROJECT_DIR hook paths with absolute ~/.aiir/hooks/ path."""
+    try:
+        data = json.loads(settings_path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+
+    abs_hook = str(Path.home() / ".aiir" / "hooks" / "forensic-audit.sh")
+    changed = False
+
+    for hook_type in ("PostToolUse", "UserPromptSubmit"):
+        entries = data.get("hooks", {}).get(hook_type, [])
+        for entry in entries:
+            for h in entry.get("hooks", []):
+                cmd = h.get("command", "")
+                if "$CLAUDE_PROJECT_DIR" in cmd and "forensic-audit.sh" in cmd:
+                    h["command"] = abs_hook
+                    changed = True
+
+    if changed:
+        _write_600(settings_path, json.dumps(data, indent=2) + "\n")
 
 
 def _merge_and_write(path: Path, config: dict) -> None:
@@ -571,7 +737,7 @@ def _copy_agents_md(target: Path) -> None:
     if src:
         try:
             shutil.copy2(src, target)
-            print(f"  Copied:    {src.name} → {target.name}")
+            print(f"  Copied:    {src.name} -> {target.name}")
         except OSError as e:
             print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
     else:
@@ -609,9 +775,199 @@ def _write_cursor_rules() -> None:
     legacy = Path.cwd() / ".cursorrules"
     try:
         shutil.copy2(src, legacy)
-        print(f"  Copied:    {src.name} → {legacy.name}")
+        print(f"  Copied:    {src.name} -> {legacy.name}")
     except OSError as e:
         print(f"  Warning: failed to copy {src} to {legacy}: {e}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
+# Uninstall
+# ---------------------------------------------------------------------------
+
+
+def _cmd_uninstall(args) -> None:
+    """Remove AIIR forensic controls with interactive per-component approval."""
+    sift = _is_sift()
+
+    print("\nAIIR Forensic Controls — Uninstall\n")
+
+    if sift:
+        _uninstall_sift()
+    else:
+        _uninstall_project()
+
+
+def _uninstall_sift() -> None:
+    """SIFT global uninstall — interactive per-component removal."""
+    # [1] MCP servers from ~/.claude.json
+    claude_json = Path.home() / ".claude.json"
+    if claude_json.is_file():
+        print("  [1] MCP servers (~/.claude.json mcpServers)")
+        print("      Only AIIR backend entries are removed. Others preserved.")
+        if _prompt_yn("      Remove?", default=False):
+            _remove_aiir_mcp_entries(claude_json)
+            print("      Removed AIIR MCP entries.")
+        else:
+            print("      Skipped.")
+    print()
+
+    # [2] Hooks & permissions from ~/.claude/settings.json
+    settings = Path.home() / ".claude" / "settings.json"
+    if settings.is_file():
+        print("  [2] Hooks & permissions (~/.claude/settings.json)")
+        print("      Forensic entries only. Other settings preserved.")
+        if _prompt_yn("      Remove?", default=False):
+            _remove_forensic_settings(settings)
+            print("      Removed forensic settings.")
+        else:
+            print("      Skipped.")
+    print()
+
+    # [3] Hook script
+    hook = Path.home() / ".aiir" / "hooks" / "forensic-audit.sh"
+    if hook.is_file():
+        print("  [3] Audit hook script (~/.aiir/hooks/forensic-audit.sh)")
+        if _prompt_yn("      Remove?", default=False):
+            hook.unlink()
+            print("      Removed.")
+        else:
+            print("      Skipped.")
+    print()
+
+    # [4] Discipline docs
+    claude_md = Path.home() / ".claude" / "CLAUDE.md"
+    rules_dir = Path.home() / ".claude" / "rules"
+    has_docs = claude_md.is_file() or rules_dir.is_dir()
+    if has_docs:
+        print("  [4] Discipline docs")
+        if claude_md.is_file():
+            print(f"      {claude_md}")
+        for name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md", "AGENTS.md"):
+            p = rules_dir / name
+            if p.is_file():
+                print(f"      {p}")
+        if _prompt_yn("      Remove?", default=False):
+            if claude_md.is_file():
+                claude_md.unlink()
+                # Restore backup if exists
+                bak = claude_md.with_suffix(".md.bak")
+                if bak.is_file():
+                    bak.rename(claude_md)
+                    print("      Restored CLAUDE.md from backup.")
+            for name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md", "AGENTS.md"):
+                p = rules_dir / name
+                if p.is_file():
+                    p.unlink()
+            print("      Removed discipline docs.")
+        else:
+            print("      Skipped.")
+    print()
+
+    # [5] Project-level files
+    project_files = ["CLAUDE.md", "AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"]
+    existing_project = [f for f in project_files if (Path.cwd() / f).is_file()]
+    if existing_project:
+        print("  [5] Project-level files (in current directory)")
+        for f in existing_project:
+            print(f"      {f}")
+        if _prompt_yn("      Remove?", default=False):
+            for f in existing_project:
+                (Path.cwd() / f).unlink()
+            print("      Removed.")
+        else:
+            print("      Skipped.")
+
+    print("\nUninstall complete.")
+
+
+def _uninstall_project() -> None:
+    """Non-SIFT project-level uninstall."""
+    project_dir = Path.cwd()
+    claude_dir = project_dir / ".claude"
+    mcp_json = project_dir / ".mcp.json"
+
+    files_to_remove = []
+    for name in ("CLAUDE.md", "AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
+        p = project_dir / name
+        if p.is_file():
+            files_to_remove.append(p)
+    if mcp_json.is_file():
+        files_to_remove.append(mcp_json)
+
+    dirs_to_remove = []
+    if claude_dir.is_dir():
+        dirs_to_remove.append(claude_dir)
+
+    if not files_to_remove and not dirs_to_remove:
+        print("  No AIIR files found in current directory.")
+        return
+
+    print("  Files to remove:")
+    for p in files_to_remove:
+        print(f"    {p}")
+    for d in dirs_to_remove:
+        print(f"    {d}/ (settings, hooks)")
+
+    if _prompt_yn("  Remove all?", default=False):
+        for p in files_to_remove:
+            p.unlink()
+        for d in dirs_to_remove:
+            shutil.rmtree(d)
+        print("  Removed.")
+    else:
+        print("  Skipped.")
+
+    print("\nUninstall complete.")
+
+
+def _remove_aiir_mcp_entries(path: Path) -> None:
+    """Remove AIIR backend entries from ~/.claude.json mcpServers."""
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+    servers = data.get("mcpServers", {})
+    for name in list(servers.keys()):
+        if name in _AIIR_BACKEND_NAMES:
+            del servers[name]
+    _write_600(path, json.dumps(data, indent=2) + "\n")
+
+
+def _remove_forensic_settings(path: Path) -> None:
+    """Remove forensic-specific entries from settings.json, preserve rest."""
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return
+
+    # Remove forensic hooks
+    hooks = data.get("hooks", {})
+    for hook_type in ("PostToolUse", "UserPromptSubmit"):
+        entries = hooks.get(hook_type, [])
+        hooks[hook_type] = [
+            e for e in entries
+            if not any("forensic-audit" in h.get("command", "") for h in e.get("hooks", []))
+            and not any("forensic-rules" in h.get("command", "") for h in e.get("hooks", []))
+        ]
+        if not hooks[hook_type]:
+            del hooks[hook_type]
+    if not hooks:
+        data.pop("hooks", None)
+
+    # Remove forensic deny rules
+    perms = data.get("permissions", {})
+    deny = perms.get("deny", [])
+    forensic_deny = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
+    perms["deny"] = [r for r in deny if r not in forensic_deny]
+    if not perms["deny"]:
+        perms.pop("deny", None)
+    if not perms:
+        data.pop("permissions", None)
+
+    # Remove sandbox
+    data.pop("sandbox", None)
+
+    _write_600(path, json.dumps(data, indent=2) + "\n")
 
 
 # ---------------------------------------------------------------------------

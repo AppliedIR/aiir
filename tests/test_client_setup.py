@@ -11,9 +11,13 @@ from aiir_cli.commands.client_setup import (
     _cmd_setup_client_remote,
     _ensure_mcp_path,
     _format_server_entry,
+    _is_sift,
     _merge_and_write,
+    _merge_settings,
     _normalise_url,
     _read_local_token,
+    _remove_aiir_mcp_entries,
+    _remove_forensic_settings,
     _save_gateway_config,
     _wizard_client,
     cmd_setup_client,
@@ -107,6 +111,65 @@ class TestMergeAndWrite:
         assert path.is_file()
 
 
+class TestIsSift:
+    def test_true_when_gateway_yaml_exists(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        aiir_dir = tmp_path / ".aiir"
+        aiir_dir.mkdir()
+        (aiir_dir / "gateway.yaml").write_text("api_keys: {}")
+        assert _is_sift() is True
+
+    def test_false_when_no_gateway_yaml(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        assert _is_sift() is False
+
+
+class TestMergeSettings:
+    def test_merges_permissions_deny(self, tmp_path):
+        target = tmp_path / "settings.json"
+        source = tmp_path / "source.json"
+
+        existing = {
+            "permissions": {
+                "allow": ["Bash(ls)"],
+                "deny": ["Bash(rm -rf *)"],
+                "defaultMode": "ask",
+            }
+        }
+        target.write_text(json.dumps(existing))
+
+        incoming = {
+            "permissions": {
+                "deny": ["Bash(mkfs*)", "Bash(dd *)", "Bash(rm -rf *)"]
+            }
+        }
+        source.write_text(json.dumps(incoming))
+
+        _merge_settings(target, source)
+        data = json.loads(target.read_text())
+
+        # deny is merged (union, sorted, deduplicated)
+        assert sorted(data["permissions"]["deny"]) == sorted(
+            ["Bash(dd *)", "Bash(mkfs*)", "Bash(rm -rf *)"]
+        )
+        # allow and defaultMode preserved
+        assert data["permissions"]["allow"] == ["Bash(ls)"]
+        assert data["permissions"]["defaultMode"] == "ask"
+
+    def test_merges_hooks_and_sandbox(self, tmp_path):
+        target = tmp_path / "settings.json"
+        source = tmp_path / "source.json"
+        source.write_text(json.dumps({
+            "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "test.sh"}]}]},
+            "sandbox": {"enabled": True},
+        }))
+
+        _merge_settings(target, source)
+        data = json.loads(target.read_text())
+        assert "PostToolUse" in data["hooks"]
+        assert data["sandbox"]["enabled"] is True
+
+
 class TestCmdSetupClient:
     def _make_args(self, **kwargs):
         """Build a namespace with defaults."""
@@ -120,12 +183,18 @@ class TestCmdSetupClient:
             "examiner": "testuser",
             "no_mslearn": False,
             "yes": True,
+            "uninstall": False,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
 
+    def _isolate_home(self, monkeypatch, tmp_path):
+        """Isolate Path.home() to tmp_path so _is_sift() returns False."""
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+
     def test_generates_claude_code_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args()
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -141,6 +210,7 @@ class TestCmdSetupClient:
 
     def test_mslearn_included_by_default(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args()
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -152,6 +222,7 @@ class TestCmdSetupClient:
 
     def test_no_mslearn_flag(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(no_mslearn=True)
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -163,6 +234,7 @@ class TestCmdSetupClient:
 
     def test_windows_endpoint(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(windows="192.168.1.20:4624")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -175,6 +247,7 @@ class TestCmdSetupClient:
 
     def test_remnux_endpoint(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(remnux="10.0.0.5")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -185,6 +258,7 @@ class TestCmdSetupClient:
 
     def test_cursor_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(client="cursor")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -197,7 +271,7 @@ class TestCmdSetupClient:
     def test_claude_desktop_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         # Redirect home to tmp_path so we don't write to real home
-        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         args = self._make_args(client="claude-desktop")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -207,6 +281,7 @@ class TestCmdSetupClient:
 
     def test_merge_preserves_existing(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         # Pre-existing config
         existing = {
             "mcpServers": {"my-custom-mcp": {"type": "stdio", "command": "test"}}
@@ -221,8 +296,32 @@ class TestCmdSetupClient:
         assert "my-custom-mcp" in data["mcpServers"]
         assert "aiir" in data["mcpServers"]
 
+    def test_sift_writes_global_claude_json(self, tmp_path, monkeypatch):
+        """On SIFT, MCP servers go to ~/.claude.json with type=http."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        # Create gateway.yaml to trigger SIFT detection
+        aiir_dir = tmp_path / ".aiir"
+        aiir_dir.mkdir()
+        (aiir_dir / "gateway.yaml").write_text("api_keys: {}")
+
+        args = self._make_args()
+        identity = {"examiner": "testuser"}
+        cmd_setup_client(args, identity)
+
+        # Should NOT have .mcp.json in cwd
+        assert not (tmp_path / ".mcp.json").is_file()
+
+        # Should have ~/.claude.json with type=http
+        claude_json = tmp_path / ".claude.json"
+        assert claude_json.is_file()
+        data = json.loads(claude_json.read_text())
+        assert "aiir" in data["mcpServers"]
+        assert data["mcpServers"]["aiir"]["type"] == "http"
+
     def test_librechat_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(client="librechat", windows="192.168.1.20:4624")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -241,6 +340,7 @@ class TestCmdSetupClient:
     def test_librechat_has_server_instructions(self, tmp_path, monkeypatch):
         """Verify LibreChat YAML includes serverInstructions: true."""
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(client="librechat")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -251,6 +351,7 @@ class TestCmdSetupClient:
     def test_cursor_writes_mdc_file(self, tmp_path, monkeypatch):
         """Verify Cursor setup creates .cursor/rules/aiir.mdc with frontmatter."""
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         # Create a mock AGENTS.md in cwd so _find_agents_md() finds it
         (tmp_path / "AGENTS.md").write_text("# Test AGENTS content\nRule Zero applies.")
         args = self._make_args(client="cursor")
@@ -269,6 +370,7 @@ class TestCmdSetupClient:
     def test_librechat_no_json_merge(self, tmp_path, monkeypatch):
         """LibreChat writes YAML, not JSON — no .mcp.json created."""
         monkeypatch.chdir(tmp_path)
+        self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(client="librechat")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
@@ -352,6 +454,7 @@ class TestRemoteSetup:
             "yes": True,
             "remote": True,
             "token": "aiir_gw_abc123",
+            "uninstall": False,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
@@ -363,6 +466,7 @@ class TestRemoteSetup:
         self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [
             {"name": "forensic-mcp", "started": True, "type": "stdio"},
@@ -398,6 +502,7 @@ class TestRemoteSetup:
         self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
         args = self._make_args(token="secret_token_xyz")
@@ -425,6 +530,7 @@ class TestRemoteSetup:
         self, mock_save, mock_discover, mock_probe, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
         args = self._make_args()
@@ -442,7 +548,7 @@ class TestRemoteSetup:
         self, mock_save, mock_discover, mock_probe, mock_which, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
-        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_probe.return_value = {"status": "ok"}
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
         args = self._make_args(client="claude-desktop")
@@ -533,6 +639,7 @@ class TestLocalModeTokenThreading:
             "examiner": "testuser",
             "no_mslearn": True,
             "yes": True,
+            "uninstall": False,
         }
         defaults.update(kwargs)
         return argparse.Namespace(**defaults)
@@ -543,6 +650,7 @@ class TestLocalModeTokenThreading:
         self, mock_token, mock_discover, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_token.return_value = "aiir_gw_secret123"
         mock_discover.return_value = [
             {"name": "forensic-mcp", "started": True},
@@ -568,6 +676,7 @@ class TestLocalModeTokenThreading:
         self, mock_token, mock_discover, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_token.return_value = None
         mock_discover.return_value = [{"name": "forensic-mcp", "started": True}]
         args = self._make_args()
@@ -583,6 +692,7 @@ class TestLocalModeTokenThreading:
         self, mock_token, mock_discover, tmp_path, monkeypatch
     ):
         monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
         mock_token.return_value = "aiir_gw_tok"
         mock_discover.return_value = None  # Discovery failed
         args = self._make_args()
@@ -592,3 +702,59 @@ class TestLocalModeTokenThreading:
         data = json.loads((tmp_path / ".mcp.json").read_text())
         entry = data["mcpServers"]["aiir"]
         assert entry["headers"]["Authorization"] == "Bearer aiir_gw_tok"
+
+
+class TestUninstallHelpers:
+    def test_remove_aiir_mcp_entries(self, tmp_path):
+        path = tmp_path / ".claude.json"
+        data = {
+            "mcpServers": {
+                "forensic-mcp": {"type": "http", "url": "http://x/mcp/forensic-mcp"},
+                "my-custom": {"type": "stdio", "command": "test"},
+                "sift-mcp": {"type": "http", "url": "http://x/mcp/sift-mcp"},
+            },
+            "other_key": "preserved",
+        }
+        path.write_text(json.dumps(data))
+        _remove_aiir_mcp_entries(path)
+
+        result = json.loads(path.read_text())
+        assert "my-custom" in result["mcpServers"]
+        assert "forensic-mcp" not in result["mcpServers"]
+        assert "sift-mcp" not in result["mcpServers"]
+        assert result["other_key"] == "preserved"
+
+    def test_remove_forensic_settings(self, tmp_path):
+        path = tmp_path / "settings.json"
+        data = {
+            "hooks": {
+                "PostToolUse": [
+                    {"matcher": "Bash", "hooks": [{"type": "command", "command": "/path/forensic-audit.sh"}]},
+                    {"matcher": "Write", "hooks": [{"type": "command", "command": "other.sh"}]},
+                ],
+                "UserPromptSubmit": [
+                    {"matcher": "", "hooks": [{"type": "command", "command": "cat << 'EOF'\n<forensic-rules>stuff</forensic-rules>"}]},
+                ],
+            },
+            "permissions": {
+                "allow": ["Bash(ls)"],
+                "deny": ["Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)", "Bash(custom)"],
+                "defaultMode": "ask",
+            },
+            "sandbox": {"enabled": True},
+        }
+        path.write_text(json.dumps(data))
+        _remove_forensic_settings(path)
+
+        result = json.loads(path.read_text())
+        # PostToolUse: forensic-audit entry removed, other preserved
+        assert len(result["hooks"]["PostToolUse"]) == 1
+        assert "other.sh" in result["hooks"]["PostToolUse"][0]["hooks"][0]["command"]
+        # UserPromptSubmit: forensic-rules entry removed
+        assert "UserPromptSubmit" not in result["hooks"]
+        # permissions: forensic deny rules removed, custom + allow preserved
+        assert result["permissions"]["deny"] == ["Bash(custom)"]
+        assert result["permissions"]["allow"] == ["Bash(ls)"]
+        assert result["permissions"]["defaultMode"] == "ask"
+        # sandbox removed
+        assert "sandbox" not in result

@@ -4,8 +4,8 @@
     AIIR LLM Client Setup for Windows
 
 .DESCRIPTION
-    Joins the SIFT gateway and produces a reference MCP config file.
-    Lightweight — no Python, no git required.
+    Joins the SIFT gateway and creates a functional $HOME\aiir\ workspace
+    with MCP config, forensic controls, and discipline docs.
 
 .PARAMETER Sift
     Gateway URL (required). Example: https://192.168.1.100:4508
@@ -13,15 +13,21 @@
 .PARAMETER Code
     Join code (required). Generated on SIFT with: aiir setup join-code
 
+.PARAMETER Uninstall
+    Remove AIIR workspace and forensic controls.
+
 .PARAMETER Help
     Show help and exit.
 
 .EXAMPLE
     .\setup-client-windows.ps1 -Sift https://192.168.1.100:4508 -Code XXXX-XXXX
+.EXAMPLE
+    .\setup-client-windows.ps1 -Uninstall
 #>
 param(
     [string]$Sift,
     [string]$Code,
+    [switch]$Uninstall,
     [switch]$Help
 )
 
@@ -33,6 +39,14 @@ function Write-Info  { param([string]$Msg) Write-Host "[INFO] $Msg" -ForegroundC
 function Write-Ok    { param([string]$Msg) Write-Host "[OK] $Msg" -ForegroundColor Green }
 function Write-Warn  { param([string]$Msg) Write-Host "[WARN] $Msg" -ForegroundColor Yellow }
 function Write-Err   { param([string]$Msg) Write-Host "[ERROR] $Msg" -ForegroundColor Red }
+
+function Prompt-YN {
+    param([string]$Msg, [bool]$Default = $true)
+    $suffix = if ($Default) { "[Y/n]" } else { "[y/N]" }
+    $answer = Read-Host "$Msg $suffix"
+    if ([string]::IsNullOrWhiteSpace($answer)) { return $Default }
+    return ($answer.Trim().ToLower() -eq "y")
+}
 
 # =============================================================================
 # Banner + Help
@@ -51,7 +65,54 @@ if ($Help) {
     Write-Host "Parameters:"
     Write-Host "  -Sift URL     Gateway URL (required)"
     Write-Host "  -Code CODE    Join code (required)"
+    Write-Host "  -Uninstall    Remove AIIR workspace"
     Write-Host "  -Help         Show this help"
+    exit 0
+}
+
+# =============================================================================
+# Uninstall
+# =============================================================================
+
+if ($Uninstall) {
+    $deployDir = Join-Path $HOME "aiir"
+    Write-Host ""
+    Write-Host "AIIR Forensic Controls - Uninstall" -ForegroundColor White
+    Write-Host ""
+
+    if (-not (Test-Path $deployDir)) {
+        Write-Info "No AIIR workspace found at $deployDir."
+        exit 0
+    }
+
+    Write-Host "  AIIR workspace: $deployDir"
+    $casesDir = Join-Path $deployDir "cases"
+    if (Test-Path $casesDir) {
+        Write-Host ""
+        Write-Host "  WARNING: $casesDir contains case data." -ForegroundColor Yellow
+        Write-Host "  Back up case data before removing the workspace."
+    }
+    Write-Host ""
+
+    if (Prompt-YN "  Remove entire AIIR workspace ($deployDir)?" $false) {
+        Remove-Item -Path $deployDir -Recurse -Force
+        Write-Ok "Removed $deployDir"
+    } else {
+        Write-Host ""
+        Write-Host "  Removing config files only (preserving cases/)..."
+        $claudeDir = Join-Path $deployDir ".claude"
+        $mcpJson = Join-Path $deployDir ".mcp.json"
+        if (Test-Path $claudeDir) { Remove-Item -Path $claudeDir -Recurse -Force }
+        if (Test-Path $mcpJson) { Remove-Item -Path $mcpJson -Force }
+        foreach ($f in @("CLAUDE.md", "AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md")) {
+            $fp = Join-Path $deployDir $f
+            if (Test-Path $fp) { Remove-Item -Path $fp -Force }
+        }
+        Write-Ok "Config files removed. $casesDir preserved."
+    }
+
+    Write-Host ""
+    Write-Host "Uninstall complete."
     exit 0
 }
 
@@ -142,54 +203,189 @@ gateway_token: "$gatewayToken"
 Write-Ok "Credentials saved to $configFile"
 
 # =============================================================================
-# Reference Config
+# Workspace Setup
 # =============================================================================
 
-$mcpConfigFile = Join-Path $aiirDir "mcp-config.txt"
-$timestamp = (Get-Date -Format "yyyy-MM-dd HH:mm UTC")
+Write-Host ""
+Write-Host "=== AIIR Workspace ===" -ForegroundColor White
+Write-Host ""
 
-$lines = @()
-$lines += "# AIIR MCP Configuration Reference"
-$lines += "# Generated $timestamp"
-$lines += "#"
-$lines += "# Configure each MCP server below in your LLM client."
-$lines += "# All connections use Streamable HTTP with bearer token auth."
-$lines += ""
-$lines += "# --- SIFT Gateway Backends ---"
-$lines += ""
+$deployDir = Join-Path $HOME "aiir"
+$casesDir = Join-Path $deployDir "cases"
+$claudeDir = Join-Path $deployDir ".claude"
+$hooksDir = Join-Path $claudeDir "hooks"
+
+New-Item -ItemType Directory -Path $casesDir -Force | Out-Null
+New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
+
+# ---- MCP Config ----
+
+$mcpServers = @{}
 
 foreach ($backend in $backends) {
-    $lines += "Name:    $backend"
-    $lines += "Type:    streamable-http"
-    $lines += "URL:     $gatewayUrl/mcp/$backend"
-    $lines += "Header:  Authorization: Bearer $gatewayToken"
-    $lines += ""
+    $mcpServers[$backend] = @{
+        type = "streamable-http"
+        url = "$gatewayUrl/mcp/$backend"
+        headers = @{
+            Authorization = "Bearer $gatewayToken"
+        }
+    }
 }
 
-$lines += "# --- External MCPs ---"
-$lines += ""
-$lines += "Name:    zeltser-ir-writing (required for reporting)"
-$lines += "Type:    streamable-http"
-$lines += "URL:     https://website-mcp.zeltser.com/mcp"
-$lines += ""
-$lines += "Name:    ms-learn (optional)"
-$lines += "Type:    streamable-http"
-$lines += "URL:     https://learn.microsoft.com/api/mcp"
-$lines += ""
-$lines += "Name:    remnux (optional, if you have a REMnux VM)"
-$lines += "Type:    streamable-http"
-$lines += "URL:     http://REMNUX_IP:8080/mcp"
-$lines += ""
-$lines += "# Configure the above MCPs in your LLM client per your"
-$lines += "# client's documentation."
+# External MCPs
+$mcpServers["zeltser-ir-writing"] = @{
+    type = "streamable-http"
+    url = "https://website-mcp.zeltser.com/mcp"
+}
 
-$lines -join "`n" | Set-Content -Path $mcpConfigFile -Encoding UTF8
+$mcpServers["microsoft-learn"] = @{
+    type = "streamable-http"
+    url = "https://learn.microsoft.com/api/mcp"
+}
 
-Write-Ok "Reference config written: $mcpConfigFile"
+$mcpConfig = @{ mcpServers = $mcpServers }
+$mcpJsonPath = Join-Path $deployDir ".mcp.json"
+$mcpConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $mcpJsonPath -Encoding UTF8
+Write-Ok "Written: $mcpJsonPath"
+
+# ---- Settings.json ----
+
+$settingsPath = Join-Path $claudeDir "settings.json"
+$hookPath = Join-Path $hooksDir "forensic-audit.sh"
+
+$settingsObj = @{
+    hooks = @{
+        UserPromptSubmit = @(
+            @{
+                matcher = ""
+                hooks = @(
+                    @{
+                        type = "command"
+                        command = "cat << 'EOF'`n<forensic-rules>`nPLAN before 3+ steps | EVIDENCE for claims | APPROVAL before conclusions`nRECORD actions via forensic-mcp | NO DELETE without approval`n</forensic-rules>`nEOF"
+                    }
+                )
+            }
+        )
+        PostToolUse = @(
+            @{
+                matcher = "Bash"
+                hooks = @(
+                    @{
+                        type = "command"
+                        command = $hookPath.Replace('\', '/')
+                    }
+                )
+            }
+        )
+    }
+    permissions = @{
+        deny = @(
+            "Bash(rm -rf *)",
+            "Bash(mkfs*)",
+            "Bash(dd *)"
+        )
+    }
+    sandbox = @{
+        enabled = $true
+        allowUnsandboxedCommands = $false
+    }
+}
+
+if (Test-Path $settingsPath) {
+    Write-Info "Existing settings.json found. Merging..."
+    try {
+        $existing = Get-Content -Path $settingsPath -Raw | ConvertFrom-Json
+
+        # Merge hooks
+        if (-not $existing.hooks) {
+            $existing | Add-Member -NotePropertyName hooks -NotePropertyValue $settingsObj.hooks
+        } else {
+            foreach ($hookType in @("UserPromptSubmit", "PostToolUse")) {
+                if (-not $existing.hooks.$hookType) {
+                    $existing.hooks | Add-Member -NotePropertyName $hookType -NotePropertyValue $settingsObj.hooks.$hookType
+                }
+            }
+        }
+
+        # Merge permissions
+        if (-not $existing.permissions) {
+            $existing | Add-Member -NotePropertyName permissions -NotePropertyValue $settingsObj.permissions
+        } elseif (-not $existing.permissions.deny) {
+            $existing.permissions | Add-Member -NotePropertyName deny -NotePropertyValue $settingsObj.permissions.deny
+        } else {
+            $existingDeny = [System.Collections.Generic.HashSet[string]]::new([string[]]$existing.permissions.deny)
+            foreach ($rule in $settingsObj.permissions.deny) {
+                [void]$existingDeny.Add($rule)
+            }
+            $existing.permissions.deny = ($existingDeny | Sort-Object)
+        }
+
+        # Merge sandbox
+        if (-not $existing.sandbox) {
+            $existing | Add-Member -NotePropertyName sandbox -NotePropertyValue $settingsObj.sandbox
+        }
+
+        $existing | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsPath -Encoding UTF8
+        Write-Ok "settings.json (merged)"
+    } catch {
+        Write-Warn "Could not merge existing settings. Overwriting."
+        $settingsObj | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsPath -Encoding UTF8
+        Write-Ok "settings.json (overwritten)"
+    }
+} else {
+    $settingsObj | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsPath -Encoding UTF8
+    Write-Ok "settings.json (hooks + permissions + sandbox)"
+}
+
+# ---- Fetch assets from GitHub ----
+
+$githubRaw = "https://raw.githubusercontent.com/AppliedIR"
+$errors = 0
+
+$assets = @(
+    @{ Name = "CLAUDE.md"; Url = "$githubRaw/sift-mcp/main/claude-code/CLAUDE.md"; Dest = (Join-Path $deployDir "CLAUDE.md") },
+    @{ Name = "AGENTS.md"; Url = "$githubRaw/sift-mcp/main/AGENTS.md"; Dest = (Join-Path $deployDir "AGENTS.md") },
+    @{ Name = "FORENSIC_DISCIPLINE.md"; Url = "$githubRaw/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md"; Dest = (Join-Path $deployDir "FORENSIC_DISCIPLINE.md") },
+    @{ Name = "TOOL_REFERENCE.md"; Url = "$githubRaw/sift-mcp/main/claude-code/TOOL_REFERENCE.md"; Dest = (Join-Path $deployDir "TOOL_REFERENCE.md") },
+    @{ Name = "forensic-audit.sh"; Url = "$githubRaw/sift-mcp/main/claude-code/hooks/forensic-audit.sh"; Dest = $hookPath }
+)
+
+foreach ($asset in $assets) {
+    Write-Info "Fetching $($asset.Name)..."
+    try {
+        $fetchParams = @{
+            Uri = $asset.Url
+            OutFile = $asset.Dest
+            UseBasicParsing = $true
+        }
+        if ($PSVersionTable.PSVersion.Major -ge 6) {
+            $fetchParams["SkipCertificateCheck"] = $true
+        }
+        Invoke-WebRequest @fetchParams
+        Write-Ok $asset.Name
+    } catch {
+        Write-Warn "Could not fetch $($asset.Name)"
+        $errors++
+    }
+}
+
+# Note: forensic-audit.sh is a POSIX shell script. Claude Code hooks on Windows
+# run via the shell. This script may require WSL or Git Bash to execute.
+
+if ($errors -gt 0) {
+    Write-Warn "$errors asset(s) could not be fetched. Re-run or download manually."
+}
 
 # =============================================================================
-# Advisories
+# Summary
 # =============================================================================
+
+Write-Host ""
+Write-Host "=== Setup Complete ===" -ForegroundColor White
+Write-Host ""
+
+Write-Host "Gateway:     $gatewayUrl"
+Write-Host "Workspace:   $deployDir"
 
 Write-Host ""
 Write-Host "SSH Access" -ForegroundColor White
@@ -215,6 +411,20 @@ Write-Host "  If you choose to use a terminal-access LLM, ensure your SSH"
 Write-Host "  authentication to SIFT requires human interaction per use (password"
 Write-Host "  auth, ssh-agent confirmation, or hardware security keys) so the LLM"
 Write-Host "  cannot authenticate automatically."
+
+Write-Host ""
+Write-Host "AIIR workspace created at $deployDir\" -ForegroundColor White
+Write-Host ""
+Write-Host "IMPORTANT: Always launch Claude Code from $deployDir\ or a subdirectory." -ForegroundColor Yellow
+Write-Host "Forensic controls (audit logging, guardrails, MCP tools) only apply"
+Write-Host "when Claude Code is started from within this directory."
+Write-Host ""
+Write-Host "  cd $deployDir; claude"
+Write-Host ""
+Write-Host "To organize case work while maintaining controls:"
+Write-Host ""
+Write-Host "  mkdir $deployDir\cases\INC-2026-001"
+Write-Host "  cd $deployDir\cases\INC-2026-001; claude"
 
 Write-Host ""
 Write-Host "Documentation: https://appliedir.github.io/aiir/" -ForegroundColor White
