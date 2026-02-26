@@ -173,8 +173,7 @@ def _resolve_client(args, auto: bool) -> str:
     val = getattr(args, "client", None)
     if val:
         return val
-    if auto:
-        return "claude-code"
+    # Always prompt for client — no sensible default (AIIR is LLM-agnostic)
     return _wizard_client()
 
 
