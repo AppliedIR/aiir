@@ -802,7 +802,9 @@ def _case_init(args, identity: dict) -> None:
     print("Next steps:")
     print(f"  1. Copy evidence into: {data['case_dir']}/evidence/")
     print("  2. Register each file:  aiir evidence register <file>")
-    print("  3. Connect your LLM — it will discover this case automatically")
+    print("  3. If using Claude Code, launch from the case directory")
+    print("     to ensure proper sandbox scope:")
+    print(f"       cd {data['case_dir']}")
 
 
 def _case_activate_data(case_id: str, cases_dir=None) -> dict:
