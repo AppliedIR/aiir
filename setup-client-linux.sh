@@ -106,6 +106,18 @@ prompt_yn() {
     [[ "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" == "y" ]]
 }
 
+prompt_yn_strict() {
+    local msg="$1"
+    while true; do
+        read -rp "$(echo -e "${BOLD}$msg${NC} [y/n]: ")" answer
+        case "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" in
+            y) return 0 ;;
+            n) return 1 ;;
+            *) echo "    Please enter y or n." ;;
+        esac
+    done
+}
+
 # =============================================================================
 # Banner
 # =============================================================================
@@ -138,7 +150,7 @@ if $UNINSTALL; then
     fi
     echo ""
 
-    if prompt_yn "  Remove entire AIIR workspace ($DEPLOY_DIR)?" "n"; then
+    if prompt_yn_strict "  Remove entire AIIR workspace ($DEPLOY_DIR)?"; then
         rm -rf "$DEPLOY_DIR"
         rm -f "$HOME/.aiir/config.yaml"
         ok "Removed $DEPLOY_DIR"

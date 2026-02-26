@@ -322,6 +322,20 @@ def _prompt_yn(message: str, default: bool = True) -> bool:
     return answer in ("y", "yes")
 
 
+def _prompt_yn_strict(message: str) -> bool:
+    """Prompt for y/n with no default. Loops until explicit answer."""
+    while True:
+        try:
+            answer = input(f"{message} [y/n]: ").strip().lower()
+        except EOFError:
+            return False
+        if answer in ("y", "yes"):
+            return True
+        if answer in ("n", "no"):
+            return False
+        print("    Please enter y or n.")
+
+
 # ---------------------------------------------------------------------------
 # Config generation
 # ---------------------------------------------------------------------------
@@ -811,7 +825,7 @@ def _uninstall_sift() -> None:
     if claude_json.is_file():
         print("  [1] MCP servers (~/.claude.json mcpServers)")
         print("      Only AIIR backend entries are removed. Others preserved.")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             _remove_aiir_mcp_entries(claude_json)
             print("      Removed AIIR MCP entries.")
         else:
@@ -823,7 +837,7 @@ def _uninstall_sift() -> None:
     if settings.is_file():
         print("  [2] Hooks & permissions (~/.claude/settings.json)")
         print("      Forensic entries only. Other settings preserved.")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             _remove_forensic_settings(settings)
             print("      Removed forensic settings.")
         else:
@@ -834,7 +848,7 @@ def _uninstall_sift() -> None:
     hook = Path.home() / ".aiir" / "hooks" / "forensic-audit.sh"
     if hook.is_file():
         print("  [3] Audit hook script (~/.aiir/hooks/forensic-audit.sh)")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             hook.unlink()
             print("      Removed.")
         else:
@@ -853,7 +867,7 @@ def _uninstall_sift() -> None:
             p = rules_dir / name
             if p.is_file():
                 print(f"      {p}")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             if claude_md.is_file():
                 claude_md.unlink()
                 # Restore backup if exists
@@ -877,7 +891,7 @@ def _uninstall_sift() -> None:
         print("  [5] Project-level files (in current directory)")
         for f in existing_project:
             print(f"      {f}")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             for f in existing_project:
                 p = Path.cwd() / f
                 p.unlink()
@@ -897,7 +911,7 @@ def _uninstall_sift() -> None:
     if config_yaml.is_file():
         print("  [6] Gateway credentials (~/.aiir/config.yaml)")
         print("      Contains bearer token for gateway authentication.")
-        if _prompt_yn("      Remove?", default=False):
+        if _prompt_yn_strict("      Remove?"):
             config_yaml.unlink()
             print("      Removed.")
         else:
@@ -948,7 +962,7 @@ def _uninstall_project() -> None:
     for p in claude_files_to_remove:
         print(f"    {p}")
 
-    if _prompt_yn("  Remove all?", default=False):
+    if _prompt_yn_strict("  Remove all?"):
         for p in files_to_remove:
             p.unlink()
         # Surgical .mcp.json removal — only AIIR entries

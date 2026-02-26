@@ -48,6 +48,16 @@ function Prompt-YN {
     return ($answer.Trim().ToLower() -eq "y")
 }
 
+function Prompt-YN-Strict {
+    param([string]$Msg)
+    while ($true) {
+        $answer = Read-Host "$Msg [y/n]"
+        if ($answer.Trim().ToLower() -eq "y") { return $true }
+        if ($answer.Trim().ToLower() -eq "n") { return $false }
+        Write-Host "    Please enter y or n."
+    }
+}
+
 # =============================================================================
 # Banner + Help
 # =============================================================================
@@ -94,7 +104,7 @@ if ($Uninstall) {
     }
     Write-Host ""
 
-    if (Prompt-YN "  Remove entire AIIR workspace ($deployDir)?" $false) {
+    if (Prompt-YN-Strict "  Remove entire AIIR workspace ($deployDir)?") {
         Remove-Item -Path $deployDir -Recurse -Force
         $configYaml = Join-Path $HOME ".aiir" "config.yaml"
         if (Test-Path $configYaml) { Remove-Item -Path $configYaml -Force }
