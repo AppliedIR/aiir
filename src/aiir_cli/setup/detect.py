@@ -10,6 +10,8 @@ from pathlib import Path
 MCP_SERVERS = {
     "forensic-mcp": {"module": "forensic_mcp", "type": "stdio"},
     "sift-mcp": {"module": "sift_mcp", "type": "stdio"},
+    "case-mcp": {"module": "case_mcp", "type": "stdio"},
+    "report-mcp": {"module": "report_mcp", "type": "stdio"},
     "forensic-rag-mcp": {"module": "rag_mcp", "type": "stdio"},
     "windows-triage-mcp": {"module": "windows_triage", "type": "stdio"},
     "opencti-mcp": {"module": "opencti_mcp", "type": "stdio"},
@@ -83,7 +85,7 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
     2. Monorepo venv at ``<base_dir>/sift-mcp/.venv/`` (setup-sift.sh default)
     3. Per-repo venvs at ``<base_dir>/<name>/.venv/`` (legacy layout)
 
-    Returns list of dicts with name, venv_path, python_path, available.
+    Returns list of dicts with name, module, type, venv_path, python_path, available.
     """
     if search_dirs is None:
         search_dirs = []
@@ -139,6 +141,8 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
                     results.append(
                         {
                             "name": name,
+                            "module": info["module"],
+                            "type": info["type"],
                             "venv_path": str(shared_path),
                             "python_path": str(shared_python),
                             "available": True,
@@ -154,6 +158,8 @@ def detect_venv_mcps(search_dirs: list[Path] | None = None) -> list[dict]:
                 results.append(
                     {
                         "name": name,
+                        "module": info["module"],
+                        "type": info["type"],
                         "venv_path": str(base_dir / name),
                         "python_path": str(venv_python),
                         "available": available,
