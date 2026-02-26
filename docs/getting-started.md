@@ -16,18 +16,13 @@ The quickstart installs all MCP servers, the gateway, and the aiir CLI:
 curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
 ```
 
-This runs `sift-install.sh` (MCP servers + gateway) and `aiir-install.sh` (CLI + client config) in sequence.
+This runs `setup-sift.sh` in quick mode — MCP servers, gateway, aiir CLI, and client config in one step.
 
 ### Step by Step
 
 ```bash
-# Clone and install MCP servers
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./sift-install.sh
-
-# Clone and install CLI
-cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./aiir-install.sh
+./setup-sift.sh
 ```
 
 The installer prompts for:

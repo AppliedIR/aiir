@@ -148,7 +148,7 @@ The LLM client runs on a separate machine (e.g., analyst laptop). Requires TLS a
 Install with `--remote` to enable TLS:
 
 ```bash
-./sift-install.sh --remote
+./setup-sift.sh --remote
 ```
 
 ### Multi-Examiner

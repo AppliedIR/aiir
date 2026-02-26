@@ -96,6 +96,20 @@ When Claude Code is the LLM client, `aiir setup client --client=claude-code` dep
 - **Provenance enforcement**: Findings without an evidence trail are rejected
 - **PIN-gated human approval**: Approval requires the examiner's PIN
 
+## SSH Security Consideration
+
+Remote deployments (Path 2) require SSH access to SIFT for CLI operations: finding approval/rejection, evidence unlocking, and command execution. These operations require PIN or terminal confirmation and are not available through MCP.
+
+If the remote LLM client has terminal access (e.g., Claude Code), it can potentially use the examiner's SSH credentials to run commands on SIFT outside of MCP controls. The PIN + TTY gate on `aiir approve` prevents the LLM from approving findings, but other operations (file modification, evidence access) are not PIN-gated.
+
+For production forensic work with remote Claude Code, examiners should use SSH authentication that requires human interaction per use:
+
+- Password-only authentication (no agent-forwarded keys)
+- `ssh-add -c` for per-use agent confirmation
+- Hardware security keys (FIDO2/U2F)
+
+Alternatively, MCP-only clients (Claude Desktop, LibreChat) eliminate this concern entirely — they can only reach SIFT through audited MCP tools.
+
 ## Adversarial Evidence
 
 Evidence under analysis may contain attacker-controlled content designed to manipulate LLM analysis. Any text field in any artifact — filenames, event log messages, registry values, email subjects, script comments, file metadata — could contain adversarial instructions.

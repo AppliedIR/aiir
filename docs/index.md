@@ -37,9 +37,7 @@ Or step by step:
 
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./sift-install.sh          # Install MCP servers + gateway
-cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./aiir-install.sh          # Install aiir CLI + configure client
+./setup-sift.sh
 ```
 
 ## Documentation Guide

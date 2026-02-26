@@ -2,7 +2,7 @@
 
 ## Installation Tiers
 
-The `sift-install.sh` installer offers three tiers:
+The `setup-sift.sh` installer offers three tiers:
 
 | Tier | Packages | Use Case |
 |------|----------|----------|
@@ -24,27 +24,17 @@ OpenCTI-mcp is always optional (requires an OpenCTI instance).
 
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./sift-install.sh
+./setup-sift.sh
 ```
 
 The installer:
 1. Creates a Python virtual environment
-2. Installs selected packages via pip
-3. Generates `gateway.yaml` configuration
-4. Creates a systemd service for the gateway (optional)
-5. Starts the gateway
-
-### Install the CLI
-
-```bash
-git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./aiir-install.sh
-```
-
-The CLI installer:
-1. Installs the `aiir` package
-2. Runs `aiir setup client` to configure your LLM client
-3. For Claude Code, deploys forensic controls (sandbox, audit hook, discipline docs)
+2. Installs MCP servers, gateway, and aiir CLI via pip
+3. Sets examiner identity
+4. Generates `gateway.yaml` configuration
+5. Creates a systemd service for the gateway (optional)
+6. Starts the gateway
+7. Runs `aiir setup client` to configure your LLM client
 
 ## Windows Workstation Setup
 
@@ -103,7 +93,7 @@ For deployments where the LLM client runs on a different machine:
 ### Enable Remote Access
 
 ```bash
-./sift-install.sh --remote
+./setup-sift.sh --remote
 ```
 
 This generates:
@@ -111,30 +101,38 @@ This generates:
 - Bearer token (`aiir_gw_` prefix) in `gateway.yaml`
 - Gateway binds to `0.0.0.0:4508` with TLS
 
-### Client Setup
+The installer prints per-OS remote client setup commands with a join code.
 
-On the remote machine:
+### Remote Client Setup
 
-1. Import the CA certificate (`~/.aiir/tls/ca-cert.pem`) into the OS trust store
-2. Copy the bearer token from the installer output
-3. Configure the client:
+Run the appropriate setup script on the machine where your LLM client runs:
 
+**Linux** (full support — Claude Code asset deployment, MCP config generation):
 ```bash
-aiir setup client --remote --sift=https://SIFT_IP:4508 --token=aiir_gw_...
+curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-linux.sh \
+  | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
+
+**macOS** (join + reference config):
+```bash
+curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-macos.sh \
+  | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
+```
+
+**Windows** (join + reference config):
+```powershell
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
+.\setup-client-windows.ps1 -Sift https://SIFT_IP:4508 -Code XXXX-XXXX
+```
+
+Your LLM client must run locally on your machine to reach the SIFT gateway. Cloud-hosted LLM services cannot connect to internal network addresses.
 
 ### Join Codes
 
-For easier remote setup, generate a join code on the SIFT workstation:
+Generate a join code on the SIFT workstation:
 
 ```bash
 aiir setup join-code --expires 2    # 2-hour expiry
-```
-
-On the remote machine:
-
-```bash
-aiir join --sift SIFT_IP --code ABC123
 ```
 
 ## Multi-Examiner Deployment
@@ -147,9 +145,7 @@ Each examiner installs independently:
 
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./sift-install.sh
-cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./aiir-install.sh
+./setup-sift.sh
 ```
 
 ### Collaboration

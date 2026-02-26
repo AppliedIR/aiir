@@ -118,8 +118,8 @@ http://localhost:4508/mcp/opencti-mcp
 
 Two primary deployment paths:
 
-- **Path 1 — Co-located (testing / quickstart).** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. Good for training, single-analyst work, and getting started.
-- **Path 2 — Remote orchestrator (preferred for production).** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. The examiner must have SSH access to SIFT for all CLI operations (approve, review, report, evidence, etc.). Run `sift-install.sh --remote` to generate TLS certificates and bind the gateway to all interfaces.
+- **Path 1 — Co-located.** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. All forensic controls apply (sandbox, audit hooks, PIN gate). Simplest setup — single machine, one installer.
+- **Path 2 — Remote orchestrator.** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. The examiner must have SSH access to SIFT for CLI operations (approve, reject, evidence unlock, execute). Run `setup-sift.sh --remote` to generate TLS certificates and bind the gateway to all interfaces. MCP-only clients (Claude Desktop, LibreChat) are well suited for this path — they can only reach SIFT through audited MCP tools.
 
 #### Solo Analyst on SIFT (Path 1)
 
@@ -336,20 +336,12 @@ Or step by step:
 
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
-./sift-install.sh          # Install MCP servers + gateway
-cd .. && git clone https://github.com/AppliedIR/aiir.git && cd aiir
-./aiir-install.sh          # Install aiir CLI + configure client
+./setup-sift.sh
 ```
 
-When you select Claude Code during `aiir setup client`, the installer deploys additional forensic controls. Claude Code has direct terminal access, so it needs constraints beyond a client that can only reach the system through MCP: kernel-level sandbox (restricts Bash writes), PostToolUse audit hook (captures every Bash command to the case audit trail), provenance enforcement (findings without an evidence trail are rejected).
+The installer handles everything: MCP servers, gateway, aiir CLI, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, PostToolUse audit hook, provenance enforcement, PIN-gated human approval). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
 
-If you don't need direct Bash access to forensic tools, a non-shell client is another option — the MCP tools provide the same forensic capabilities with a smaller attack surface.
-
-```bash
-curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh | bash
-```
-
-The quickstart installs all core components, starts the gateway, and runs the aiir setup wizard. For tier selection (quick, recommended, custom) or remote access, run `sift-install.sh` directly.
+For tier selection (quick, recommended, custom) or remote access, run `setup-sift.sh` directly.
 
 ### Windows Forensic Workstation (optional)
 
@@ -536,7 +528,7 @@ aiir setup client --client=claude-code --sift=http://127.0.0.1:4508 -y    # Loca
 aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT + Windows
 ```
 
-For remote orchestrator setups (Path 2), use the `--remote` flag:
+For remote orchestrator setups (Path 2), remote examiners run a platform-specific setup script:
 
 ```bash
 aiir setup client --remote                                                 # Interactive remote wizard
