@@ -19,6 +19,7 @@ OpenCTI-mcp is always optional (requires an OpenCTI instance).
 - Ubuntu 22.04+ (SIFT Workstation recommended)
 - Python 3.11+
 - Git
+- sudo access (for creating `/var/lib/aiir/verification/` — the HMAC verification ledger directory). The installer degrades gracefully without sudo but HMAC verification will not be available.
 
 ### Install
 
@@ -30,11 +31,12 @@ git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 The installer:
 1. Creates a Python virtual environment
 2. Installs MCP servers, gateway, and aiir CLI via pip
-3. Sets examiner identity
-4. Generates `gateway.yaml` configuration
-5. Creates a systemd service for the gateway (optional)
-6. Starts the gateway
-7. Runs `aiir setup client` to configure your LLM client
+3. Creates the HMAC verification ledger directory at `/var/lib/aiir/verification/` (requires sudo)
+4. Sets examiner identity
+5. Generates `gateway.yaml` configuration
+6. Creates a systemd service for the gateway (optional)
+7. Starts the gateway
+8. Runs `aiir setup client` to configure your LLM client
 
 ## Windows Workstation Setup
 
@@ -245,7 +247,7 @@ api_keys:
 `aiir setup client --client=claude-code` deploys:
 
 - `.mcp.json` with Streamable HTTP endpoint
-- `.claude/settings.json` with kernel-level sandbox and PostToolUse audit hook
+- `.claude/settings.json` with kernel-level sandbox, case data deny rules, PreToolUse guard hook, and PostToolUse audit hook
 - `FORENSIC_DISCIPLINE.md` and `TOOL_REFERENCE.md` for LLM context
 - `CLAUDE.md` referencing AGENTS.md
 

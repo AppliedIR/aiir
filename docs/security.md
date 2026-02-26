@@ -37,7 +37,7 @@ Bearer token authentication with `aiir_wt_` prefix. Generated during installatio
 
 ### sift-mcp (Linux)
 
-- **Denylist**: Blocks destructive system commands (mkfs, dd, fdisk, shutdown, etc.)
+- **Denylist**: Blocks destructive system commands (mkfs, dd, fdisk, shutdown, etc.). When Claude Code is the client, additional case-file-specific deny rules are deployed (see L3 below).
 - **subprocess.run(shell=False)**: No shell, no arbitrary command chains
 - **Argument sanitization**: Shell metacharacters blocked
 - **Path validation**: Kernel interfaces (/proc, /sys, /dev) blocked for input
@@ -59,17 +59,61 @@ The installer requires typing `security_hole` (or passing `-AcknowledgeSecurityH
 
 ## Human-in-the-Loop Controls
 
-### Structural Approval Gate
+Nine layers of defense-in-depth protect the integrity of forensic findings. The HMAC verification ledger (L2) is the cryptographic guarantee. The other layers are advisory controls that raise the bar.
+
+### L1 — Structural Approval Gate
 
 All findings and timeline events stage as DRAFT. Only the aiir CLI (which requires a human at `/dev/tty`) can move them to APPROVED or REJECTED. There is no MCP tool for approval. The AI cannot bypass this mechanism.
 
-### PIN Authentication
+### L2 — HMAC Verification Ledger
 
-The `aiir approve` command requires PIN confirmation. PINs are set per examiner via `aiir config --setup-pin`.
+When an examiner approves findings, an HMAC-SHA256 signature is computed over the description text using a key derived from the examiner's PIN (PBKDF2, 600K iterations). These signatures are stored in `/var/lib/aiir/verification/{case-id}.jsonl` — outside the case directory and outside the Claude Code sandbox.
 
-### Provenance Enforcement
+- `aiir review --verify` performs full HMAC verification with per-examiner PIN prompts
+- `aiir review --verify --mine` filters to the current examiner only
+- Report generation includes automatic reconciliation (no PIN needed) that detects mismatches between approved items and ledger entries
+- PIN rotation (`aiir config --reset-pin`) re-signs all ledger entries with the new key
+- Case close copies the verification ledger into the case directory for archival
 
-Findings must be traceable to evidence:
+The LLM cannot forge ledger entries because it does not know the PIN-derived key.
+
+### L3 — Case Data Deny Rules
+
+When Claude Code is the LLM client, 16 deny rules block Edit/Write tool access to protected case data files:
+
+- `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`
+- `Bash(aiir approve*)` and `Bash(aiir reject*)` are also denied
+
+These rules replace the previous generic denylist (rm -rf, mkfs, dd) with targeted protection for case integrity.
+
+### L4 — PreToolUse Hook
+
+A `pre-bash-guard.sh` hook intercepts Bash commands before execution. It blocks shell redirections, tee, cp, mv, and chmod targeting protected case data filenames (findings.json, timeline.json, approvals.jsonl, etc.). This is a heuristic — the spec labels it advisory — but it catches common bypass patterns.
+
+### L5 — File Permission Protection
+
+Case data files (findings.json, timeline.json, todos.json, CASE.yaml, approvals.jsonl) are set to chmod 444 (read-only) after every write. The owning process unlocks before writing and relocks after. This is a speed bump, not a wall — the LLM process can chmod — but combined with deny rules and the PreToolUse hook it adds another layer.
+
+At case initialization, the filesystem is checked. Non-POSIX filesystems (NTFS, exFAT, VFAT) trigger a warning since chmod has no effect.
+
+### L6 — Report Reconciliation
+
+When generating reports, report-mcp performs a bidirectional reconciliation between approved items and the verification ledger. This does not require a PIN. It detects:
+
+- Items approved but missing from the ledger (APPROVED_NO_VERIFICATION)
+- Ledger entries with no corresponding approved item (VERIFICATION_NO_FINDING)
+- Description text that changed after signing (DESCRIPTION_MISMATCH)
+- Count mismatches between approved items and ledger entries
+
+Alerts are included in the generated report as `verification_alerts`.
+
+### L7-L9 — Existing Controls
+
+- **PIN authentication**: The `aiir approve` command requires PIN confirmation. PINs are set per examiner via `aiir config --setup-pin`.
+- **Provenance enforcement**: Findings must be traceable to evidence (MCP > HOOK > SHELL > NONE). NONE provenance with no supporting commands is rejected by a hard gate in `record_finding()`.
+- **Content hash integrity**: SHA-256 hashes computed at staging, verified at approval. `aiir review --verify` detects post-approval tampering via cross-file hash comparison.
+
+### Provenance Tiers
 
 | Tier | Source | Trust Level |
 |------|--------|-------------|
@@ -78,23 +122,16 @@ Findings must be traceable to evidence:
 | SHELL | `supporting_commands` parameter | Self-reported |
 | NONE | No audit record | Rejected |
 
-Findings with NONE provenance and no supporting commands are automatically rejected by a hard gate in `record_finding()`.
-
-### Content Integrity
-
-- SHA-256 hashes are computed when findings are staged
-- Hashes are verified at approval time
-- Cross-file verification compares hashes in `findings.json` against `approvals.jsonl`
-- `aiir review --verify` detects post-approval tampering
-
 ### Claude Code Controls
 
 When Claude Code is the LLM client, `aiir setup client --client=claude-code` deploys:
 
 - **Kernel-level sandbox**: Restricts Bash writes to prevent unauthorized file modifications
+- **Case data deny rules**: 16 rules blocking Edit/Write to protected case files (L3)
+- **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`
 - **Provenance enforcement**: Findings without an evidence trail are rejected
-- **PIN-gated human approval**: Approval requires the examiner's PIN
+- **PIN-gated human approval**: Approval requires the examiner's PIN + writes HMAC ledger entry (L2)
 
 ## SSH Security Consideration
 

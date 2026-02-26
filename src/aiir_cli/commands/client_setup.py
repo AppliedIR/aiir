@@ -780,8 +780,11 @@ def _copy_agents_md(target: Path) -> None:
     src = _find_agents_md()
     if src:
         try:
-            shutil.copy2(src, target)
-            print(f"  Copied:    {src.name} -> {target.name}")
+            if src.resolve() == Path(target).resolve():
+                pass  # Already in place
+            else:
+                shutil.copy2(src, target)
+                print(f"  Copied:    {src.name} -> {target.name}")
         except OSError as e:
             print(f"  Warning: failed to copy {src} to {target}: {e}", file=sys.stderr)
     else:

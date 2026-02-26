@@ -339,7 +339,7 @@ git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./setup-sift.sh
 ```
 
-The installer handles everything: MCP servers, gateway, aiir CLI, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, PostToolUse audit hook, provenance enforcement, PIN-gated human approval). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
+The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
 
 For tier selection (quick, recommended, custom) or remote access, run `setup-sift.sh` directly.
 
@@ -368,7 +368,7 @@ Any data loaded into the system or its component VMs, computers, or instances ru
 
 Outgoing Internet connections are required for report generation (Zeltser IR Writing MCP) and optionally used for threat intelligence (OpenCTI) and documentation (MS Learn MCP). No incoming connections from external systems should be allowed.
 
-AIIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. Clients with direct shell access (like Claude Code) can also operate outside MCP, but `aiir setup client` deploys forensic controls for Claude Code: a kernel-level sandbox restricts Bash writes, a PostToolUse hook captures every Bash command to the audit trail, and provenance enforcement ensures findings are traceable to evidence. AIIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
+AIIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. Clients with direct shell access (like Claude Code) can also operate outside MCP, but `aiir setup client` deploys forensic controls for Claude Code: a kernel-level sandbox restricts Bash writes, deny rules block Edit/Write to case data files, a PreToolUse hook guards against Bash redirections to protected files, a PostToolUse hook captures every Bash command to the audit trail, provenance enforcement ensures findings are traceable to evidence, and an HMAC verification ledger provides cryptographic proof that approved findings haven't been tampered with. AIIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
 
 ## Commands
 
@@ -406,7 +406,8 @@ aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 aiir review                                # Case summary (counts by status)
 aiir review --findings                     # Findings table
 aiir review --findings --detail            # Full finding detail
-aiir review --findings --verify            # Cross-check content hashes against approval records
+aiir review --findings --verify            # Cross-check content hashes + HMAC verification
+aiir review --findings --verify --mine    # HMAC verification for current examiner only
 aiir review --iocs                         # IOCs grouped by approval status
 aiir review --timeline                     # Timeline events
 aiir review --timeline --status APPROVED   # Filter timeline by status
@@ -552,7 +553,7 @@ Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remot
 
 | Client | Config file | Extras |
 |--------|-------------|--------|
-| Claude Code | `~/aiir/.mcp.json` (non-SIFT) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (hooks + permissions + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
+| Claude Code | `~/aiir/.mcp.json` (non-SIFT) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (deny rules + PreToolUse guard + PostToolUse audit + sandbox), `forensic-audit.sh`, `pre-bash-guard.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
 | Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
 | Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |

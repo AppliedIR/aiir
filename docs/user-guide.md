@@ -131,13 +131,14 @@ aiir review --iocs             # IOCs from findings
 ### Integrity Verification
 
 ```bash
-aiir review --verify
+aiir review --verify                # Full verification (all examiners, prompts for each PIN)
+aiir review --verify --mine         # HMAC verification for current examiner only
 ```
 
-This cross-checks:
-- Content hashes in `findings.json` against `approvals.jsonl`
-- Detects post-approval tampering
-- Reports any findings modified after approval
+This performs three levels of verification:
+- **Content hash check**: Compares SHA-256 hashes in `findings.json` against `approvals.jsonl`
+- **Ledger reconciliation**: Cross-checks approved items against the HMAC verification ledger (no PIN needed)
+- **HMAC verification**: Recomputes HMAC-SHA256 signatures using the examiner's PIN to confirm cryptographic integrity. Prompts for each examiner's PIN separately. Use `--mine` to check only your own entries.
 
 ### Approving Findings
 

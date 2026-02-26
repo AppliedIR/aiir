@@ -93,7 +93,8 @@ aiir review --todos --open               # Open TODOs only
 aiir review --audit                      # Audit trail
 aiir review --evidence                   # Evidence integrity
 aiir review --iocs                       # IOCs from findings
-aiir review --verify                     # Cross-check findings vs approvals
+aiir review --verify                     # Cross-check findings vs approvals + HMAC verification
+aiir review --verify --mine              # HMAC verification for current examiner only
 ```
 
 | Option | Description |
@@ -106,7 +107,8 @@ aiir review --verify                     # Cross-check findings vs approvals
 | `--audit` | Show audit log |
 | `--evidence` | Show evidence integrity |
 | `--iocs` | Extract IOCs from findings grouped by status |
-| `--verify` | Cross-check findings against approval records |
+| `--verify` | Cross-check findings against approval records and HMAC verification ledger |
+| `--mine` | Filter HMAC verification to current examiner only (with --verify) |
 | `--status` | Filter by status: DRAFT, APPROVED, REJECTED |
 | `--start` | Start date filter (ISO format) |
 | `--end` | End date filter (ISO format) |
