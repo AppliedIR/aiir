@@ -528,19 +528,31 @@ aiir setup client --client=claude-code --sift=http://127.0.0.1:4508 -y    # Loca
 aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT + Windows
 ```
 
-For remote orchestrator setups (Path 2), remote examiners run a platform-specific setup script:
+For remote orchestrator setups (Path 2), remote examiners run a platform-specific setup script that creates a `~/aiir/` workspace with MCP config, forensic controls, and discipline docs:
 
 ```bash
-aiir setup client --remote                                                 # Interactive remote wizard
-aiir setup client --remote --client=claude-code --token=TOKEN              # Claude Code on remote machine
-aiir setup client --remote --client=claude-desktop --token=TOKEN           # Claude Desktop (uses mcp-remote bridge)
+# Linux
+curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-linux.sh \
+  | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
+
+# macOS
+curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-macos.sh \
+  | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
 
-Remote mode prompts for the gateway URL, bearer token, and optional Windows VM address. Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge for Streamable HTTP support.
+```powershell
+# Windows
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
+.\setup-client-windows.ps1 -Sift https://SIFT_IP:4508 -Code XXXX-XXXX
+```
+
+Always launch your LLM client from `~/aiir/` or a subdirectory. Forensic controls only apply when started from within the workspace. To uninstall, re-run the setup script with `--uninstall` (Linux/macOS) or `-Uninstall` (Windows).
+
+Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge for Streamable HTTP support.
 
 | Client | Config file | Extras |
 |--------|-------------|--------|
-| Claude Code | `.mcp.json` | `CLAUDE.md`, `settings.json` (hooks + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
+| Claude Code | `.mcp.json` (remote) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (hooks + permissions + sandbox), `forensic-audit.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
 | Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
 | Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
 | Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |

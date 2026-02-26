@@ -105,25 +105,35 @@ The installer prints per-OS remote client setup commands with a join code.
 
 ### Remote Client Setup
 
-Run the appropriate setup script on the machine where your LLM client runs:
+Run the appropriate setup script on the machine where your LLM client runs. Each script joins the gateway and creates a `~/aiir/` workspace with MCP config, forensic controls, and discipline docs.
 
-**Linux** (full support — Claude Code asset deployment, MCP config generation):
+**Linux:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-linux.sh \
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
 
-**macOS** (join + reference config):
+**macOS:**
 ```bash
 curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-macos.sh \
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
 
-**Windows** (join + reference config):
+**Windows:**
 ```powershell
 Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
 .\setup-client-windows.ps1 -Sift https://SIFT_IP:4508 -Code XXXX-XXXX
 ```
+
+Always launch your LLM client from `~/aiir/` or a subdirectory. Forensic controls only apply when started from within the workspace.
+
+```bash
+cd ~/aiir && claude                          # start from workspace root
+mkdir ~/aiir/cases/INC-2026-001              # organize by case
+cd ~/aiir/cases/INC-2026-001 && claude       # case-specific session
+```
+
+To uninstall, re-run the setup script with `--uninstall` (Linux/macOS) or `-Uninstall` (Windows).
 
 Your LLM client must run locally on your machine to reach the SIFT gateway. Cloud-hosted LLM services cannot connect to internal network addresses.
 
