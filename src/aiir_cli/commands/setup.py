@@ -143,6 +143,8 @@ def cmd_setup(args, identity: dict) -> None:
 def _run_connectivity_test() -> None:
     """Test connectivity to the gateway and all MCP backends."""
     import json
+    import shutil
+    import subprocess
     import time
     import urllib.error
     import urllib.request
@@ -150,6 +152,42 @@ def _run_connectivity_test() -> None:
     print("=" * 60)
     print("  AIIR Connectivity Test")
     print("=" * 60)
+
+    # --- Sandbox health check ---
+    print("\n  Sandbox:")
+    bwrap = shutil.which("bwrap")
+    if not bwrap:
+        print("    bwrap: NOT INSTALLED — kernel sandbox (L9) unavailable")
+        print("    Install: sudo apt install bubblewrap")
+    else:
+        try:
+            subprocess.run(
+                [bwrap, "--unshare-user", "--", "true"],
+                capture_output=True,
+                timeout=5,
+                check=True,
+            )
+            print("    bwrap: OK (user namespace works)")
+        except subprocess.CalledProcessError:
+            # Check if AppArmor userns restriction is the cause
+            userns_val = ""
+            try:
+                result = subprocess.run(
+                    ["sysctl", "-n", "kernel.apparmor_restrict_unprivileged_userns"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                userns_val = result.stdout.strip()
+            except Exception:
+                pass
+            if userns_val == "1":
+                print("    bwrap: FAIL — AppArmor blocks user namespaces")
+                print("    Fix: re-run setup-sift.sh or install /etc/apparmor.d/bwrap profile")
+            else:
+                print("    bwrap: FAIL — cannot create user namespace")
+        except Exception as e:
+            print(f"    bwrap: ERROR ({e})")
 
     # Resolve gateway URL
     gateway_url = "http://127.0.0.1:4508"

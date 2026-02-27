@@ -108,11 +108,23 @@ When generating reports, report-mcp performs a bidirectional reconciliation betw
 
 Alerts are included in the generated report as `verification_alerts`.
 
-### L7-L9 — Existing Controls
+### L7-L8 — Integrity Controls
 
 - **PIN authentication**: The `aiir approve` command requires PIN confirmation. PINs are set per examiner via `aiir config --setup-pin`.
 - **Provenance enforcement**: Findings must be traceable to evidence (MCP > HOOK > SHELL > NONE). NONE provenance with no supporting commands is rejected by a hard gate in `record_finding()`.
 - **Content hash integrity**: SHA-256 hashes computed at staging, verified at approval. `aiir review --verify` detects post-approval tampering via cross-file hash comparison.
+
+### L9 — Kernel Sandbox (bubblewrap)
+
+Claude Code's sandbox uses bubblewrap (`bwrap`) to isolate Bash commands in Linux namespaces. It enforces filesystem write restrictions (only the working directory is writable) and network isolation (all traffic routed through a proxy with domain allowlists). MCP servers run outside the sandbox with full access. Only Bash commands and their children are confined.
+
+On Ubuntu 24.04+, the default AppArmor setting `kernel.apparmor_restrict_unprivileged_userns=1` blocks bwrap from creating user namespaces. Without a fix, the sandbox fails silently and L9 is non-functional.
+
+`setup-sift.sh` detects this restriction at install time and writes a targeted AppArmor profile at `/etc/apparmor.d/bwrap` that grants only `/usr/bin/bwrap` the `userns` permission. This restores sandbox functionality without weakening kernel hardening for other processes. The profile is removed on uninstall.
+
+`aiir setup test` includes a sandbox health check that verifies bwrap can create user namespaces.
+
+If the AppArmor fix cannot be applied (e.g., sudo unavailable), the installer warns but continues. L9 is defense-in-depth — L1-L8 function independently. With `allowUnsandboxedCommands: false` (the default), Claude Code will refuse to run Bash commands rather than running them unsandboxed.
 
 ### Provenance Tiers
 
@@ -127,7 +139,7 @@ Alerts are included in the generated report as `verification_alerts`.
 
 When Claude Code is the LLM client, `aiir setup client --client=claude-code` deploys:
 
-- **Kernel-level sandbox**: Restricts Bash writes to prevent unauthorized file modifications
+- **Kernel-level sandbox**: Restricts Bash writes and network access via bubblewrap (L9). On Ubuntu 24.04+, requires AppArmor profile installed by `setup-sift.sh`
 - **Case data deny rules**: 21 rules blocking Read/Edit/Write to protected case files, evidence registry, and verification ledger (L3)
 - **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`

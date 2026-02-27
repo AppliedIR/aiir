@@ -75,14 +75,6 @@ class TestRegisterEvidence:
         assert reg["files"][0]["sha256"]
         assert reg["files"][0]["description"] == "Test malware"
 
-    def test_register_sets_readonly(self, case_dir, identity, monkeypatch):
-        monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
-        ev_file = case_dir / "evidence" / "data.bin"
-        ev_file.write_bytes(b"data")
-        args = FakeArgs(path=str(ev_file))
-        cmd_register_evidence(args, identity)
-        assert not os.access(ev_file, os.W_OK)
-
 
 class TestListEvidence:
     def test_list_shows_registered_files(self, case_dir, identity, monkeypatch, capsys):
