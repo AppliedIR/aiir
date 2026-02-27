@@ -597,6 +597,8 @@ if [[ "$CLIENT" == "claude-code" ]]; then
       "Write(**/CASE.yaml)",
       "Write(**/actions.jsonl)",
       "Write(**/audit/*.jsonl)",
+      "Edit(**/evidence.json)",
+      "Write(**/evidence.json)",
       "Read(/var/lib/aiir/**)",
       "Edit(/var/lib/aiir/**)",
       "Write(/var/lib/aiir/**)",

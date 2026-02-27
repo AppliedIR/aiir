@@ -79,9 +79,9 @@ The LLM cannot forge ledger entries because it does not know the PIN-derived key
 
 ### L3 — Case Data Deny Rules
 
-When Claude Code is the LLM client, 19 deny rules block Read/Edit/Write tool access to protected case data files:
+When Claude Code is the LLM client, 21 deny rules block Read/Edit/Write tool access to protected case data files:
 
-- `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`
+- `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`, `evidence.json`
 - `/var/lib/aiir/**` (HMAC verification ledger — Read/Edit/Write all blocked)
 - `Bash(aiir approve*)` and `Bash(aiir reject*)` are also denied
 
@@ -89,11 +89,11 @@ These rules replace the previous generic denylist (rm -rf, mkfs, dd) with target
 
 ### L4 — PreToolUse Hook
 
-A `pre-bash-guard.sh` hook intercepts Bash commands before execution. It blocks shell redirections, tee, cp, mv, and chmod targeting protected case data filenames (findings.json, timeline.json, approvals.jsonl, etc.). This is a heuristic — the spec labels it advisory — but it catches common bypass patterns.
+A `pre-bash-guard.sh` hook intercepts Bash commands before execution. It blocks shell redirections, tee, cp, mv, and chmod targeting protected case data filenames (findings.json, timeline.json, approvals.jsonl, CASE.yaml). This is a heuristic — the spec labels it advisory — but it catches common bypass patterns.
 
 ### L5 — File Permission Protection
 
-Case data files (findings.json, timeline.json, todos.json, CASE.yaml, approvals.jsonl) are set to chmod 444 (read-only) after every write. The owning process unlocks before writing and relocks after. This is a speed bump, not a wall — the LLM process can chmod — but combined with deny rules and the PreToolUse hook it adds another layer.
+Case data files with forensic value (findings.json, timeline.json, approvals.jsonl) are set to chmod 444 (read-only) after every write. The owning process unlocks before writing and relocks after. This is a speed bump, not a wall — the LLM process can chmod — but combined with deny rules and the PreToolUse hook it adds another layer.
 
 At case initialization, the filesystem is checked. Non-POSIX filesystems (NTFS, exFAT, VFAT) trigger a warning since chmod has no effect.
 
@@ -128,7 +128,7 @@ Alerts are included in the generated report as `verification_alerts`.
 When Claude Code is the LLM client, `aiir setup client --client=claude-code` deploys:
 
 - **Kernel-level sandbox**: Restricts Bash writes to prevent unauthorized file modifications
-- **Case data deny rules**: 19 rules blocking Read/Edit/Write to protected case files and verification ledger (L3)
+- **Case data deny rules**: 21 rules blocking Read/Edit/Write to protected case files, evidence registry, and verification ledger (L3)
 - **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`
 - **Provenance enforcement**: Findings without an evidence trail are rejected
@@ -167,12 +167,13 @@ Any data loaded into the system runs the risk of being exposed to the underlying
 
 ### Evidence Integrity Measures
 
-- Registered evidence files are set to read-only (chmod 444) as defense-in-depth
-- SHA-256 hashes computed at registration, verified on demand
+- SHA-256 hashes computed at registration, verified on demand via `aiir evidence verify`
+- Evidence registry (`evidence.json`) protected by deny rules to prevent hash tampering
 - Evidence access is logged to `evidence_access.jsonl`
-- `aiir evidence lock` creates a bind mount for the evidence directory (requires sudo)
+- `aiir evidence lock` sets the entire evidence directory to read-only (chmod 444/555)
+- `aiir evidence unlock` restores write access for re-extraction
 
-These are defense-in-depth measures. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
+These are defense-in-depth measures. Hash-based verification is the primary integrity mechanism. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
 
 ### Filesystem Requirements
 

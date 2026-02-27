@@ -751,7 +751,7 @@ def _case_init_data(
 
     if not fs_warning:
         for fname in (
-            "findings.json", "timeline.json", "todos.json", "CASE.yaml",
+            "findings.json", "timeline.json",
         ):
             try:
                 os.chmod(case_dir / fname, 0o444)

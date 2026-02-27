@@ -171,12 +171,6 @@ def register_evidence_data(
             sha.update(chunk)
     file_hash = sha.hexdigest()
 
-    # Set read-only
-    try:
-        evidence_path.chmod(stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH)  # 444
-    except OSError:
-        pass  # non-fatal — CLI wrapper can warn
-
     # Record in evidence registry
     reg_file = case_dir / "evidence.json"
     try:
