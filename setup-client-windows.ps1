@@ -319,6 +319,20 @@ $settingsObj = @{
         )
     }
     permissions = @{
+        allow = @(
+            "mcp__forensic-mcp__*",
+            "mcp__case-mcp__*",
+            "mcp__sift-mcp__*",
+            "mcp__report-mcp__*",
+            "mcp__forensic-rag-mcp__*",
+            "mcp__windows-triage-mcp__*",
+            "mcp__opencti-mcp__*",
+            "mcp__wintools-mcp__*",
+            "mcp__remnux-mcp__*",
+            "mcp__aiir__*",
+            "mcp__zeltser-ir-writing__*",
+            "mcp__microsoft-learn__*"
+        )
         deny = @(
             "Edit(**/findings.json)",
             "Edit(**/timeline.json)",
@@ -363,18 +377,31 @@ if (Test-Path $settingsPath) {
         # Merge permissions
         if (-not $existing.permissions) {
             $existing | Add-Member -NotePropertyName permissions -NotePropertyValue $settingsObj.permissions
-        } elseif (-not $existing.permissions.deny) {
-            $existing.permissions | Add-Member -NotePropertyName deny -NotePropertyValue $settingsObj.permissions.deny
         } else {
-            $existingDeny = [System.Collections.Generic.HashSet[string]]::new([string[]]$existing.permissions.deny)
-            # Remove old forensic rules on re-deploy
-            foreach ($old in @("Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)")) {
-                [void]$existingDeny.Remove($old)
+            # Merge allow
+            if (-not $existing.permissions.allow) {
+                $existing.permissions | Add-Member -NotePropertyName allow -NotePropertyValue $settingsObj.permissions.allow
+            } else {
+                $existingAllow = [System.Collections.Generic.HashSet[string]]::new([string[]]$existing.permissions.allow)
+                foreach ($rule in $settingsObj.permissions.allow) {
+                    [void]$existingAllow.Add($rule)
+                }
+                $existing.permissions.allow = ($existingAllow | Sort-Object)
             }
-            foreach ($rule in $settingsObj.permissions.deny) {
-                [void]$existingDeny.Add($rule)
+            # Merge deny
+            if (-not $existing.permissions.deny) {
+                $existing.permissions | Add-Member -NotePropertyName deny -NotePropertyValue $settingsObj.permissions.deny
+            } else {
+                $existingDeny = [System.Collections.Generic.HashSet[string]]::new([string[]]$existing.permissions.deny)
+                # Remove old forensic rules on re-deploy
+                foreach ($old in @("Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)")) {
+                    [void]$existingDeny.Remove($old)
+                }
+                foreach ($rule in $settingsObj.permissions.deny) {
+                    [void]$existingDeny.Add($rule)
+                }
+                $existing.permissions.deny = ($existingDeny | Sort-Object)
             }
-            $existing.permissions.deny = ($existingDeny | Sort-Object)
         }
 
         # Merge sandbox

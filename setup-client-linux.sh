@@ -565,6 +565,20 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     ]
   },
   "permissions": {
+    "allow": [
+      "mcp__forensic-mcp__*",
+      "mcp__case-mcp__*",
+      "mcp__sift-mcp__*",
+      "mcp__report-mcp__*",
+      "mcp__forensic-rag-mcp__*",
+      "mcp__windows-triage-mcp__*",
+      "mcp__opencti-mcp__*",
+      "mcp__wintools-mcp__*",
+      "mcp__remnux-mcp__*",
+      "mcp__aiir__*",
+      "mcp__zeltser-ir-writing__*",
+      "mcp__microsoft-learn__*"
+    ],
     "deny": [
       "Edit(**/findings.json)",
       "Edit(**/timeline.json)",
@@ -631,9 +645,14 @@ if "hooks" in incoming:
                 if not any(c in existing_cmds for c in new_cmds):
                     existing_hooks[hook_type].append(entry)
 
-# Merge permissions.deny
+# Merge permissions
 if "permissions" in incoming:
     existing_perms = existing.setdefault("permissions", {})
+    if "allow" in incoming["permissions"]:
+        existing_allow = set(existing_perms.get("allow", []))
+        for rule in incoming["permissions"]["allow"]:
+            existing_allow.add(rule)
+        existing_perms["allow"] = sorted(existing_allow)
     if "deny" in incoming["permissions"]:
         existing_deny = set(existing_perms.get("deny", []))
         # Remove old forensic rules on re-deploy

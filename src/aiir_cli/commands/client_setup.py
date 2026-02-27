@@ -31,6 +31,21 @@ _MSLEARN_MCP = {
 }
 
 # Forensic deny rules — must match claude-code/settings.json source template
+_FORENSIC_ALLOW_RULES = {
+    "mcp__forensic-mcp__*",
+    "mcp__case-mcp__*",
+    "mcp__sift-mcp__*",
+    "mcp__report-mcp__*",
+    "mcp__forensic-rag-mcp__*",
+    "mcp__windows-triage-mcp__*",
+    "mcp__opencti-mcp__*",
+    "mcp__wintools-mcp__*",
+    "mcp__remnux-mcp__*",
+    "mcp__aiir__*",
+    "mcp__zeltser-ir-writing__*",
+    "mcp__microsoft-learn__*",
+}
+
 _FORENSIC_DENY_RULES = {
     "Edit(**/findings.json)",
     "Edit(**/timeline.json)",
@@ -526,9 +541,14 @@ def _merge_settings(target: Path, source: Path) -> None:
                     if not any(c in existing_cmds for c in new_cmds):
                         existing_hooks[hook_type].append(entry)
 
-    # Merge permissions.deny (additive, preserve allow/ask/defaultMode)
+    # Merge permissions (additive, preserve ask/defaultMode)
     if "permissions" in incoming:
         existing_perms = existing.setdefault("permissions", {})
+        if "allow" in incoming["permissions"]:
+            existing_allow = set(existing_perms.get("allow", []))
+            for rule in incoming["permissions"]["allow"]:
+                existing_allow.add(rule)
+            existing_perms["allow"] = sorted(existing_allow)
         if "deny" in incoming["permissions"]:
             existing_deny = set(existing_perms.get("deny", []))
             existing_deny -= _OLD_FORENSIC_DENY_RULES  # Remove old forensic rules
@@ -1063,8 +1083,12 @@ def _remove_forensic_settings(path: Path) -> None:
     if not hooks:
         data.pop("hooks", None)
 
-    # Remove forensic deny rules (both current and old/migrated)
+    # Remove forensic allow and deny rules (both current and old/migrated)
     perms = data.get("permissions", {})
+    allow = perms.get("allow", [])
+    perms["allow"] = [r for r in allow if r not in _FORENSIC_ALLOW_RULES]
+    if not perms["allow"]:
+        perms.pop("allow", None)
     deny = perms.get("deny", [])
     all_forensic_rules = _FORENSIC_DENY_RULES | _OLD_FORENSIC_DENY_RULES
     perms["deny"] = [r for r in deny if r not in all_forensic_rules]
