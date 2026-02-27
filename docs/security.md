@@ -67,7 +67,7 @@ All findings and timeline events stage as DRAFT. Only the aiir CLI (which requir
 
 ### L2 — HMAC Verification Ledger
 
-When an examiner approves findings, an HMAC-SHA256 signature is computed over the description text using a key derived from the examiner's PIN (PBKDF2, 600K iterations). These signatures are stored in `/var/lib/aiir/verification/{case-id}.jsonl` — outside the case directory and outside the Claude Code sandbox.
+When an examiner approves findings, an HMAC-SHA256 signature is computed over the substantive text (observation + interpretation for findings, description for timeline events) using a key derived from the examiner's PIN (PBKDF2, 600K iterations). These signatures are stored in `/var/lib/aiir/verification/{case-id}.jsonl` — outside the case directory and outside the Claude Code sandbox.
 
 - `aiir review --verify` performs full HMAC verification with per-examiner PIN prompts
 - `aiir review --verify --mine` filters to the current examiner only
@@ -103,7 +103,7 @@ When generating reports, report-mcp performs a bidirectional reconciliation betw
 
 - Items approved but missing from the ledger (APPROVED_NO_VERIFICATION)
 - Ledger entries with no corresponding approved item (VERIFICATION_NO_FINDING)
-- Description text that changed after signing (DESCRIPTION_MISMATCH)
+- Substantive text changed after signing (DESCRIPTION_MISMATCH)
 - Count mismatches between approved items and ledger entries
 
 Alerts are included in the generated report as `verification_alerts`.
