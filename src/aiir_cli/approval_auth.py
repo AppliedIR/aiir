@@ -175,7 +175,9 @@ def reset_pin(config_path: Path, analyst: str) -> None:
                     case_id, analyst, current, old_salt, new_pin, new_salt
                 )
                 if count:
-                    print(f"  Re-signed {count} ledger entry/entries for case {case_id}.")
+                    print(
+                        f"  Re-signed {count} ledger entry/entries for case {case_id}."
+                    )
     except (ImportError, OSError) as e:
         print(f"  Warning: could not re-sign ledger entries: {e}", file=sys.stderr)
 

@@ -190,17 +190,19 @@ def _show_findings_detail(case_dir: Path) -> None:
                     ts = entry.get("ts", "")[:19]
                     if source_file == "claude-code.jsonl":
                         cmd = entry.get("command", "?")
-                        print(f"    [HOOK]  {eid} {_EM_DASH} \"{cmd}\" @ {ts}")
+                        print(f'    [HOOK]  {eid} {_EM_DASH} "{cmd}" @ {ts}')
                     elif eid.startswith("shell-"):
                         cmd = entry.get("params", {}).get("command", "?")
-                        print(f"    [SHELL] {eid} {_EM_DASH} \"{cmd}\"")
+                        print(f'    [SHELL] {eid} {_EM_DASH} "{cmd}"')
                     else:
                         tool = entry.get("tool", "?")
                         params = entry.get("params", {})
                         params_summary = ", ".join(
                             f"{k}={v}" for k, v in list(params.items())[:3]
                         )
-                        print(f"    [MCP]   {eid} {_EM_DASH} {tool}({params_summary}) @ {ts}")
+                        print(
+                            f"    [MCP]   {eid} {_EM_DASH} {tool}({params_summary}) @ {ts}"
+                        )
                 else:
                     print(f"    [NONE]  {eid} {_EM_DASH} no audit record")
 
@@ -317,7 +319,9 @@ def _show_ledger_reconciliation(case_dir: Path) -> None:
             if item_id.startswith("T-"):
                 desc = item.get("description", "")
             else:
-                desc = item.get("observation", "") + "\n" + item.get("interpretation", "")
+                desc = (
+                    item.get("observation", "") + "\n" + item.get("interpretation", "")
+                )
             snap = entry.get("description_snapshot", "")
             if desc != snap:
                 print(f"{item_id:<20} DESCRIPTION_MISMATCH")
@@ -326,7 +330,9 @@ def _show_ledger_reconciliation(case_dir: Path) -> None:
                 print(f"{item_id:<20} VERIFIED")
 
     if alerts:
-        print(f"\n{alerts} alert(s) found. Run 'aiir review --findings --verify' with PIN for full HMAC check.")
+        print(
+            f"\n{alerts} alert(s) found. Run 'aiir review --findings --verify' with PIN for full HMAC check."
+        )
 
 
 def _show_hmac_verification(
@@ -350,7 +356,9 @@ def _show_hmac_verification(
         return
 
     # Group entries by examiner
-    examiners = sorted(set(e.get("approved_by", "") for e in ledger if e.get("approved_by")))
+    examiners = sorted(
+        set(e.get("approved_by", "") for e in ledger if e.get("approved_by"))
+    )
     if not examiners:
         return
 
@@ -376,7 +384,9 @@ def _show_hmac_verification(
 
             print(f"  {confirmed} confirmed, {failed} failed")
             if failed:
-                print("  ALERT: HMAC mismatch detected. Findings may have been tampered with.")
+                print(
+                    "  ALERT: HMAC mismatch detected. Findings may have been tampered with."
+                )
         except (ValueError, RuntimeError) as e:
             print(f"  Skipped: {e}")
 

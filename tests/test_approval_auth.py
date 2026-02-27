@@ -91,9 +91,7 @@ class TestPinSetup:
 
 class TestPinReset:
     def test_reset_pin_requires_current(self, config_path):
-        with patch(
-            "aiir_cli.approval_auth.getpass_prompt", side_effect=["old", "old"]
-        ):
+        with patch("aiir_cli.approval_auth.getpass_prompt", side_effect=["old", "old"]):
             setup_pin(config_path, "analyst1")
         # Wrong current PIN
         with patch("aiir_cli.approval_auth.getpass_prompt", side_effect=["wrong"]):
@@ -101,9 +99,7 @@ class TestPinReset:
                 reset_pin(config_path, "analyst1")
 
     def test_reset_pin_success(self, config_path):
-        with patch(
-            "aiir_cli.approval_auth.getpass_prompt", side_effect=["old", "old"]
-        ):
+        with patch("aiir_cli.approval_auth.getpass_prompt", side_effect=["old", "old"]):
             setup_pin(config_path, "analyst1")
         # Correct current, then new PIN twice
         with patch(

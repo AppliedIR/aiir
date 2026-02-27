@@ -183,7 +183,9 @@ def _run_connectivity_test() -> None:
                 pass
             if userns_val == "1":
                 print("    bwrap: FAIL — AppArmor blocks user namespaces")
-                print("    Fix: sudo apparmor_parser -rT /etc/apparmor.d/bwrap (or reboot)")
+                print(
+                    "    Fix: sudo apparmor_parser -rT /etc/apparmor.d/bwrap (or reboot)"
+                )
                 print("    If no profile exists: re-run setup-sift.sh")
             else:
                 print("    bwrap: FAIL — cannot create user namespace")

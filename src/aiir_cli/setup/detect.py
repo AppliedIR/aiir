@@ -23,7 +23,10 @@ REMOTE_SERVERS = {
         "type": "http",
         "default_url": "https://learn.microsoft.com/api/mcp",
     },
-    "zeltser-ir-writing": {"type": "http", "default_url": "https://website-mcp.zeltser.com/mcp"},
+    "zeltser-ir-writing": {
+        "type": "http",
+        "default_url": "https://website-mcp.zeltser.com/mcp",
+    },
 }
 
 

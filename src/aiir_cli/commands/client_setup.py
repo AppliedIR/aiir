@@ -426,7 +426,9 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
             print("")
             print("  Forensic controls deployed globally.")
             print("  Claude Code can be launched from any directory on this machine.")
-            print("  Audit logging, permission guardrails, and MCP tools will always apply.")
+            print(
+                "  Audit logging, permission guardrails, and MCP tools will always apply."
+            )
 
     elif client == "claude-desktop":
         output = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
@@ -506,6 +508,7 @@ def _find_claude_code_assets() -> Path | None:
     if gw_config.is_file():
         try:
             import yaml
+
             config = yaml.safe_load(gw_config.read_text()) or {}
             src_dir = config.get("sift_mcp_dir", "")
             if src_dir:
@@ -557,9 +560,12 @@ def _merge_settings(target: Path, source: Path) -> None:
                 for entry in entries:
                     matcher = entry.get("matcher", "")
                     new_pairs = [
-                        (matcher, h.get("command", "").rsplit("/", 1)[-1]
-                         if "/" in h.get("command", "")
-                         else h.get("command", ""))
+                        (
+                            matcher,
+                            h.get("command", "").rsplit("/", 1)[-1]
+                            if "/" in h.get("command", "")
+                            else h.get("command", ""),
+                        )
                         for h in entry.get("hooks", [])
                     ]
                     if not any(p in existing_pairs for p in new_pairs):
@@ -964,7 +970,12 @@ def _uninstall_sift() -> None:
     print()
 
     # [5] Project-level files
-    project_files = ["CLAUDE.md", "AGENTS.md", "FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"]
+    project_files = [
+        "CLAUDE.md",
+        "AGENTS.md",
+        "FORENSIC_DISCIPLINE.md",
+        "TOOL_REFERENCE.md",
+    ]
     existing_project = [f for f in project_files if (Path.cwd() / f).is_file()]
     if existing_project:
         print("  [5] Project-level files (in current directory)")
@@ -1101,10 +1112,17 @@ def _remove_forensic_settings(path: Path) -> None:
     for hook_type in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
         entries = hooks.get(hook_type, [])
         hooks[hook_type] = [
-            e for e in entries
-            if not any("forensic-audit" in h.get("command", "") for h in e.get("hooks", []))
-            and not any("pre-bash-guard" in h.get("command", "") for h in e.get("hooks", []))
-            and not any("forensic-rules" in h.get("command", "") for h in e.get("hooks", []))
+            e
+            for e in entries
+            if not any(
+                "forensic-audit" in h.get("command", "") for h in e.get("hooks", [])
+            )
+            and not any(
+                "pre-bash-guard" in h.get("command", "") for h in e.get("hooks", [])
+            )
+            and not any(
+                "forensic-rules" in h.get("command", "") for h in e.get("hooks", [])
+            )
         ]
         if not hooks[hook_type]:
             del hooks[hook_type]

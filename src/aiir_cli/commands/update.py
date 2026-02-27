@@ -121,7 +121,9 @@ def cmd_update(args, identity: dict) -> None:
             print(f"  {name}: up to date ({current[:7]})")
         else:
             remote = _git_remote_head(path)
-            print(f"  {name}: {count} commit{'s' if count != 1 else ''} behind ({current[:7]} → {remote[:7]})")
+            print(
+                f"  {name}: {count} commit{'s' if count != 1 else ''} behind ({current[:7]} → {remote[:7]})"
+            )
 
     if check_only:
         print("\n  Run 'aiir update' to apply.")
@@ -188,7 +190,9 @@ def cmd_update(args, identity: dict) -> None:
                 continue
             pkg_path = str(source / rel)
         if not Path(pkg_path).is_dir():
-            print(f"  Warning: {pkg_name} source not found at {pkg_path}", file=sys.stderr)
+            print(
+                f"  Warning: {pkg_name} source not found at {pkg_path}", file=sys.stderr
+            )
             continue
         result = subprocess.run(
             [pip, "install", "-e", pkg_path, "--quiet"],
@@ -197,7 +201,10 @@ def cmd_update(args, identity: dict) -> None:
             timeout=120,
         )
         if result.returncode != 0:
-            print(f"  Failed to install {pkg_name}: {result.stderr.strip()}", file=sys.stderr)
+            print(
+                f"  Failed to install {pkg_name}: {result.stderr.strip()}",
+                file=sys.stderr,
+            )
             sys.exit(1)
         count += 1
     print(f"  Reinstalling packages... {count} packages")

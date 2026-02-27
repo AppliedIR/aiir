@@ -136,14 +136,16 @@ def _approve_specific(
         item["approved_at"] = now
         item["approved_by"] = identity["examiner"]
         write_approval_log(
-            case_dir, item["id"], "APPROVED", identity,
-            mode=mode, content_hash=new_hash,
+            case_dir,
+            item["id"],
+            "APPROVED",
+            identity,
+            mode=mode,
+            content_hash=new_hash,
         )
 
     # Write HMAC verification ledger entries
-    _write_verification_entries(
-        case_dir, to_approve, identity, config_path, pin, now
-    )
+    _write_verification_entries(case_dir, to_approve, identity, config_path, pin, now)
 
     # Update modified_at on approve
     for item in to_approve:
@@ -289,8 +291,12 @@ def _interactive_review(
             item["approved_at"] = now
             item["approved_by"] = identity["examiner"]
             write_approval_log(
-                case_dir, item["id"], "APPROVED", identity,
-                mode=mode, content_hash=new_hash,
+                case_dir,
+                item["id"],
+                "APPROVED",
+                identity,
+                mode=mode,
+                content_hash=new_hash,
             )
 
     # Write HMAC verification ledger entries for approved items

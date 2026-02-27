@@ -37,7 +37,9 @@ def derive_hmac_key(pin: str, salt: bytes) -> bytes:
 
 def compute_hmac(derived_key: bytes, description: str) -> str:
     """HMAC-SHA256 over description text."""
-    return hmac.new(derived_key, description.encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(
+        derived_key, description.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
 
 
 def write_ledger_entry(case_id: str, entry: dict) -> None:
@@ -82,11 +84,13 @@ def verify_items(case_id: str, pin: str, salt: bytes, examiner: str) -> list[dic
             continue
         expected = compute_hmac(derived_key, entry.get("description_snapshot", ""))
         actual = entry.get("hmac", "")
-        results.append({
-            "finding_id": entry["finding_id"],
-            "type": entry.get("type", "finding"),
-            "verified": hmac.compare_digest(expected, actual),
-        })
+        results.append(
+            {
+                "finding_id": entry["finding_id"],
+                "type": entry.get("type", "finding"),
+                "verified": hmac.compare_digest(expected, actual),
+            }
+        )
     return results
 
 

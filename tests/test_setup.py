@@ -282,14 +282,16 @@ class TestCmdSetup:
         args = MagicMock()
         args.setup_action = "test"
 
-        health_resp = json.dumps({
-            "status": "ok",
-            "backends": {
-                "forensic-mcp": {"status": "ok", "tools": 15},
-                "sift-mcp": {"status": "ok", "tools": 6},
-            },
-            "tools_count": 21,
-        }).encode()
+        health_resp = json.dumps(
+            {
+                "status": "ok",
+                "backends": {
+                    "forensic-mcp": {"status": "ok", "tools": 15},
+                    "sift-mcp": {"status": "ok", "tools": 6},
+                },
+                "tools_count": 21,
+            }
+        ).encode()
 
         mock_resp = MagicMock()
         mock_resp.read.return_value = health_resp

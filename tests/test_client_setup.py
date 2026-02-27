@@ -139,9 +139,7 @@ class TestMergeSettings:
         target.write_text(json.dumps(existing))
 
         incoming = {
-            "permissions": {
-                "deny": ["Bash(mkfs*)", "Bash(dd *)", "Bash(rm -rf *)"]
-            }
+            "permissions": {"deny": ["Bash(mkfs*)", "Bash(dd *)", "Bash(rm -rf *)"]}
         }
         source.write_text(json.dumps(incoming))
 
@@ -159,10 +157,21 @@ class TestMergeSettings:
     def test_merges_hooks_and_sandbox(self, tmp_path):
         target = tmp_path / "settings.json"
         source = tmp_path / "source.json"
-        source.write_text(json.dumps({
-            "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "test.sh"}]}]},
-            "sandbox": {"enabled": True},
-        }))
+        source.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "PostToolUse": [
+                            {
+                                "matcher": "Bash",
+                                "hooks": [{"type": "command", "command": "test.sh"}],
+                            }
+                        ]
+                    },
+                    "sandbox": {"enabled": True},
+                }
+            )
+        )
 
         _merge_settings(target, source)
         data = json.loads(target.read_text())
@@ -729,11 +738,27 @@ class TestUninstallHelpers:
         data = {
             "hooks": {
                 "PostToolUse": [
-                    {"matcher": "Bash", "hooks": [{"type": "command", "command": "/path/forensic-audit.sh"}]},
-                    {"matcher": "Write", "hooks": [{"type": "command", "command": "other.sh"}]},
+                    {
+                        "matcher": "Bash",
+                        "hooks": [
+                            {"type": "command", "command": "/path/forensic-audit.sh"}
+                        ],
+                    },
+                    {
+                        "matcher": "Write",
+                        "hooks": [{"type": "command", "command": "other.sh"}],
+                    },
                 ],
                 "UserPromptSubmit": [
-                    {"matcher": "", "hooks": [{"type": "command", "command": "cat << 'EOF'\n<forensic-rules>stuff</forensic-rules>"}]},
+                    {
+                        "matcher": "",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "cat << 'EOF'\n<forensic-rules>stuff</forensic-rules>",
+                            }
+                        ],
+                    },
                 ],
             },
             "permissions": {

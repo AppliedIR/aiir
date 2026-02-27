@@ -175,7 +175,9 @@ def test_rehmac_entries(tmp_path):
     }
     write_ledger_entry("INC-2026-001", entry)
 
-    count = rehmac_entries("INC-2026-001", "alice", old_pin, old_salt, new_pin, new_salt)
+    count = rehmac_entries(
+        "INC-2026-001", "alice", old_pin, old_salt, new_pin, new_salt
+    )
     assert count == 1
 
     # Verify with new key

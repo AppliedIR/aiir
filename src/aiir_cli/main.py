@@ -752,7 +752,8 @@ def _case_init_data(
 
         result = subprocess.run(
             ["stat", "-f", "-c", "%T", str(case_dir)],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         fs_type = result.stdout.strip().lower()
         _NON_POSIX = {"fuseblk", "vfat", "exfat", "ntfs"}
@@ -766,7 +767,8 @@ def _case_init_data(
 
     if not fs_warning:
         for fname in (
-            "findings.json", "timeline.json",
+            "findings.json",
+            "timeline.json",
         ):
             try:
                 os.chmod(case_dir / fname, 0o444)
@@ -916,6 +918,7 @@ def _case_close(args, identity: dict) -> None:
     # Copy verification ledger into case directory
     try:
         from aiir_cli.verification import copy_ledger_to_case
+
         copy_ledger_to_case(case_id, case_dir)
     except (ImportError, OSError):
         pass  # Non-fatal — ledger may not exist

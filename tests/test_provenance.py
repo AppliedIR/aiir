@@ -115,12 +115,14 @@ class TestDetailEvidenceChain:
         audit_dir = case_dir / "audit"
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "sift-mcp.jsonl").write_text(
-            json.dumps({
-                "evidence_id": "sift-tester-20260225-001",
-                "tool": "run_command",
-                "params": {"command": "fls -r /dev/sda1"},
-                "ts": "2026-02-25T10:00:00Z",
-            })
+            json.dumps(
+                {
+                    "evidence_id": "sift-tester-20260225-001",
+                    "tool": "run_command",
+                    "params": {"command": "fls -r /dev/sda1"},
+                    "ts": "2026-02-25T10:00:00Z",
+                }
+            )
             + "\n"
         )
         save_findings(
@@ -146,11 +148,13 @@ class TestDetailEvidenceChain:
         audit_dir = case_dir / "audit"
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "claude-code.jsonl").write_text(
-            json.dumps({
-                "evidence_id": "hook-tester-20260225-001",
-                "command": "grep -r malware /var/log",
-                "ts": "2026-02-25T10:00:00Z",
-            })
+            json.dumps(
+                {
+                    "evidence_id": "hook-tester-20260225-001",
+                    "command": "grep -r malware /var/log",
+                    "ts": "2026-02-25T10:00:00Z",
+                }
+            )
             + "\n"
         )
         save_findings(
@@ -176,12 +180,14 @@ class TestDetailEvidenceChain:
         audit_dir = case_dir / "audit"
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "forensic-mcp.jsonl").write_text(
-            json.dumps({
-                "evidence_id": "shell-tester-20260225-001",
-                "tool": "supporting_command",
-                "params": {"command": "strings evil.exe"},
-                "ts": "2026-02-25T10:00:00Z",
-            })
+            json.dumps(
+                {
+                    "evidence_id": "shell-tester-20260225-001",
+                    "tool": "supporting_command",
+                    "params": {"command": "strings evil.exe"},
+                    "ts": "2026-02-25T10:00:00Z",
+                }
+            )
             + "\n"
         )
         save_findings(
@@ -258,12 +264,22 @@ class TestCrossFileHash:
     def test_content_hash_in_approval_log(self, case_dir, identity):
         save_findings(
             case_dir,
-            [{"id": "F-tester-001", "title": "Test", "observation": "obs", "status": "DRAFT"}],
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "obs",
+                    "status": "DRAFT",
+                }
+            ],
         )
         findings = load_findings(case_dir)
         content_hash = compute_content_hash(findings[0])
         write_approval_log(
-            case_dir, "F-tester-001", "APPROVED", identity,
+            case_dir,
+            "F-tester-001",
+            "APPROVED",
+            identity,
             content_hash=content_hash,
         )
         log_file = case_dir / "approvals.jsonl"
@@ -273,7 +289,14 @@ class TestCrossFileHash:
     def test_cross_file_confirmed(self, case_dir, identity):
         save_findings(
             case_dir,
-            [{"id": "F-tester-001", "title": "Test", "observation": "obs", "status": "DRAFT"}],
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "obs",
+                    "status": "DRAFT",
+                }
+            ],
         )
         findings = load_findings(case_dir)
         content_hash = compute_content_hash(findings[0])
@@ -281,7 +304,10 @@ class TestCrossFileHash:
         findings[0]["status"] = "APPROVED"
         save_findings(case_dir, findings)
         write_approval_log(
-            case_dir, "F-tester-001", "APPROVED", identity,
+            case_dir,
+            "F-tester-001",
+            "APPROVED",
+            identity,
             content_hash=content_hash,
         )
         results = verify_approval_integrity(case_dir)
@@ -291,7 +317,14 @@ class TestCrossFileHash:
         """Modify findings.json after approval -> tampered."""
         save_findings(
             case_dir,
-            [{"id": "F-tester-001", "title": "Test", "observation": "original", "status": "DRAFT"}],
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "original",
+                    "status": "DRAFT",
+                }
+            ],
         )
         findings = load_findings(case_dir)
         content_hash = compute_content_hash(findings[0])
@@ -299,7 +332,10 @@ class TestCrossFileHash:
         findings[0]["status"] = "APPROVED"
         save_findings(case_dir, findings)
         write_approval_log(
-            case_dir, "F-tester-001", "APPROVED", identity,
+            case_dir,
+            "F-tester-001",
+            "APPROVED",
+            identity,
             content_hash=content_hash,
         )
         # Tamper
@@ -313,11 +349,21 @@ class TestCrossFileHash:
         """Approval log hash different from recomputed -> tampered."""
         save_findings(
             case_dir,
-            [{"id": "F-tester-001", "title": "Test", "observation": "obs", "status": "APPROVED"}],
+            [
+                {
+                    "id": "F-tester-001",
+                    "title": "Test",
+                    "observation": "obs",
+                    "status": "APPROVED",
+                }
+            ],
         )
         # Write approval log with a wrong hash
         write_approval_log(
-            case_dir, "F-tester-001", "APPROVED", identity,
+            case_dir,
+            "F-tester-001",
+            "APPROVED",
+            identity,
             content_hash="badhash",
         )
         results = verify_approval_integrity(case_dir)
@@ -332,8 +378,10 @@ class TestLoadAuditIndex:
         audit_dir = case_dir / "audit"
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "sift-mcp.jsonl").write_text(
-            json.dumps({"evidence_id": "sift-001", "tool": "run_command"}) + "\n"
-            + json.dumps({"evidence_id": "sift-002", "tool": "list_tools"}) + "\n"
+            json.dumps({"evidence_id": "sift-001", "tool": "run_command"})
+            + "\n"
+            + json.dumps({"evidence_id": "sift-002", "tool": "list_tools"})
+            + "\n"
         )
         (audit_dir / "forensic-mcp.jsonl").write_text(
             json.dumps({"evidence_id": "fmcp-001", "tool": "record_finding"}) + "\n"
@@ -349,7 +397,8 @@ class TestLoadAuditIndex:
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "test.jsonl").write_text(
             "NOT JSON\n"
-            + json.dumps({"evidence_id": "ok-001", "tool": "test"}) + "\n"
+            + json.dumps({"evidence_id": "ok-001", "tool": "test"})
+            + "\n"
             + "ALSO BAD\n"
         )
         index = load_audit_index(case_dir)

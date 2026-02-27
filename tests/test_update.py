@@ -103,8 +103,10 @@ def test_check_up_to_date(manifest_dir, capsys):
             result.stdout = ""
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+    ):
         cmd_update(_make_args(check=True), {})
 
     out = capsys.readouterr().out
@@ -133,8 +135,10 @@ def test_check_behind(manifest_dir, capsys):
             result.stdout = ""
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+    ):
         cmd_update(_make_args(check=True), {})
 
     out = capsys.readouterr().out
@@ -156,8 +160,10 @@ def test_fetch_failure(manifest_dir, capsys):
             result.stdout = ""
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+    ):
         with pytest.raises(SystemExit):
             cmd_update(_make_args(), {})
 
@@ -179,10 +185,12 @@ def test_pip_install_order(manifest_dir):
             installed.append(cmd[-1])
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run), \
-         patch("aiir_cli.commands.client_setup._deploy_claude_code_assets"), \
-         patch("aiir_cli.commands.setup._run_connectivity_test"):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+        patch("aiir_cli.commands.client_setup._deploy_claude_code_assets"),
+        patch("aiir_cli.commands.setup._run_connectivity_test"),
+    ):
         cmd_update(_make_args(no_restart=True), {})
 
     # Verify order: aiir-cli must come before case-mcp and report-mcp
@@ -212,10 +220,12 @@ def test_no_restart_flag(manifest_dir):
             systemctl_called.append(cmd)
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run), \
-         patch("aiir_cli.commands.client_setup._deploy_claude_code_assets"), \
-         patch("aiir_cli.commands.setup._run_connectivity_test"):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+        patch("aiir_cli.commands.client_setup._deploy_claude_code_assets"),
+        patch("aiir_cli.commands.setup._run_connectivity_test"),
+    ):
         cmd_update(_make_args(no_restart=True), {})
 
     assert len(systemctl_called) == 0
@@ -228,7 +238,6 @@ def test_client_written_to_manifest(tmp_path):
     manifest_path.write_text(json.dumps({"version": "1.0"}))
 
     with patch("pathlib.Path.home", return_value=tmp_path):
-
         # Simulate the manifest write logic directly
         manifest = json.loads(manifest_path.read_text())
         manifest["client"] = "cursor"
@@ -251,8 +260,10 @@ def test_wrong_branch_fails(manifest_dir):
             result.stdout = "feature-branch"
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+    ):
         with pytest.raises(SystemExit):
             cmd_update(_make_args(), {})
 
@@ -279,9 +290,11 @@ def test_old_manifest_no_client(manifest_dir, capsys):
             result.stdout = "main"
         return result
 
-    with patch("pathlib.Path.home", return_value=tmp_path), \
-         patch("subprocess.run", side_effect=mock_run), \
-         patch("aiir_cli.commands.setup._run_connectivity_test"):
+    with (
+        patch("pathlib.Path.home", return_value=tmp_path),
+        patch("subprocess.run", side_effect=mock_run),
+        patch("aiir_cli.commands.setup._run_connectivity_test"),
+    ):
         cmd_update(_make_args(no_restart=True), {})
 
     out = capsys.readouterr().out
