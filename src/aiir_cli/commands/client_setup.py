@@ -61,6 +61,7 @@ _FORENSIC_DENY_RULES = {
     "Write(**/CASE.yaml)",
     "Write(**/actions.jsonl)",
     "Write(**/audit/*.jsonl)",
+    "Read(/var/lib/aiir/**)",
     "Edit(/var/lib/aiir/**)",
     "Write(/var/lib/aiir/**)",
     "Bash(aiir approve*)",
@@ -533,20 +534,23 @@ def _merge_settings(target: Path, source: Path) -> None:
             if hook_type not in existing_hooks:
                 existing_hooks[hook_type] = entries
             else:
-                # Deduplicate by script basename (handles path fixup differences)
-                existing_basenames = set()
+                # Deduplicate by (matcher, script basename) pair
+                existing_pairs = set()
                 for entry in existing_hooks[hook_type]:
+                    matcher = entry.get("matcher", "")
                     for h in entry.get("hooks", []):
                         cmd = h.get("command", "")
-                        existing_basenames.add(cmd.rsplit("/", 1)[-1] if "/" in cmd else cmd)
+                        basename = cmd.rsplit("/", 1)[-1] if "/" in cmd else cmd
+                        existing_pairs.add((matcher, basename))
                 for entry in entries:
-                    new_basenames = [
-                        h.get("command", "").rsplit("/", 1)[-1]
-                        if "/" in h.get("command", "")
-                        else h.get("command", "")
+                    matcher = entry.get("matcher", "")
+                    new_pairs = [
+                        (matcher, h.get("command", "").rsplit("/", 1)[-1]
+                         if "/" in h.get("command", "")
+                         else h.get("command", ""))
                         for h in entry.get("hooks", [])
                     ]
-                    if not any(b in existing_basenames for b in new_basenames):
+                    if not any(p in existing_pairs for p in new_pairs):
                         existing_hooks[hook_type].append(entry)
 
     # Merge permissions (additive, preserve ask/defaultMode)

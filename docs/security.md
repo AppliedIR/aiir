@@ -79,10 +79,10 @@ The LLM cannot forge ledger entries because it does not know the PIN-derived key
 
 ### L3 — Case Data Deny Rules
 
-When Claude Code is the LLM client, 18 deny rules block Edit/Write tool access to protected case data files:
+When Claude Code is the LLM client, 19 deny rules block Read/Edit/Write tool access to protected case data files:
 
 - `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`
-- `/var/lib/aiir/**` (HMAC verification ledger)
+- `/var/lib/aiir/**` (HMAC verification ledger — Read/Edit/Write all blocked)
 - `Bash(aiir approve*)` and `Bash(aiir reject*)` are also denied
 
 These rules replace the previous generic denylist (rm -rf, mkfs, dd) with targeted protection for case integrity.
@@ -128,7 +128,7 @@ Alerts are included in the generated report as `verification_alerts`.
 When Claude Code is the LLM client, `aiir setup client --client=claude-code` deploys:
 
 - **Kernel-level sandbox**: Restricts Bash writes to prevent unauthorized file modifications
-- **Case data deny rules**: 16 rules blocking Edit/Write to protected case files (L3)
+- **Case data deny rules**: 19 rules blocking Read/Edit/Write to protected case files and verification ledger (L3)
 - **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`
 - **Provenance enforcement**: Findings without an evidence trail are rejected
