@@ -327,6 +327,8 @@ cases/INC-2026-0219/
 
 ### SIFT Workstation
 
+Requires Python 3.11+ and sudo access.
+
 ```bash
 # One-command quickstart (SIFT workstation)
 curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
@@ -339,7 +341,7 @@ git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./setup-sift.sh
 ```
 
-The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
+The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger (`/var/lib/aiir/verification/`, requires sudo), examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
 
 For tier selection (quick, recommended, custom) or remote access, run `setup-sift.sh` directly.
 

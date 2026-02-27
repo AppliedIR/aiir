@@ -19,7 +19,7 @@ OpenCTI-mcp is always optional (requires an OpenCTI instance).
 - Ubuntu 22.04+ (SIFT Workstation recommended)
 - Python 3.11+
 - Git
-- sudo access (for creating `/var/lib/aiir/verification/` — the HMAC verification ledger directory). The installer degrades gracefully without sudo but HMAC verification will not be available.
+- sudo access (required — creates the HMAC verification ledger at `/var/lib/aiir/verification/`)
 
 ### Install
 
