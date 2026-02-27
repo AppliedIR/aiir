@@ -159,7 +159,7 @@ aiir reject T-alice-007 --reason "Timestamp unreliable"
 
 ### `aiir evidence register`
 
-Register an evidence file (computes SHA-256 hash, sets chmod 444).
+Register an evidence file (computes and records SHA-256 hash).
 
 ```bash
 aiir evidence register /path/to/disk.E01 --description "Workstation image"

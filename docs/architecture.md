@@ -67,7 +67,7 @@ http://localhost:4508/mcp/opencti-mcp
 
 ### forensic-mcp
 
-The investigation state machine. Manages findings, timeline events, evidence listing, TODOs, and discipline methodology. 15 tools in default mode (resources for discipline data) or 26 tools in tools mode (discipline data as tools for clients without resource support).
+The investigation state machine. Manages findings, timeline events, evidence listing, TODOs, and discipline methodology. 12 tools + 14 resources in default mode, or 26 tools in tools mode (discipline data as tools for clients without resource support).
 
 ### case-mcp
 

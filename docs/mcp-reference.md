@@ -1,8 +1,8 @@
 # MCP Reference
 
-63 MCP tools across 7 backends. Each backend runs as a stdio subprocess of the sift-gateway, except wintools-mcp which runs independently on a Windows machine.
+70 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine.
 
-## forensic-mcp (12 core tools + 14 discipline tools)
+## forensic-mcp (12 core tools + 14 discipline resources)
 
 The investigation state machine. Manages findings, timeline, evidence listing, TODOs, and forensic discipline methodology.
 

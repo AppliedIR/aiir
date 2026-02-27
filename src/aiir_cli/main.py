@@ -182,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # register-evidence
     p_reg = sub.add_parser(
-        "register-evidence", help="Register evidence file (hash + chmod 444)"
+        "register-evidence", help="Register evidence file (SHA-256 hash)"
     )
     p_reg.add_argument("path", help="Path to evidence file")
     p_reg.add_argument("--description", default="", help="Description of evidence")
@@ -355,7 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     p_ev_register = evidence_sub.add_parser(
-        "register", help="Register evidence file (hash + chmod 444)"
+        "register", help="Register evidence file (SHA-256 hash)"
     )
     p_ev_register.add_argument("path", help="Path to evidence file")
     p_ev_register.add_argument(

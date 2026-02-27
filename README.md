@@ -90,7 +90,7 @@ sequenceDiagram
 | Component | Runs on | Port | Purpose |
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
-| forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, discipline (15 tools + 14 resources) |
+| forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, discipline (12 tools + 14 resources) |
 | case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration (13 tools) |
 | report-mcp | SIFT | (via gateway) | Report generation with profiles, IOC aggregation, MITRE mapping (6 tools) |
 | sift-mcp | SIFT | (via gateway) | Denylist-protected forensic tool execution on Linux/SIFT (6 tools) |
@@ -586,7 +586,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 
 Never place original evidence on any AIIR system. Only use working copies for which verified originals or backups exist. AIIR workstations process evidence through AI-connected tools, and any data loaded into these systems may be transmitted to the configured AI provider. Treat all AIIR systems as analysis environments, not evidence storage.
 
-AIIR sets registered evidence files to read-only (chmod 444) as a defense-in-depth measure to prevent accidental modification. This is not an evidence integrity feature. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
+Evidence integrity is verified by SHA-256 hashes recorded at registration. Examiners can optionally lock evidence to read-only via `aiir evidence lock`. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
 
 Case directories can reside on external or removable media. ext4 is preferred for full permission support. NTFS and exFAT are acceptable but file permission controls (read-only protection) will be silently ineffective. FAT32 is discouraged due to the 4 GB file size limit.
 
