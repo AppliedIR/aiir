@@ -223,7 +223,7 @@ def cmd_register_evidence(args, identity: dict) -> None:
 
     print(f"Registered: {data['path']}")
     print(f"  SHA256: {data['sha256']}")
-    print("  Permissions: 444 (read-only)")
+    print("  Integrity: SHA-256 hash recorded")
 
 
 def _log_evidence_action(

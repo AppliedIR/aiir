@@ -313,7 +313,11 @@ def _show_ledger_reconciliation(case_dir: Path) -> None:
             print(f"{item_id:<20} VERIFICATION_NO_FINDING")
             alerts += 1
         elif item and entry:
-            desc = item.get("description", "")
+            # Construct text the same way approve.py _hmac_text() does
+            if item_id.startswith("T-"):
+                desc = item.get("description", "")
+            else:
+                desc = item.get("observation", "") + "\n" + item.get("interpretation", "")
             snap = entry.get("description_snapshot", "")
             if desc != snap:
                 print(f"{item_id:<20} DESCRIPTION_MISMATCH")
