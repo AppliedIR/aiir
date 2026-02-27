@@ -2,7 +2,6 @@
 
 import json
 from argparse import Namespace
-from pathlib import Path
 
 import pytest
 import yaml
@@ -12,7 +11,6 @@ from aiir_cli.case_io import (
     load_audit_index,
     load_findings,
     save_findings,
-    save_timeline,
     verify_approval_integrity,
     write_approval_log,
 )

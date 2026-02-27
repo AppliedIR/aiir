@@ -369,7 +369,7 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
                 finding_hash = f.get("content_hash")
                 approval_hash = record.get("content_hash")
                 # Check findings.json content hash
-                if finding_hash and recomputed != finding_hash:
+                if finding_hash and recomputed != finding_hash:  # noqa: SIM114
                     result["verification"] = "tampered"
                 # Cross-file check: approval record content hash
                 elif approval_hash and recomputed != approval_hash:

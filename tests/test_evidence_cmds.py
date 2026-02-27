@@ -1,7 +1,6 @@
 """Tests for evidence CLI commands."""
 
 import json
-import os
 import stat
 
 import pytest

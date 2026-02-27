@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import hmac as hmac_mod
-import json
-
 import pytest
 
 from aiir_cli.verification import (

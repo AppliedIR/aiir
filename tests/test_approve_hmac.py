@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from unittest.mock import patch
-
 import pytest
 import yaml
 
 from aiir_cli.commands.approve import _write_verification_entries
-from aiir_cli.verification import VERIFICATION_DIR, read_ledger
+from aiir_cli.verification import read_ledger
 
 
 @pytest.fixture(autouse=True)

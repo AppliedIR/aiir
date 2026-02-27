@@ -14,8 +14,6 @@ Supports multiple view modes:
 
 from __future__ import annotations
 
-_EM_DASH = "\u2014"
-
 import json
 import re
 import sys
@@ -30,6 +28,8 @@ from aiir_cli.case_io import (
     load_todos,
     verify_approval_integrity,
 )
+
+_EM_DASH = "\u2014"
 
 
 def cmd_review(args, identity: dict) -> None:
@@ -182,7 +182,7 @@ def _show_findings_detail(case_dir: Path) -> None:
         # Evidence chain
         evidence_ids = f.get("evidence_ids", [])
         if evidence_ids:
-            print(f"\n  Evidence Chain:")
+            print("\n  Evidence Chain:")
             for eid in evidence_ids:
                 entry = audit_index.get(eid)
                 if entry:
@@ -207,7 +207,7 @@ def _show_findings_detail(case_dir: Path) -> None:
         # Supporting commands
         supporting = f.get("supporting_commands", [])
         if supporting:
-            print(f"\n  Supporting Commands:")
+            print("\n  Supporting Commands:")
             for i, cmd in enumerate(supporting, 1):
                 print(f"    {i}. {cmd.get('command', '?')}")
                 print(f"       Purpose: {cmd.get('purpose', '?')}")
@@ -336,8 +336,7 @@ def _show_hmac_verification(
 ) -> None:
     """Perform full HMAC verification with PIN prompt."""
     try:
-        from aiir_cli.approval_auth import get_analyst_salt
-        from aiir_cli.approval_auth import getpass_prompt
+        from aiir_cli.approval_auth import get_analyst_salt, getpass_prompt
         from aiir_cli.verification import read_ledger, verify_items
     except ImportError:
         return
@@ -358,7 +357,7 @@ def _show_hmac_verification(
     if mine_only and identity:
         examiners = [e for e in examiners if e == identity.get("examiner")]
 
-    print(f"\nHMAC Verification (PIN required)")
+    print("\nHMAC Verification (PIN required)")
     print(f"Examiners with ledger entries: {', '.join(examiners)}")
 
     for examiner in examiners:

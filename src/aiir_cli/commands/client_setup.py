@@ -720,13 +720,13 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
         discipline_src = assets_dir / "FORENSIC_DISCIPLINE.md"
         if discipline_src.is_file():
             shutil.copy2(discipline_src, project_dir / "FORENSIC_DISCIPLINE.md")
-            print(f"  Copied:    FORENSIC_DISCIPLINE.md")
+            print("  Copied:    FORENSIC_DISCIPLINE.md")
 
         # Deploy TOOL_REFERENCE.md
         toolref_src = assets_dir / "TOOL_REFERENCE.md"
         if toolref_src.is_file():
             shutil.copy2(toolref_src, project_dir / "TOOL_REFERENCE.md")
-            print(f"  Copied:    TOOL_REFERENCE.md")
+            print("  Copied:    TOOL_REFERENCE.md")
 
 
 def _fixup_global_hook_path(settings_path: Path) -> None:

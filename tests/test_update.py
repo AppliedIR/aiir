@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -229,7 +228,6 @@ def test_client_written_to_manifest(tmp_path):
     manifest_path.write_text(json.dumps({"version": "1.0"}))
 
     with patch("pathlib.Path.home", return_value=tmp_path):
-        from aiir_cli.commands.client_setup import cmd_setup_client
 
         # Simulate the manifest write logic directly
         manifest = json.loads(manifest_path.read_text())
