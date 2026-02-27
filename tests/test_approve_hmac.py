@@ -48,7 +48,8 @@ def test_approve_writes_ledger_entry(case_dir, config_path, tmp_path):
     items = [
         {
             "id": "F-alice-20260226-001",
-            "description": "Suspicious process found on host A",
+            "observation": "Suspicious process found on host A",
+            "interpretation": "Likely lateral movement",
             "title": "Suspicious process",
         }
     ]
@@ -62,7 +63,8 @@ def test_approve_writes_ledger_entry(case_dir, config_path, tmp_path):
     assert len(entries) == 1
     assert entries[0]["finding_id"] == "F-alice-20260226-001"
     assert entries[0]["type"] == "finding"
-    assert entries[0]["description_snapshot"] == "Suspicious process found on host A"
+    # HMAC signs observation + "\n" + interpretation for findings
+    assert entries[0]["description_snapshot"] == "Suspicious process found on host A\nLikely lateral movement"
     assert entries[0]["approved_by"] == "alice"
     assert entries[0]["case_id"] == "INC-2026-TEST"
     assert len(entries[0]["hmac"]) == 64  # hex SHA-256
@@ -77,7 +79,8 @@ def test_approve_timeline_type_field(case_dir, config_path, tmp_path):
         },
         {
             "id": "F-alice-20260226-001",
-            "description": "Malware detected",
+            "observation": "Malware detected",
+            "interpretation": "Known RAT variant",
             "title": "Malware detection",
         },
     ]
@@ -98,8 +101,8 @@ def test_approve_timeline_type_field(case_dir, config_path, tmp_path):
 def test_interactive_approve_writes_ledger(case_dir, config_path, tmp_path):
     """Batch approval of multiple items writes all ledger entries."""
     items = [
-        {"id": "F-alice-20260226-001", "description": "Finding one", "title": "F1"},
-        {"id": "F-alice-20260226-002", "description": "Finding two", "title": "F2"},
+        {"id": "F-alice-20260226-001", "observation": "Finding one", "interpretation": "Interp one", "title": "F1"},
+        {"id": "F-alice-20260226-002", "observation": "Finding two", "interpretation": "Interp two", "title": "F2"},
         {"id": "T-alice-20260226-001", "description": "Timeline event"},
     ]
     identity = {"examiner": "alice"}
@@ -124,7 +127,7 @@ def test_interactive_approve_writes_ledger(case_dir, config_path, tmp_path):
 
 def test_no_pin_skips_ledger(case_dir, config_path, tmp_path):
     """When pin is None, no ledger entries are written."""
-    items = [{"id": "F-alice-20260226-001", "description": "test", "title": "T"}]
+    items = [{"id": "F-alice-20260226-001", "observation": "test", "interpretation": "interp", "title": "T"}]
     identity = {"examiner": "alice"}
 
     _write_verification_entries(

@@ -39,6 +39,17 @@ from aiir_cli.case_io import (
 )
 
 
+def _hmac_text(item: dict, item_type: str) -> str:
+    """Construct the text that the HMAC signs.
+
+    Findings: observation + interpretation (the substantive forensic claim).
+    Timeline: description (the factual event record).
+    """
+    if item_type == "timeline":
+        return item.get("description", "")
+    return item.get("observation", "") + "\n" + item.get("interpretation", "")
+
+
 def cmd_approve(args, identity: dict) -> None:
     """Approve findings/timeline events."""
     case_dir = get_case_dir(getattr(args, "case", None))
@@ -362,9 +373,9 @@ def _write_verification_entries(
         case_id = case_dir.name
 
     for item in items:
-        desc = item.get("description", "")
         item_id = item.get("id", "")
         item_type = "timeline" if item_id.startswith("T-") else "finding"
+        desc = _hmac_text(item, item_type)
         entry = {
             "finding_id": item_id,
             "type": item_type,
