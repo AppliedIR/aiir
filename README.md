@@ -331,7 +331,7 @@ Requires Python 3.11+ and sudo access.
 
 ```bash
 # One-command quickstart (SIFT workstation)
-curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
+curl -fsSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
 ```
 
 Or step by step:

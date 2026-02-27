@@ -71,7 +71,10 @@ prompt_yn() {
 prompt_yn_strict() {
     local msg="$1"
     while true; do
-        read -rp "$(echo -e "${BOLD}$msg${NC} [y/n]: ")" answer
+        if ! read -rp "$(echo -e "${BOLD}$msg${NC} [y/n]: ")" answer; then
+            echo ""
+            return 1
+        fi
         case "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" in
             y) return 0 ;;
             n) return 1 ;;
@@ -438,7 +441,7 @@ GITHUB_RAW="https://raw.githubusercontent.com/AppliedIR"
 ERRORS=0
 
 info "Fetching CLAUDE.md..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/CLAUDE.md" -o "$DEPLOY_DIR/CLAUDE.md" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/CLAUDE.md" -o "$DEPLOY_DIR/CLAUDE.md" 2>/dev/null; then
     ok "CLAUDE.md"
 else
     warn "Could not fetch CLAUDE.md"
@@ -446,7 +449,7 @@ else
 fi
 
 info "Fetching AGENTS.md..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/AGENTS.md" -o "$DEPLOY_DIR/AGENTS.md" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/AGENTS.md" -o "$DEPLOY_DIR/AGENTS.md" 2>/dev/null; then
     ok "AGENTS.md"
 else
     warn "Could not fetch AGENTS.md"
@@ -454,7 +457,7 @@ else
 fi
 
 info "Fetching FORENSIC_DISCIPLINE.md..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md" -o "$DEPLOY_DIR/FORENSIC_DISCIPLINE.md" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md" -o "$DEPLOY_DIR/FORENSIC_DISCIPLINE.md" 2>/dev/null; then
     ok "FORENSIC_DISCIPLINE.md"
 else
     warn "Could not fetch FORENSIC_DISCIPLINE.md"
@@ -462,7 +465,7 @@ else
 fi
 
 info "Fetching TOOL_REFERENCE.md..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/TOOL_REFERENCE.md" -o "$DEPLOY_DIR/TOOL_REFERENCE.md" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/TOOL_REFERENCE.md" -o "$DEPLOY_DIR/TOOL_REFERENCE.md" 2>/dev/null; then
     ok "TOOL_REFERENCE.md"
 else
     warn "Could not fetch TOOL_REFERENCE.md"
@@ -470,7 +473,7 @@ else
 fi
 
 info "Fetching forensic-audit.sh..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/forensic-audit.sh" -o "$DEPLOY_DIR/.claude/hooks/forensic-audit.sh" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/forensic-audit.sh" -o "$DEPLOY_DIR/.claude/hooks/forensic-audit.sh" 2>/dev/null; then
     chmod 755 "$DEPLOY_DIR/.claude/hooks/forensic-audit.sh"
     ok "forensic-audit.sh"
 else
@@ -479,7 +482,7 @@ else
 fi
 
 info "Fetching pre-bash-guard.sh..."
-if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh" -o "$DEPLOY_DIR/.claude/hooks/pre-bash-guard.sh" 2>/dev/null; then
+if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh" -o "$DEPLOY_DIR/.claude/hooks/pre-bash-guard.sh" 2>/dev/null; then
     chmod 755 "$DEPLOY_DIR/.claude/hooks/pre-bash-guard.sh"
     ok "pre-bash-guard.sh"
 else

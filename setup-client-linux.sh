@@ -109,7 +109,10 @@ prompt_yn() {
 prompt_yn_strict() {
     local msg="$1"
     while true; do
-        read -rp "$(echo -e "${BOLD}$msg${NC} [y/n]: ")" answer
+        if ! read -rp "$(echo -e "${BOLD}$msg${NC} [y/n]: ")" answer; then
+            echo ""
+            return 1
+        fi
         case "$(echo "$answer" | tr '[:upper:]' '[:lower:]')" in
             y) return 0 ;;
             n) return 1 ;;
@@ -463,7 +466,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 
     # Fetch the real CLAUDE.md (245+ lines with session-start check)
     info "Fetching CLAUDE.md..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/CLAUDE.md" -o "$DEPLOY_DIR/CLAUDE.md" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/CLAUDE.md" -o "$DEPLOY_DIR/CLAUDE.md" 2>/dev/null; then
         ok "CLAUDE.md"
     else
         warn "Could not fetch CLAUDE.md"
@@ -472,7 +475,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 
     # Fetch AGENTS.md
     info "Fetching AGENTS.md..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/AGENTS.md" -o "$DEPLOY_DIR/AGENTS.md" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/AGENTS.md" -o "$DEPLOY_DIR/AGENTS.md" 2>/dev/null; then
         ok "AGENTS.md"
     else
         warn "Could not fetch AGENTS.md"
@@ -481,7 +484,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 
     # Fetch FORENSIC_DISCIPLINE.md
     info "Fetching FORENSIC_DISCIPLINE.md..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md" -o "$DEPLOY_DIR/FORENSIC_DISCIPLINE.md" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/FORENSIC_DISCIPLINE.md" -o "$DEPLOY_DIR/FORENSIC_DISCIPLINE.md" 2>/dev/null; then
         ok "FORENSIC_DISCIPLINE.md"
     else
         warn "Could not fetch FORENSIC_DISCIPLINE.md"
@@ -490,7 +493,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 
     # Fetch TOOL_REFERENCE.md
     info "Fetching TOOL_REFERENCE.md..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/TOOL_REFERENCE.md" -o "$DEPLOY_DIR/TOOL_REFERENCE.md" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/TOOL_REFERENCE.md" -o "$DEPLOY_DIR/TOOL_REFERENCE.md" 2>/dev/null; then
         ok "TOOL_REFERENCE.md"
     else
         warn "Could not fetch TOOL_REFERENCE.md"
@@ -501,7 +504,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     HOOKS_DIR="$DEPLOY_DIR/.claude/hooks"
     mkdir -p "$HOOKS_DIR"
     info "Fetching forensic-audit.sh..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/forensic-audit.sh" -o "$HOOKS_DIR/forensic-audit.sh" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/forensic-audit.sh" -o "$HOOKS_DIR/forensic-audit.sh" 2>/dev/null; then
         chmod 755 "$HOOKS_DIR/forensic-audit.sh"
         ok "forensic-audit.sh"
     else
@@ -510,7 +513,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     fi
 
     info "Fetching pre-bash-guard.sh..."
-    if curl -sSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh" -o "$HOOKS_DIR/pre-bash-guard.sh" 2>/dev/null; then
+    if curl -fsSL "$GITHUB_RAW/sift-mcp/main/claude-code/hooks/pre-bash-guard.sh" -o "$HOOKS_DIR/pre-bash-guard.sh" 2>/dev/null; then
         chmod 755 "$HOOKS_DIR/pre-bash-guard.sh"
         ok "pre-bash-guard.sh"
     else

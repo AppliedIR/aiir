@@ -30,7 +30,7 @@ AIIR (AI-Assisted Incident Response) is a forensic investigation platform that c
 
 ```bash
 # One-command install (SIFT workstation)
-curl -sSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
+curl -fsSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
 ```
 
 Or step by step:

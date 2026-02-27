@@ -226,7 +226,7 @@ try {
     $acl.AddAccessRule($rule)
     Set-Acl -Path $configFile -AclObject $acl
 } catch {
-    Write-Warn "Could not restrict permissions on $configFile"
+    Write-Warn "Could not restrict permissions on $configFile`: $($_.Exception.Message)"
 }
 
 Write-Ok "Credentials saved to $configFile"

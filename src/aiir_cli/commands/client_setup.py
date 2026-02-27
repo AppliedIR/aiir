@@ -533,14 +533,20 @@ def _merge_settings(target: Path, source: Path) -> None:
             if hook_type not in existing_hooks:
                 existing_hooks[hook_type] = entries
             else:
-                # Deduplicate by comparing command strings
-                existing_cmds = set()
+                # Deduplicate by script basename (handles path fixup differences)
+                existing_basenames = set()
                 for entry in existing_hooks[hook_type]:
                     for h in entry.get("hooks", []):
-                        existing_cmds.add(h.get("command", ""))
+                        cmd = h.get("command", "")
+                        existing_basenames.add(cmd.rsplit("/", 1)[-1] if "/" in cmd else cmd)
                 for entry in entries:
-                    new_cmds = [h.get("command", "") for h in entry.get("hooks", [])]
-                    if not any(c in existing_cmds for c in new_cmds):
+                    new_basenames = [
+                        h.get("command", "").rsplit("/", 1)[-1]
+                        if "/" in h.get("command", "")
+                        else h.get("command", "")
+                        for h in entry.get("hooks", [])
+                    ]
+                    if not any(b in existing_basenames for b in new_basenames):
                         existing_hooks[hook_type].append(entry)
 
     # Merge permissions (additive, preserve ask/defaultMode)
