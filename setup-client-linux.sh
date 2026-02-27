@@ -594,6 +594,8 @@ if [[ "$CLIENT" == "claude-code" ]]; then
       "Write(**/CASE.yaml)",
       "Write(**/actions.jsonl)",
       "Write(**/audit/*.jsonl)",
+      "Edit(/var/lib/aiir/**)",
+      "Write(/var/lib/aiir/**)",
       "Bash(aiir approve*)",
       "Bash(aiir reject*)"
     ]

@@ -44,7 +44,6 @@ def write_ledger_entry(case_id: str, entry: dict) -> None:
     """Append entry to /var/lib/aiir/verification/{case_id}.jsonl."""
     _validate_case_id(case_id)
     path = VERIFICATION_DIR / f"{case_id}.jsonl"
-    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
         f.flush()
