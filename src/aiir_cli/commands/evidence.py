@@ -127,7 +127,7 @@ def register_evidence_data(
 ) -> dict:
     """Register an evidence file and return structured data.
 
-    Validates path, computes SHA-256, sets chmod 444, writes registry.
+    Validates path, computes SHA-256, writes registry.
 
     Args:
         case_dir: Path to the active case directory.
