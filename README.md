@@ -1,4 +1,7 @@
 # AIIR
+[![CI](https://github.com/AppliedIR/aiir/actions/workflows/ci.yml/badge.svg)](https://github.com/AppliedIR/aiir/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-appliedir.github.io-blue)](https://appliedir.github.io/aiir/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/AppliedIR/aiir/blob/main/LICENSE)
 
 Artificial Intelligence Incident Response platform. CLI and architecture reference.
 
