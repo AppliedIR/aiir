@@ -32,6 +32,7 @@ from aiir_cli.commands.service import cmd_service
 from aiir_cli.commands.setup import cmd_setup
 from aiir_cli.commands.sync import cmd_export, cmd_merge
 from aiir_cli.commands.todo import cmd_todo
+from aiir_cli.commands.update import cmd_update
 from aiir_cli.identity import get_examiner_identity, warn_if_unconfigured
 
 
@@ -419,6 +420,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Backend name to restart (omit for all)",
     )
 
+    # update
+    p_update = sub.add_parser("update", help="Pull latest code and redeploy")
+    p_update.add_argument(
+        "--check",
+        action="store_true",
+        help="Check for updates without applying",
+    )
+    p_update.add_argument(
+        "--no-restart",
+        action="store_true",
+        help="Skip gateway restart",
+    )
+
     return parser
 
 
@@ -456,6 +470,7 @@ def main() -> None:
         "audit": cmd_audit,
         "service": cmd_service,
         "join": cmd_join,
+        "update": cmd_update,
     }
 
     handler = dispatch.get(args.command)

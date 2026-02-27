@@ -182,7 +182,17 @@ def cmd_setup_client(args, identity: dict) -> None:
         print(f"Failed to write client configuration: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # 4. Print internet MCP summary
+    # 4. Record client type in manifest (for aiir update)
+    manifest_path = Path.home() / ".aiir" / "manifest.json"
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            manifest["client"] = client
+            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        except (json.JSONDecodeError, OSError):
+            pass  # Non-critical
+
+    # 5. Print internet MCP summary
     internet_mcps = []
     if include_zeltser:
         internet_mcps.append((_ZELTSER_MCP["name"], _ZELTSER_MCP["url"]))
@@ -624,12 +634,15 @@ def _deploy_global_rules(assets_dir: Path) -> None:
         print(f"  Copied:    AGENTS.md -> {rules_dir}")
 
 
-def _deploy_claude_code_assets(project_dir: Path) -> None:
+def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
     """Deploy settings.json, hooks, and doc files for Claude Code.
 
     Sources from sift-mcp/claude-code/ directory.
     On SIFT: deploys globally (settings to ~/.claude/, hook to ~/.aiir/hooks/).
     On non-SIFT: deploys to project directory.
+
+    project_dir is optional on SIFT (global deployment doesn't need it).
+    When None, project-level doc copies are skipped.
     """
     assets_dir = _find_claude_code_assets()
     if not assets_dir:
@@ -669,14 +682,15 @@ def _deploy_claude_code_assets(project_dir: Path) -> None:
         _deploy_global_rules(assets_dir)
 
         # Also deploy docs to project root (contextual, harmless)
-        for doc_name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
-            doc_src = assets_dir / doc_name
-            if doc_src.is_file():
-                shutil.copy2(doc_src, project_dir / doc_name)
-                print(f"  Copied:    {doc_name}")
+        if project_dir:
+            for doc_name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
+                doc_src = assets_dir / doc_name
+                if doc_src.is_file():
+                    shutil.copy2(doc_src, project_dir / doc_name)
+                    print(f"  Copied:    {doc_name}")
 
-        # Copy AGENTS.md to project root for non-Claude-Code clients
-        _copy_agents_md(project_dir / "AGENTS.md")
+            # Copy AGENTS.md to project root for non-Claude-Code clients
+            _copy_agents_md(project_dir / "AGENTS.md")
 
     else:
         # --- Non-SIFT project-level deployment ---
