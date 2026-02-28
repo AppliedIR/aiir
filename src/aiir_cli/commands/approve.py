@@ -15,6 +15,7 @@ Interactive review options per item:
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -54,6 +55,29 @@ def cmd_approve(args, identity: dict) -> None:
     """Approve findings/timeline events."""
     case_dir = get_case_dir(getattr(args, "case", None))
     config_path = Path.home() / ".aiir" / "config.yaml"
+
+    review = getattr(args, "review", False)
+    if review and args.ids:
+        print("Error: --review cannot be used with specific IDs.", file=sys.stderr)
+        sys.exit(1)
+
+    if review:
+        _review_mode(case_dir, identity, config_path)
+        return
+
+    # Inform about pending dashboard reviews (non-blocking)
+    delta_path = case_dir / "pending-reviews.json"
+    if delta_path.exists():
+        try:
+            delta = json.loads(delta_path.read_text())
+            n_items = len(delta.get("items", []))
+            if n_items > 0:
+                print(
+                    f"  Note: {n_items} pending dashboard review(s). "
+                    "Use `aiir approve --review` to apply them."
+                )
+        except (json.JSONDecodeError, OSError):
+            pass
 
     if args.ids:
         # Specific-ID mode with optional flags
@@ -608,3 +632,347 @@ def _display_item(item: dict) -> None:
         if item.get("evidence_ids"):
             print(f"  Evidence: {', '.join(item['evidence_ids'])}")
     print()
+
+
+# --- Dashboard review mode ---
+
+_RED = "\033[31m"
+_GREEN = "\033[32m"
+_YELLOW = "\033[33m"
+_CYAN = "\033[36m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
+
+
+def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
+    """Print a terminal diff for a single delta item."""
+    item_id = delta_entry.get("id", "?")
+    action = delta_entry.get("action", "?").upper()
+    modifications = delta_entry.get("modifications", {})
+
+    # Color for action
+    action_color = {
+        "APPROVE": _GREEN,
+        "REJECT": _RED,
+        "TODO": _YELLOW,
+    }.get(action, _CYAN)
+
+    # Header
+    print(f"\n{_BOLD}{'─' * 20} {item_id} {'─' * 3} {action_color}{action}{_RESET}"
+          f"{_BOLD} {'─' * (35 - len(item_id) - len(action))}{_RESET}")
+
+    if item is None:
+        print(f"  {_RED}Item not found in case data{_RESET}")
+        return
+
+    # Finding fields
+    if "title" in item:
+        print(f"  Title:          {item.get('title', '')}")
+        _render_field("Confidence", item, modifications, "confidence")
+        _render_field("Observation", item, modifications, "observation")
+        _render_field("Interpretation", item, modifications, "interpretation")
+        if item.get("evidence_ids"):
+            print(f"  Evidence:       {', '.join(item['evidence_ids'])}")
+        if item.get("mitre_ids"):
+            _render_field("MITRE", item, modifications, "mitre_ids")
+        if item.get("iocs"):
+            _render_field("IOCs", item, modifications, "iocs")
+    else:
+        # Timeline event
+        print(f"  Timestamp:      {item.get('timestamp', '?')}")
+        _render_field("Description", item, modifications, "description")
+        if item.get("source"):
+            print(f"  Source:         {item.get('source', '')}")
+
+    # Note
+    note = delta_entry.get("note")
+    if note:
+        print(f"  {_CYAN}Note: {note}{_RESET}")
+
+    # Rejection reason
+    if action == "REJECT":
+        reason = delta_entry.get("reason", "")
+        print(f"  {_RED}Reason: {reason or '(no reason given)'}{_RESET}")
+
+    # TODO details
+    if action == "TODO":
+        desc = delta_entry.get("todo_description", "")
+        prio = delta_entry.get("todo_priority", "medium")
+        print(f"  {_YELLOW}TODO: {desc} (priority: {prio}){_RESET}")
+
+    # Status line
+    current_status = item.get("status", "DRAFT")
+    if action == "APPROVE":
+        print(f"  Status:         {_DIM}{current_status}{_RESET} → {_GREEN}APPROVED{_RESET}")
+    elif action == "REJECT":
+        print(f"  Status:         {_DIM}{current_status}{_RESET} → {_RED}REJECTED{_RESET}")
+
+
+def _render_field(
+    label: str, item: dict, modifications: dict, field: str
+) -> None:
+    """Render a field, showing diff if modified."""
+    pad = max(0, 14 - len(label))
+    prefix = f"  {label}:{' ' * pad}"
+
+    if field in modifications:
+        mod = modifications[field]
+        original = mod.get("original", "")
+        modified = mod.get("modified", "")
+        # Format lists
+        if isinstance(original, list):
+            original = ", ".join(str(x) for x in original)
+        if isinstance(modified, list):
+            modified = ", ".join(str(x) for x in modified)
+        print(f"{prefix}{_RED}- {original}{_RESET}")
+        print(f"  {' ' * (len(label) + 1)}{' ' * pad}{_GREEN}+ {modified}{_RESET}")
+    else:
+        val = item.get(field, "")
+        if isinstance(val, list):
+            val = ", ".join(str(x) for x in val)
+        print(f"{prefix}{val}")
+
+
+def _review_mode(
+    case_dir: Path, identity: dict, config_path: Path
+) -> None:
+    """Apply pending dashboard reviews from pending-reviews.json."""
+    delta_path = case_dir / "pending-reviews.json"
+
+    if not delta_path.exists():
+        print("No pending dashboard reviews.")
+        return
+
+    # Atomically rename to .processing (TOCTOU mitigation)
+    processing_path = case_dir / "pending-reviews.processing"
+    try:
+        delta_path.rename(processing_path)
+    except OSError as e:
+        print(f"Error: Cannot lock delta file: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        delta = json.loads(processing_path.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        # Restore original file on parse failure
+        try:
+            processing_path.rename(delta_path)
+        except OSError:
+            pass
+        print(f"Error: Cannot read delta file: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    items = delta.get("items", [])
+    if not items:
+        processing_path.unlink(missing_ok=True)
+        print("No pending dashboard reviews.")
+        return
+
+    # Validate case_id
+    delta_case_id = delta.get("case_id", "")
+    case_meta_path = case_dir / "CASE.yaml"
+    if case_meta_path.exists():
+        try:
+            meta = yaml.safe_load(case_meta_path.read_text()) or {}
+            active_case_id = meta.get("case_id", "")
+            if delta_case_id and active_case_id and delta_case_id != active_case_id:
+                print(
+                    f"Error: Delta case_id ({delta_case_id}) does not match "
+                    f"active case ({active_case_id}).",
+                    file=sys.stderr,
+                )
+                processing_path.rename(delta_path)
+                sys.exit(1)
+        except (yaml.YAMLError, OSError):
+            pass
+
+    # Check modified_at — warn if file was modified after last browser action
+    delta_modified = delta.get("modified_at", "")
+    try:
+        file_mtime = datetime.fromtimestamp(
+            processing_path.stat().st_mtime, tz=timezone.utc
+        ).isoformat()
+        if delta_modified and file_mtime > delta_modified:
+            print(
+                f"  {_YELLOW}WARNING: Delta file was modified after your last "
+                f"review action.{_RESET}"
+            )
+    except OSError:
+        pass
+
+    # Load case data — all items, not just DRAFTs
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
+
+    # Build lookup by ID
+    item_by_id: dict[str, dict] = {}
+    for f in findings:
+        item_by_id[f["id"]] = f
+    for t in timeline:
+        item_by_id[t["id"]] = t
+
+    # Categorize delta items
+    approvals = []
+    rejections = []
+    todos = []
+    stale_warnings = []
+
+    for entry in items:
+        item_id = entry.get("id", "")
+        action = entry.get("action", "").lower()
+        item = item_by_id.get(item_id)
+
+        # Check content hash staleness
+        hash_at_review = entry.get("content_hash_at_review", "")
+        if item and hash_at_review:
+            current_hash = item.get("content_hash", "")
+            if current_hash and hash_at_review != current_hash:
+                stale_warnings.append(item_id)
+
+        # Render each item
+        _render_terminal_diff(item, entry)
+
+        if action == "approve":
+            approvals.append(entry)
+        elif action == "reject":
+            rejections.append(entry)
+        elif action == "todo":
+            todos.append(entry)
+
+    # Stale warnings
+    for sid in stale_warnings:
+        print(f"  {_YELLOW}WARNING: {sid} was modified after you reviewed it.{_RESET}")
+
+    # Summary
+    print(f"\n{'=' * 60}")
+    print(
+        f"  Apply {len(approvals)} approval(s), {len(rejections)} rejection(s), "
+        f"{len(todos)} TODO(s)?"
+    )
+    print(f"{'=' * 60}")
+
+    if not approvals and not rejections and not todos:
+        processing_path.unlink(missing_ok=True)
+        print("Nothing to apply.")
+        return
+
+    # PIN confirmation
+    mode, pin = require_confirmation(config_path, identity["examiner"])
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Process approvals
+    skipped = []
+    approved_ids = []
+    for entry in approvals:
+        item_id = entry.get("id", "")
+        item = item_by_id.get(item_id)
+        if item is None:
+            skipped.append((item_id, "not found"))
+            continue
+
+        modifications = entry.get("modifications", {})
+
+        # Verify modification originals match current values
+        mod_conflict = False
+        for field, mod in modifications.items():
+            current_val = item.get(field)
+            original_val = mod.get("original")
+            if current_val != original_val:
+                skipped.append((item_id, f"field '{field}' changed since review"))
+                mod_conflict = True
+                break
+
+        if mod_conflict:
+            continue
+
+        # Apply modifications
+        if modifications:
+            for field, mod in modifications.items():
+                item[field] = mod.get("modified")
+                item.setdefault("examiner_modifications", {})[field] = {
+                    "original": mod.get("original"),
+                    "modified": mod.get("modified"),
+                    "modified_by": identity["examiner"],
+                    "modified_at": now,
+                }
+
+        # Apply note
+        note = entry.get("note")
+        if note:
+            _apply_note(item, note, identity)
+
+        # Compute content hash AFTER modifications
+        new_hash = compute_content_hash(item)
+        item["content_hash"] = new_hash
+        item["status"] = "APPROVED"
+        item["approved_at"] = now
+        item["approved_by"] = identity["examiner"]
+        item["modified_at"] = now
+        write_approval_log(
+            case_dir,
+            item_id,
+            "APPROVED",
+            identity,
+            mode=mode,
+            content_hash=new_hash,
+        )
+        approved_ids.append(item_id)
+
+    # HMAC verification entries for approved items
+    approved_items = [item_by_id[aid] for aid in approved_ids if aid in item_by_id]
+    _write_verification_entries(
+        case_dir, approved_items, identity, config_path, pin, now
+    )
+
+    # Process rejections
+    rejected_ids = []
+    for entry in rejections:
+        item_id = entry.get("id", "")
+        item = item_by_id.get(item_id)
+        if item is None:
+            skipped.append((item_id, "not found"))
+            continue
+
+        reason = entry.get("reason", "")
+        item["status"] = "REJECTED"
+        item["rejected_at"] = now
+        item["rejected_by"] = identity["examiner"]
+        if reason:
+            item["rejection_reason"] = reason
+        item["modified_at"] = now
+        write_approval_log(
+            case_dir, item_id, "REJECTED", identity, reason=reason, mode=mode
+        )
+        rejected_ids.append(item_id)
+
+    # Process TODOs
+    if todos:
+        todos_to_create = []
+        for entry in todos:
+            todos_to_create.append({
+                "description": entry.get("todo_description", f"Follow up on {entry.get('id', '')}"),
+                "priority": entry.get("todo_priority", "medium"),
+                "assignee": "",
+                "related_findings": [entry.get("id", "")],
+            })
+        _create_todos(case_dir, todos_to_create, identity)
+
+    # Save
+    save_findings(case_dir, findings)
+    save_timeline(case_dir, timeline)
+
+    # Clean up
+    processing_path.unlink(missing_ok=True)
+
+    # Report
+    if skipped:
+        print(f"\n  {_YELLOW}Skipped {len(skipped)} item(s) (field changed since review):")
+        for sid, reason in skipped:
+            print(f"    {sid}: {reason}")
+        print(f"  Re-review in browser.{_RESET}")
+
+    print(
+        f"\nApplied: {len(approved_ids)} approved, {len(rejected_ids)} rejected, "
+        f"{len(todos)} TODO(s)."
+    )

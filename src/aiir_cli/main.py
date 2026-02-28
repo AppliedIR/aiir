@@ -81,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve.add_argument(
         "--timeline-only", action="store_true", help="Review only timeline events"
     )
+    p_approve.add_argument(
+        "--review",
+        action="store_true",
+        help="Apply pending dashboard reviews from pending-reviews.json",
+    )
 
     # reject
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
