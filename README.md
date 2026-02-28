@@ -3,14 +3,93 @@
 [![Docs](https://img.shields.io/badge/docs-appliedir.github.io-blue)](https://appliedir.github.io/aiir/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/AppliedIR/aiir/blob/main/LICENSE)
 
-Artificial Intelligence Incident Response platform. CLI and architecture reference.
+AI Incident Response platform with varying levels of human-in-the-loop review and control based on your deployment needs. CLI and architecture reference.
 
 **[Platform Documentation](https://appliedir.github.io/aiir/)** ·
 [CLI Reference](https://appliedir.github.io/aiir/cli-reference/)
 
+## AIIR Lite — Get Started in Minutes
+
+In its simplest form, AIIR Lite provides Claude Code with forensic knowledge and instructions on how to enforce forensic rigor, present findings for human review, and audit actions taken. MCP servers enhance accuracy by providing authoritative information — a forensic knowledge RAG and a Windows triage database — plus optional OpenCTI threat intelligence and REMnux malware analysis.
+
+```bash
+git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
+./quickstart-lite.sh
+claude
+/welcome
+```
+
+#### AIIR Lite
+
+```mermaid
+graph LR
+    subgraph analyst ["Analyst Machine"]
+        CC["Claude Code<br/>(human interface)"]
+        FR["forensic-rag-mcp<br/>Knowledge search"]
+        WTR["windows-triage-mcp<br/>Baseline validation"]
+
+        CC -->|stdio| FR
+        CC -->|stdio| WTR
+    end
+```
+
+#### AIIR Lite with Optional Add-ons
+
+```mermaid
+graph LR
+    subgraph analyst ["Analyst Machine"]
+        CC["Claude Code<br/>(human interface)"]
+        FR["forensic-rag-mcp<br/>Knowledge search"]
+        WTR["windows-triage-mcp<br/>Baseline validation"]
+        OC["opencti-mcp<br/>Threat intelligence"]
+
+        CC -->|stdio| FR
+        CC -->|stdio| WTR
+        CC -->|stdio| OC
+    end
+
+    subgraph octi ["OpenCTI Instance"]
+        OCTI[OpenCTI]
+    end
+
+    subgraph remnux ["REMnux Workstation"]
+        RAPI["remnux-mcp API<br/>:3000"]
+        RMX["remnux-mcp<br/>Malware analysis"]
+        RAPI --> RMX
+    end
+
+    subgraph internet ["Internet"]
+        ML["MS Learn MCP<br/>(HTTPS)"]
+        ZE["Zeltser IR Writing MCP<br/>(HTTPS)"]
+    end
+
+    CC -->|"streamable-http"| RAPI
+    CC -->|"HTTPS"| ML
+    CC -->|"HTTPS"| ZE
+    OC -->|"HTTP(S)"| OCTI
+```
+
+| Connection | Protocol | Notes |
+|-----------|----------|-------|
+| Claude Code → forensic-rag-mcp | stdio | Local Python process, always present |
+| Claude Code → windows-triage-mcp | stdio | Local Python process, always present |
+| Claude Code → opencti-mcp | stdio | Local Python process, connects out to OpenCTI via HTTP(S) |
+| opencti-mcp → OpenCTI Instance | HTTP(S) | opencti-mcp runs locally, calls out to the OpenCTI server |
+| Claude Code → remnux-mcp | streamable-http | Remote, on its own REMnux workstation |
+| Claude Code → MS Learn MCP | HTTPS | `https://learn.microsoft.com/api/mcp` — streamable-http type in .mcp.json |
+| Claude Code → Zeltser IR Writing MCP | HTTPS | `https://website-mcp.zeltser.com/mcp` — streamable-http type in .mcp.json |
+
+No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via Bash. Forensic discipline is suggested and reinforced via prompt hooks and reference documents, but Claude Code can choose to ignore them. See the [sift-mcp README](https://github.com/AppliedIR/sift-mcp#aiir-lite--get-started-in-minutes) for details and optional add-ons.
+
+## Full AIIR — Structural Enforcement
+
+For use cases where more definitive human-in-the-loop approval is desired, the full AIIR suite ensures accountability and enforces human review of findings through cryptographic signing, PIN-gated approvals, and multiple layered controls.
+
+Full AIIR is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, Cursor, LibreChat, ChatGPT, and any client that can speak to a local MCP. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
+
 ## Platform Architecture
 
-AIIR is an LLM-agnostic forensic investigation platform built on the Model Context Protocol (MCP). Any MCP-compatible orchestrator works: Claude Code, Cursor, Claude Desktop, Cherry Studio, LibreChat, Goose, and others. The LLM client and the aiir CLI are the two human-facing tools. The aiir CLI always runs on the SIFT workstation — it requires direct filesystem access to the case directory. When the LLM client runs on a separate machine (Path 2), the examiner must have SSH access to SIFT for all CLI operations (approve, review, report, etc.).
+The LLM client and the aiir CLI are the two human-facing tools. The aiir CLI always runs on the SIFT workstation — it requires direct filesystem access to the case directory. When the LLM client runs on a separate machine (Path 2), the examiner must have SSH access to SIFT for all CLI operations (approve, review, report, etc.).
 
 ### Core Component Map
 
@@ -377,16 +456,15 @@ AIIR is designed so that AI interactions flow through MCP tools, enabling securi
 
 ## Commands
 
-### case
+Most `aiir` CLI operations have MCP equivalents via case-mcp, forensic-mcp, and report-mcp. When working with an MCP-connected client, you can ask the AI to handle case management, evidence registration, report generation, and more — the AI operates through audited MCP tools rather than direct CLI invocation.
 
-```
-aiir case init "Ransomware Investigation"                # Create a new case
-aiir case close                                          # Close the active case
-aiir case activate INC-2026-02191200                     # Set active case
-aiir case migrate                                        # Migrate to flat layout (see below)
-```
+The commands below that require human interaction at the terminal (`/dev/tty`) **cannot** be delegated to the AI. These are intentional human-in-the-loop checkpoints — they use PIN entry, interactive review, or terminal confirmation to ensure the human examiner retains control over approval, rejection, and security-sensitive operations.
 
-### approve
+### Human-Only Commands (require terminal)
+
+These commands read from `/dev/tty` directly and cannot be run by an AI client, even via Bash. This is by design — they are the human-in-the-loop controls that ensure the examiner reviews and approves all findings.
+
+#### approve
 
 ```bash
 aiir approve                                             # Interactive review of all DRAFT items
@@ -398,21 +476,71 @@ aiir approve --findings-only                             # Skip timeline events
 aiir approve --timeline-only                             # Skip findings
 ```
 
-### reject
+Requires PIN entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key.
+
+#### reject
 
 ```bash
 aiir reject F-alice-003 --reason "Insufficient evidence for attribution"
 aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 ```
 
-### review
+Requires PIN confirmation via `/dev/tty`.
+
+#### exec
+
+```bash
+aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
+```
+
+Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`. Use this for manual tool execution with audit trail when not operating through MCP.
+
+#### evidence unlock
+
+```bash
+aiir unlock-evidence                       # Directory chmod 755, files remain 444
+aiir evidence unlock
+```
+
+Requires `/dev/tty` confirmation. Unlocking evidence allows writes to the evidence directory.
+
+#### PIN management
+
+```bash
+aiir config --setup-pin                    # Set approval PIN (PBKDF2-hashed)
+aiir config --reset-pin                    # Reset PIN (requires current)
+```
+
+PIN entry uses masked input via `/dev/tty` with termios. No echo, no stdin — the AI cannot read or supply the PIN.
+
+#### HMAC verification
+
+```bash
+aiir review --findings --verify            # Cross-check content hashes + HMAC verification
+aiir review --findings --verify --mine    # HMAC verification for current examiner only
+```
+
+Verification requires the examiner's PIN to derive the HMAC key and confirm integrity.
+
+### All Commands
+
+The remaining commands can also be performed through MCP tools (case-mcp, forensic-mcp, report-mcp) when working with an MCP-connected client. The CLI equivalents are listed here for reference and for use outside MCP sessions.
+
+#### case
+
+```
+aiir case init "Ransomware Investigation"                # Create a new case
+aiir case close INC-2026-02191200                        # Close a case by ID
+aiir case activate INC-2026-02191200                     # Set active case
+aiir case migrate                                        # Migrate to flat layout (see below)
+```
+
+#### review
 
 ```bash
 aiir review                                # Case summary (counts by status)
 aiir review --findings                     # Findings table
 aiir review --findings --detail            # Full finding detail
-aiir review --findings --verify            # Cross-check content hashes + HMAC verification
-aiir review --findings --verify --mine    # HMAC verification for current examiner only
 aiir review --iocs                         # IOCs grouped by approval status
 aiir review --timeline                     # Timeline events
 aiir review --timeline --status APPROVED   # Filter timeline by status
@@ -423,7 +551,7 @@ aiir review --audit --limit 100            # Audit trail (last N entries)
 aiir review --todos --open                 # Open TODOs
 ```
 
-### todo
+#### todo
 
 ```bash
 aiir todo                                                          # List open TODOs
@@ -433,46 +561,27 @@ aiir todo complete TODO-alice-001
 aiir todo update TODO-alice-002 --note "Waiting on third party" --priority low
 ```
 
-### service
-
-```bash
-aiir service status                    # Show running backends + health
-aiir service start forensic-rag        # Start a backend
-aiir service stop windows-triage       # Stop a backend
-aiir service restart sift-mcp          # Restart a backend
-```
-
-### exec
-
-```bash
-aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
-```
-
-Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`.
-
-### evidence
+#### evidence
 
 ```bash
 aiir register-evidence /path/to/image.E01 --description "Disk image from workstation"
 aiir lock-evidence                         # All files chmod 444, directory chmod 555
-aiir unlock-evidence                       # Directory chmod 755, files remain 444
 
 aiir evidence register /path/to/image.E01 --description "Disk image"
 aiir evidence list
 aiir evidence verify
 aiir evidence log [--path <filter>]
 aiir evidence lock
-aiir evidence unlock
 ```
 
-### sync
+#### export / merge
 
 ```bash
-aiir sync export --file steve-findings.json      # Export findings for sharing
-aiir sync import --file jane-findings.json        # Merge another examiner's findings
+aiir export --file steve-findings.json      # Export findings for sharing
+aiir merge --file jane-findings.json        # Merge another examiner's findings
 ```
 
-### report
+#### report
 
 ```bash
 aiir report --full [--save <path>]
@@ -483,14 +592,23 @@ aiir report --findings F-alice-001,F-alice-002 [--save <path>]
 aiir report --status-brief [--save <path>]
 ```
 
-### audit
+#### audit
 
 ```bash
 aiir audit log [--limit 100] [--mcp sift-mcp] [--tool run_command]
 aiir audit summary
 ```
 
-### case migrate
+#### service
+
+```bash
+aiir service status                    # Show running backends + health
+aiir service start forensic-rag        # Start a backend
+aiir service stop windows-triage       # Stop a backend
+aiir service restart sift-mcp          # Restart a backend
+```
+
+#### case migrate
 
 ```bash
 aiir case migrate                                      # Migrate primary examiner data to flat layout
@@ -498,25 +616,23 @@ aiir case migrate --examiner alice                     # Specify examiner
 aiir case migrate --import-all                         # Merge all examiners' data
 ```
 
-### config
+#### config
 
 ```bash
 aiir config --examiner "jane.doe"          # Set examiner identity
 aiir config --show                         # Show current configuration
-aiir config --setup-pin                    # Set approval PIN (PBKDF2-hashed)
-aiir config --reset-pin                    # Reset PIN (requires current)
 ```
 
-### join
+#### join
 
 ```bash
-aiir join SIFT_URL CODE                                          # Join from remote machine using join code
-aiir join SIFT_URL CODE --wintools                               # Join as wintools machine (registers backend)
+aiir join --sift SIFT_URL --code CODE                            # Join from remote machine using join code
+aiir join --sift SIFT_URL --code CODE --wintools                 # Join as wintools machine (registers backend)
 ```
 
 Exchange a one-time join code for gateway credentials. Run on the remote machine (analyst laptop or Windows forensic workstation). The join code is generated on SIFT via `aiir setup join-code`. Credentials are saved to `~/.aiir/config.yaml` with restricted permissions (0600).
 
-### setup
+#### setup
 
 ```
 aiir setup                                 # Interactive (detect MCPs, configure, generate)
@@ -524,7 +640,7 @@ aiir setup --non-interactive               # Detect + generate configs
 aiir setup test                            # Test MCP server connectivity
 ```
 
-### setup client
+#### setup client
 
 Generate Streamable HTTP config for your LLM client:
 
@@ -584,6 +700,10 @@ Every approval, rejection, and command execution is logged with examiner identit
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 10 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
+
+## Upgrading from Lite to Full
+
+Both modes share the same knowledge base, MCPs, and audit format. Upgrading adds the gateway, sandbox, enforcement layer, and structured case management. Note: lite case data (markdown files) does not auto-migrate to full case data (structured JSON). Start fresh or transfer findings manually.
 
 ## Evidence Handling
 
