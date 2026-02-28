@@ -178,8 +178,14 @@ def reset_pin(config_path: Path, analyst: str) -> None:
             for ledger_file in VERIFICATION_DIR.glob("*.jsonl"):
                 case_id = ledger_file.stem
                 count = rehmac_entries(
-                    case_id, analyst, current, old_salt, new_pin, new_salt,
-                    old_key=old_key, new_key=new_key,
+                    case_id,
+                    analyst,
+                    current,
+                    old_salt,
+                    new_pin,
+                    new_salt,
+                    old_key=old_key,
+                    new_key=new_key,
                 )
                 if count:
                     print(

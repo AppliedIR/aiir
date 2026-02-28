@@ -659,8 +659,10 @@ def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
     }.get(action, _CYAN)
 
     # Header
-    print(f"\n{_BOLD}{'─' * 20} {item_id} {'─' * 3} {action_color}{action}{_RESET}"
-          f"{_BOLD} {'─' * (35 - len(item_id) - len(action))}{_RESET}")
+    print(
+        f"\n{_BOLD}{'─' * 20} {item_id} {'─' * 3} {action_color}{action}{_RESET}"
+        f"{_BOLD} {'─' * (35 - len(item_id) - len(action))}{_RESET}"
+    )
 
     if item is None:
         print(f"  {_RED}Item not found in case data{_RESET}")
@@ -704,14 +706,16 @@ def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
     # Status line
     current_status = item.get("status", "DRAFT")
     if action == "APPROVE":
-        print(f"  Status:         {_DIM}{current_status}{_RESET} → {_GREEN}APPROVED{_RESET}")
+        print(
+            f"  Status:         {_DIM}{current_status}{_RESET} → {_GREEN}APPROVED{_RESET}"
+        )
     elif action == "REJECT":
-        print(f"  Status:         {_DIM}{current_status}{_RESET} → {_RED}REJECTED{_RESET}")
+        print(
+            f"  Status:         {_DIM}{current_status}{_RESET} → {_RED}REJECTED{_RESET}"
+        )
 
 
-def _render_field(
-    label: str, item: dict, modifications: dict, field: str
-) -> None:
+def _render_field(label: str, item: dict, modifications: dict, field: str) -> None:
     """Render a field, showing diff if modified."""
     pad = max(0, 14 - len(label))
     prefix = f"  {label}:{' ' * pad}"
@@ -734,9 +738,7 @@ def _render_field(
         print(f"{prefix}{val}")
 
 
-def _review_mode(
-    case_dir: Path, identity: dict, config_path: Path
-) -> None:
+def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
     """Apply pending dashboard reviews from pending-reviews.json."""
     delta_path = case_dir / "pending-reviews.json"
 
@@ -950,12 +952,16 @@ def _review_mode(
     if todos:
         todos_to_create = []
         for entry in todos:
-            todos_to_create.append({
-                "description": entry.get("todo_description", f"Follow up on {entry.get('id', '')}"),
-                "priority": entry.get("todo_priority", "medium"),
-                "assignee": "",
-                "related_findings": [entry.get("id", "")],
-            })
+            todos_to_create.append(
+                {
+                    "description": entry.get(
+                        "todo_description", f"Follow up on {entry.get('id', '')}"
+                    ),
+                    "priority": entry.get("todo_priority", "medium"),
+                    "assignee": "",
+                    "related_findings": [entry.get("id", "")],
+                }
+            )
         _create_todos(case_dir, todos_to_create, identity)
 
     # Save
@@ -967,7 +973,9 @@ def _review_mode(
 
     # Report
     if skipped:
-        print(f"\n  {_YELLOW}Skipped {len(skipped)} item(s) (field changed since review):")
+        print(
+            f"\n  {_YELLOW}Skipped {len(skipped)} item(s) (field changed since review):"
+        )
         for sid, reason in skipped:
             print(f"    {sid}: {reason}")
         print(f"  Re-review in browser.{_RESET}")
