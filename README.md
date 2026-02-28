@@ -635,10 +635,11 @@ Exchange a one-time join code for gateway credentials. Run on the remote machine
 #### setup
 
 ```
-aiir setup                                 # Interactive (detect MCPs, configure, generate)
-aiir setup --non-interactive               # Detect + generate configs
+aiir setup client                          # Interactive client configuration (recommended)
 aiir setup test                            # Test MCP server connectivity
 ```
+
+`aiir setup` bare is deprecated — use `aiir setup client` instead.
 
 #### setup client
 
