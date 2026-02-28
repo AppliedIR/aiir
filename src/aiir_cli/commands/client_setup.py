@@ -601,10 +601,9 @@ def _deploy_hook(source: Path, target: Path) -> None:
     target.chmod(0o755)
 
 
-def _deploy_claude_md(assets_dir: Path, target: Path) -> None:
-    """Copy the real CLAUDE.md from assets directory to target."""
-    src = assets_dir / "CLAUDE.md"
-    if not src.is_file():
+def _deploy_claude_md(src: Path | None, target: Path) -> None:
+    """Copy CLAUDE.md to target location."""
+    if not src or not src.is_file():
         print("  Warning: CLAUDE.md not found in assets.", file=sys.stderr)
         return
     if target.is_file():
@@ -616,24 +615,23 @@ def _deploy_claude_md(assets_dir: Path, target: Path) -> None:
     print(f"  Deployed:  CLAUDE.md -> {target}")
 
 
-def _deploy_global_rules(assets_dir: Path) -> None:
+def _deploy_global_rules(
+    discipline_src: Path | None,
+    toolref_src: Path | None,
+) -> None:
     """Deploy discipline docs to ~/.claude/rules/ (SIFT only)."""
     rules_dir = Path.home() / ".claude" / "rules"
     rules_dir.mkdir(parents=True, exist_ok=True)
 
-    # FORENSIC_DISCIPLINE.md
-    src = assets_dir / "FORENSIC_DISCIPLINE.md"
-    if src.is_file():
-        shutil.copy2(src, rules_dir / "FORENSIC_DISCIPLINE.md")
-        print(f"  Copied:    FORENSIC_DISCIPLINE.md -> {rules_dir}")
+    for src, name in [
+        (discipline_src, "FORENSIC_DISCIPLINE.md"),
+        (toolref_src, "TOOL_REFERENCE.md"),
+    ]:
+        if src and src.is_file():
+            shutil.copy2(src, rules_dir / name)
+            print(f"  Copied:    {name} -> {rules_dir}")
 
-    # TOOL_REFERENCE.md
-    src = assets_dir / "TOOL_REFERENCE.md"
-    if src.is_file():
-        shutil.copy2(src, rules_dir / "TOOL_REFERENCE.md")
-        print(f"  Copied:    TOOL_REFERENCE.md -> {rules_dir}")
-
-    # AGENTS.md
+    # AGENTS.md — independent lookup
     agents = _find_agents_md()
     if agents:
         shutil.copy2(agents, rules_dir / "AGENTS.md")
@@ -641,9 +639,9 @@ def _deploy_global_rules(assets_dir: Path) -> None:
 
 
 def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
-    """Deploy settings.json, hooks, and doc files for Claude Code.
+    """Deploy settings.json, hooks, skills, and doc files for Claude Code.
 
-    Sources from sift-mcp/claude-code/ directory.
+    Sources from sift-mcp/claude-code/ directory (shared/ + full/).
     On SIFT: deploys globally (settings to ~/.claude/, hook to ~/.aiir/hooks/).
     On non-SIFT: deploys to project directory.
 
@@ -658,79 +656,127 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
         )
         return
 
+    # Resolve shared and mode directories (new layout: shared/ + full/)
+    shared_dir = assets_dir / "shared"
+    mode_dir = assets_dir / "full"
+    if not shared_dir.is_dir() or not mode_dir.is_dir():
+        # Legacy flat layout — treat assets_dir as both shared and mode
+        shared_dir = assets_dir
+        mode_dir = assets_dir
+
+    def _find_asset(name: str) -> Path | None:
+        """Find asset file: mode_dir first, then shared_dir."""
+        for d in (mode_dir, shared_dir):
+            p = d / name
+            if p.exists():
+                return p
+        return None
+
+    def _find_hook(hook_name: str) -> Path | None:
+        """Find hook script: mode hooks first, then shared hooks."""
+        for d in (mode_dir, shared_dir):
+            p = d / "hooks" / hook_name
+            if p.is_file():
+                return p
+        return None
+
     sift = _is_sift()
 
     if sift:
         # --- SIFT global deployment ---
 
         # Deploy settings.json to ~/.claude/settings.json
-        settings_src = assets_dir / "settings.json"
-        if settings_src.is_file():
+        settings_src = _find_asset("settings.json")
+        if settings_src:
             settings_target = Path.home() / ".claude" / "settings.json"
             _merge_settings(settings_target, settings_src)
             print(f"  Merged:    settings.json -> {settings_target}")
-
-            # Post-merge fixup: replace $CLAUDE_PROJECT_DIR hook path with absolute
             _fixup_global_hook_path(settings_target)
 
         # Deploy hook scripts to ~/.aiir/hooks/
         for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
-            hook_src = assets_dir / "hooks" / hook_name
-            if hook_src.is_file():
+            hook_src = _find_hook(hook_name)
+            if hook_src:
                 hook_target = Path.home() / ".aiir" / "hooks" / hook_name
                 _deploy_hook(hook_src, hook_target)
                 print(f"  Deployed:  {hook_name} -> {hook_target}")
 
         # Deploy CLAUDE.md globally
-        _deploy_claude_md(assets_dir, Path.home() / ".claude" / "CLAUDE.md")
+        _deploy_claude_md(
+            _find_asset("CLAUDE.md"),
+            Path.home() / ".claude" / "CLAUDE.md",
+        )
 
         # Deploy discipline docs to ~/.claude/rules/
-        _deploy_global_rules(assets_dir)
+        _deploy_global_rules(
+            discipline_src=_find_asset("FORENSIC_DISCIPLINE.md"),
+            toolref_src=_find_asset("TOOL_REFERENCE.md"),
+        )
+
+        # Deploy skills to ~/.claude/commands/
+        commands_src = mode_dir / "commands"
+        if commands_src.is_dir():
+            commands_target = Path.home() / ".claude" / "commands"
+            commands_target.mkdir(parents=True, exist_ok=True)
+            for skill_file in commands_src.glob("*.md"):
+                shutil.copy2(skill_file, commands_target / skill_file.name)
+                print(f"  Deployed:  {skill_file.name} -> {commands_target}")
 
         # Also deploy docs to project root (contextual, harmless)
         if project_dir:
             for doc_name in ("FORENSIC_DISCIPLINE.md", "TOOL_REFERENCE.md"):
-                doc_src = assets_dir / doc_name
-                if doc_src.is_file():
+                doc_src = _find_asset(doc_name)
+                if doc_src:
                     shutil.copy2(doc_src, project_dir / doc_name)
                     print(f"  Copied:    {doc_name}")
 
-            # Copy AGENTS.md to project root for non-Claude-Code clients
             _copy_agents_md(project_dir / "AGENTS.md")
 
     else:
         # --- Non-SIFT project-level deployment ---
 
         # Deploy settings.json to project
-        settings_src = assets_dir / "settings.json"
-        if settings_src.is_file():
+        settings_src = _find_asset("settings.json")
+        if settings_src:
             settings_target = project_dir / ".claude" / "settings.json"
             _merge_settings(settings_target, settings_src)
             print(f"  Merged:    settings.json -> {settings_target}")
 
         # Deploy hook scripts to project
         for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
-            hook_src = assets_dir / "hooks" / hook_name
-            if hook_src.is_file():
+            hook_src = _find_hook(hook_name)
+            if hook_src:
                 hook_target = project_dir / ".claude" / "hooks" / hook_name
                 _deploy_hook(hook_src, hook_target)
                 print(f"  Deployed:  {hook_name} -> {hook_target}")
 
         # Deploy CLAUDE.md to project root
-        _deploy_claude_md(assets_dir, project_dir / "CLAUDE.md")
+        _deploy_claude_md(
+            _find_asset("CLAUDE.md"),
+            project_dir / "CLAUDE.md",
+        )
+
+        # Deploy skills to project .claude/commands/
+        commands_src = mode_dir / "commands"
+        if commands_src.is_dir():
+            commands_target = project_dir / ".claude" / "commands"
+            commands_target.mkdir(parents=True, exist_ok=True)
+            for skill_file in commands_src.glob("*.md"):
+                shutil.copy2(skill_file, commands_target / skill_file.name)
+                print(f"  Deployed:  {skill_file.name} -> {commands_target}")
 
         # Copy AGENTS.md to project root
         _copy_agents_md(project_dir / "AGENTS.md")
 
         # Deploy FORENSIC_DISCIPLINE.md
-        discipline_src = assets_dir / "FORENSIC_DISCIPLINE.md"
-        if discipline_src.is_file():
+        discipline_src = _find_asset("FORENSIC_DISCIPLINE.md")
+        if discipline_src:
             shutil.copy2(discipline_src, project_dir / "FORENSIC_DISCIPLINE.md")
             print("  Copied:    FORENSIC_DISCIPLINE.md")
 
         # Deploy TOOL_REFERENCE.md
-        toolref_src = assets_dir / "TOOL_REFERENCE.md"
-        if toolref_src.is_file():
+        toolref_src = _find_asset("TOOL_REFERENCE.md")
+        if toolref_src:
             shutil.copy2(toolref_src, project_dir / "TOOL_REFERENCE.md")
             print("  Copied:    TOOL_REFERENCE.md")
 
