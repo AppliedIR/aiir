@@ -466,7 +466,7 @@ These commands read from `/dev/tty` directly and cannot be run by an AI client, 
 
 #### approve
 
-```bash
+```
 aiir approve                                             # Interactive review of all DRAFT items
 aiir approve F-alice-001 F-alice-002 T-alice-001         # Approve specific IDs
 aiir approve F-alice-001 --edit                          # Edit in $EDITOR before approving
@@ -480,7 +480,7 @@ Requires PIN entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKD
 
 #### reject
 
-```bash
+```
 aiir reject F-alice-003 --reason "Insufficient evidence for attribution"
 aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 ```
@@ -489,7 +489,7 @@ Requires PIN confirmation via `/dev/tty`.
 
 #### exec
 
-```bash
+```
 aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
 ```
 
@@ -497,7 +497,7 @@ Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`. Use this for
 
 #### evidence unlock
 
-```bash
+```
 aiir unlock-evidence                       # Directory chmod 755, files remain 444
 aiir evidence unlock
 ```
@@ -506,7 +506,7 @@ Requires `/dev/tty` confirmation. Unlocking evidence allows writes to the eviden
 
 #### PIN management
 
-```bash
+```
 aiir config --setup-pin                    # Set approval PIN (PBKDF2-hashed)
 aiir config --reset-pin                    # Reset PIN (requires current)
 ```
@@ -515,7 +515,7 @@ PIN entry uses masked input via `/dev/tty` with termios. No echo, no stdin — t
 
 #### HMAC verification
 
-```bash
+```
 aiir review --findings --verify            # Cross-check content hashes + HMAC verification
 aiir review --findings --verify --mine    # HMAC verification for current examiner only
 ```
@@ -537,7 +537,7 @@ aiir case migrate                                        # Migrate to flat layou
 
 #### review
 
-```bash
+```
 aiir review                                # Case summary (counts by status)
 aiir review --findings                     # Findings table
 aiir review --findings --detail            # Full finding detail
@@ -553,7 +553,7 @@ aiir review --todos --open                 # Open TODOs
 
 #### todo
 
-```bash
+```
 aiir todo                                                          # List open TODOs
 aiir todo --all                                                    # Include completed
 aiir todo add "Run volatility on server-04" --assignee jane --priority high --finding F-alice-003
@@ -563,7 +563,7 @@ aiir todo update TODO-alice-002 --note "Waiting on third party" --priority low
 
 #### evidence
 
-```bash
+```
 aiir register-evidence /path/to/image.E01 --description "Disk image from workstation"
 aiir lock-evidence                         # All files chmod 444, directory chmod 555
 
@@ -576,14 +576,14 @@ aiir evidence lock
 
 #### export / merge
 
-```bash
+```
 aiir export --file steve-findings.json      # Export findings for sharing
 aiir merge --file jane-findings.json        # Merge another examiner's findings
 ```
 
 #### report
 
-```bash
+```
 aiir report --full [--save <path>]
 aiir report --executive-summary [--save <path>]
 aiir report --timeline [--from <date> --to <date>] [--save <path>]
@@ -594,14 +594,14 @@ aiir report --status-brief [--save <path>]
 
 #### audit
 
-```bash
+```
 aiir audit log [--limit 100] [--mcp sift-mcp] [--tool run_command]
 aiir audit summary
 ```
 
 #### service
 
-```bash
+```
 aiir service status                    # Show running backends + health
 aiir service start forensic-rag        # Start a backend
 aiir service stop windows-triage       # Stop a backend
@@ -610,7 +610,7 @@ aiir service restart sift-mcp          # Restart a backend
 
 #### case migrate
 
-```bash
+```
 aiir case migrate                                      # Migrate primary examiner data to flat layout
 aiir case migrate --examiner alice                     # Specify examiner
 aiir case migrate --import-all                         # Merge all examiners' data
@@ -618,14 +618,14 @@ aiir case migrate --import-all                         # Merge all examiners' da
 
 #### config
 
-```bash
+```
 aiir config --examiner "jane.doe"          # Set examiner identity
 aiir config --show                         # Show current configuration
 ```
 
 #### join
 
-```bash
+```
 aiir join --sift SIFT_URL --code CODE                            # Join from remote machine using join code
 aiir join --sift SIFT_URL --code CODE --wintools                 # Join as wintools machine (registers backend)
 ```
@@ -645,7 +645,7 @@ aiir setup test                            # Test MCP server connectivity
 
 Generate Streamable HTTP config for your LLM client:
 
-```bash
+```
 aiir setup client                                                          # Interactive wizard
 aiir setup client --client=claude-code --sift=http://127.0.0.1:4508 -y    # Local solo
 aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT + Windows
