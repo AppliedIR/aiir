@@ -15,6 +15,14 @@ In its simplest form, AIIR Lite provides Claude Code with forensic knowledge and
 ```bash
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./quickstart-lite.sh
+```
+
+The installer downloads triage databases (~1.1 GB compressed) and builds
+a RAG index over 22,000+ forensic knowledge records. This one-time setup
+takes approximately 15-30 minutes depending on internet speed and CPU.
+Subsequent runs reuse existing databases and index.
+
+```bash
 claude
 /welcome
 ```
