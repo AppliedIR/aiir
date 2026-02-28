@@ -16,9 +16,9 @@ import argcomplete
 
 from aiir_cli import __version__
 from aiir_cli.commands.approve import cmd_approve
-from aiir_cli.commands.dashboard import cmd_dashboard
 from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.config import cmd_config
+from aiir_cli.commands.dashboard import cmd_dashboard
 from aiir_cli.commands.evidence import (
     cmd_evidence,
     cmd_lock_evidence,
