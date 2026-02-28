@@ -166,13 +166,20 @@ def reset_pin(config_path: Path, analyst: str) -> None:
     # Re-HMAC verification ledger entries with new key
     new_salt = get_analyst_salt(config_path, analyst)
     try:
-        from aiir_cli.verification import VERIFICATION_DIR, rehmac_entries
+        from aiir_cli.verification import (
+            VERIFICATION_DIR,
+            derive_hmac_key,
+            rehmac_entries,
+        )
 
         if VERIFICATION_DIR.is_dir():
+            old_key = derive_hmac_key(current, old_salt)
+            new_key = derive_hmac_key(new_pin, new_salt)
             for ledger_file in VERIFICATION_DIR.glob("*.jsonl"):
                 case_id = ledger_file.stem
                 count = rehmac_entries(
-                    case_id, analyst, current, old_salt, new_pin, new_salt
+                    case_id, analyst, current, old_salt, new_pin, new_salt,
+                    old_key=old_key, new_key=new_key,
                 )
                 if count:
                     print(

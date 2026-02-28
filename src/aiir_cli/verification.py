@@ -101,15 +101,24 @@ def rehmac_entries(
     old_salt: bytes,
     new_pin: str,
     new_salt: bytes,
+    *,
+    old_key: bytes | None = None,
+    new_key: bytes | None = None,
 ) -> int:
-    """Re-HMAC all entries for examiner after PIN rotation. Returns count."""
+    """Re-HMAC all entries for examiner after PIN rotation. Returns count.
+
+    Pass pre-derived old_key/new_key to avoid redundant PBKDF2 derivation
+    when calling in a loop across multiple ledger files.
+    """
     _validate_case_id(case_id)
     path = VERIFICATION_DIR / f"{case_id}.jsonl"
     if not path.exists():
         return 0
 
-    old_key = derive_hmac_key(old_pin, old_salt)
-    new_key = derive_hmac_key(new_pin, new_salt)
+    if old_key is None:
+        old_key = derive_hmac_key(old_pin, old_salt)
+    if new_key is None:
+        new_key = derive_hmac_key(new_pin, new_salt)
 
     entries = read_ledger(case_id)
     count = 0
