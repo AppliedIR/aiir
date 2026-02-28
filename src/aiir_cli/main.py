@@ -16,6 +16,7 @@ import argcomplete
 
 from aiir_cli import __version__
 from aiir_cli.commands.approve import cmd_approve
+from aiir_cli.commands.dashboard import cmd_dashboard
 from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.config import cmd_config
 from aiir_cli.commands.evidence import (
@@ -440,6 +441,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip gateway restart",
     )
 
+    # dashboard
+    sub.add_parser("dashboard", help="Open the case review dashboard in a browser")
+
     return parser
 
 
@@ -479,6 +483,7 @@ def main() -> None:
         "service": cmd_service,
         "join": cmd_join,
         "update": cmd_update,
+        "dashboard": cmd_dashboard,
     }
 
     handler = dispatch.get(args.command)
