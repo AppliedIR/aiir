@@ -623,6 +623,14 @@ aiir config --examiner "jane.doe"          # Set examiner identity
 aiir config --show                         # Show current configuration
 ```
 
+#### update
+
+```
+aiir update                       # Pull latest, reinstall, redeploy, restart
+aiir update --check               # Check for updates without applying
+aiir update --no-restart          # Skip gateway restart after update
+```
+
 #### join
 
 ```
@@ -638,8 +646,6 @@ Exchange a one-time join code for gateway credentials. Run on the remote machine
 aiir setup client                          # Interactive client configuration (recommended)
 aiir setup test                            # Test MCP server connectivity
 ```
-
-`aiir setup` bare is deprecated — use `aiir setup client` instead.
 
 #### setup client
 
@@ -702,9 +708,43 @@ Every approval, rejection, and command execution is logged with examiner identit
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
+## Updating
+
+### Full AIIR
+
+```
+aiir update              # Pull latest code, reinstall packages, redeploy controls, restart gateway
+aiir update --check      # Check for updates without applying
+aiir update --no-restart # Update without restarting the gateway
+```
+
+The update command pulls the latest code from both repos (sift-mcp and aiir),
+reinstalls all packages, redeploys forensic controls, restarts the gateway,
+and runs a connectivity smoke test.
+
+### AIIR Lite
+
+Re-run the installer from an updated clone:
+
+```bash
+cd sift-mcp && git pull
+./quickstart-lite.sh
+```
+
+The installer is idempotent — it reuses the existing venv, skips databases
+and RAG index if already present, and redeploys config files.
+
 ## Upgrading from Lite to Full
 
-Both modes share the same knowledge base, MCPs, and audit format. Upgrading adds the gateway, sandbox, enforcement layer, and structured case management. Note: lite case data (markdown files) does not auto-migrate to full case data (structured JSON). Start fresh or transfer findings manually.
+Both modes share the same Python venv, triage databases, and RAG index. Full
+AIIR adds the gateway (7 MCP backends behind one HTTP endpoint), 4 additional
+MCP servers (forensic-mcp, case-mcp, report-mcp, sift-mcp), structured case
+management, sandbox enforcement, and HMAC-signed approvals.
+
+To upgrade, run `setup-sift.sh` from your existing sift-mcp clone. The
+installer reuses the existing venv and databases. Lite case data (markdown
+files) does not auto-migrate to full case data (structured JSON) — start
+fresh or transfer findings manually.
 
 ## Evidence Handling
 
