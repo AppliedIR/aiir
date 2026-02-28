@@ -12,6 +12,8 @@ from __future__ import annotations
 import argparse
 import sys
 
+import argcomplete
+
 from aiir_cli import __version__
 from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.audit_cmd import cmd_audit
@@ -438,6 +440,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     parser = build_parser()
+    argcomplete.autocomplete(parser)
     args = parser.parse_args()
 
     if not args.command:
