@@ -1,0 +1,78 @@
+name: Bug Report
+description: Something isn't working correctly
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of AIIR is affected?
+      options:
+        - aiir CLI
+        - sift-gateway
+        - forensic-mcp
+        - case-mcp
+        - report-mcp
+        - sift-mcp
+        - windows-triage
+        - wintools-mcp
+        - forensic-rag
+        - opencti-mcp
+        - Installer (setup-sift.sh)
+        - Installer (quickstart-lite.sh)
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug clearly.
+      placeholder: "When I run X, Y happens instead of Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps to trigger the bug.
+      placeholder: |
+        1. Run `aiir case init ...`
+        2. Run `aiir evidence register ...`
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, Python version, and install method.
+      placeholder: |
+        OS: Ubuntu 22.04 (SIFT)
+        Python: 3.10.12
+        Install: setup-sift.sh (quick tier)
+        aiir version: (run `aiir --version`)
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Paste any relevant error messages or logs.
+      render: shell
+    validations:
+      required: false
