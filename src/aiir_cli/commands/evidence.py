@@ -154,15 +154,29 @@ def register_evidence_data(
     # Validate path is within case directory
     resolved = evidence_path.resolve()
     case_resolved = case_dir.resolve()
-    if (
-        not str(resolved).startswith(str(case_resolved) + os.sep)
-        and resolved != case_resolved
-    ):
-        raise ValueError(
-            f"Evidence path must be within the case directory.\n"
-            f"  Evidence file:     {resolved}\n"
-            f"  Case evidence dir: {case_dir / 'evidence'}"
+    in_case = (
+        str(resolved).startswith(str(case_resolved) + os.sep)
+        or resolved == case_resolved
+    )
+    if not in_case:
+        # Resolved path is outside — check unresolved (symlink in case dir)
+        evidence_path_abs = (
+            evidence_path
+            if evidence_path.is_absolute()
+            else case_dir / evidence_path
         )
+        normalized = Path(os.path.normpath(evidence_path_abs))
+        case_norm = Path(os.path.normpath(case_resolved))
+        if not (
+            str(normalized).startswith(str(case_norm) + os.sep)
+            or normalized == case_norm
+        ):
+            raise ValueError(
+                f"Evidence path must be within the case directory.\n"
+                f"  Evidence file:     {evidence_path}\n"
+                f"  Resolved to:       {resolved}\n"
+                f"  Case evidence dir: {case_dir / 'evidence'}"
+            )
 
     # Compute SHA256
     sha = hashlib.sha256()
@@ -180,6 +194,32 @@ def register_evidence_data(
             registry = {"files": []}
     except (json.JSONDecodeError, OSError):
         registry = {"files": []}
+
+    # Dedup check — match by resolved path
+    for existing in registry.get("files", []):
+        if existing.get("path") == str(resolved):
+            if existing.get("sha256") == file_hash:
+                return {
+                    **existing,
+                    "note": "already registered (same path and hash)",
+                }
+            else:
+                # Same path, different hash — file changed. Update entry.
+                existing["sha256"] = file_hash
+                existing["registered_at"] = datetime.now(
+                    timezone.utc
+                ).isoformat()
+                existing["registered_by"] = examiner
+                if description:
+                    existing["description"] = description
+                _atomic_write(
+                    reg_file,
+                    json.dumps(registry, indent=2, default=str),
+                )
+                return {
+                    **existing,
+                    "note": "updated (same path, hash changed)",
+                }
 
     entry = {
         "path": str(resolved),
