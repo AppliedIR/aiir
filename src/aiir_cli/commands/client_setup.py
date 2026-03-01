@@ -68,6 +68,22 @@ _FORENSIC_DENY_RULES = {
     "Write(/var/lib/aiir/**)",
     "Bash(aiir approve*)",
     "Bash(aiir reject*)",
+    # Control file self-protection (anti-accident, anti-injection)
+    "Edit(**/.claude/settings.json)",
+    "Write(**/.claude/settings.json)",
+    "Edit(**/.claude/CLAUDE.md)",
+    "Write(**/.claude/CLAUDE.md)",
+    "Edit(**/.claude/rules/**)",
+    "Write(**/.claude/rules/**)",
+    "Edit(**/.aiir/hooks/**)",
+    "Write(**/.aiir/hooks/**)",
+    "Edit(**/.aiir/active_case)",
+    "Write(**/.aiir/active_case)",
+    "Edit(**/.aiir/gateway.yaml)",
+    "Write(**/.aiir/gateway.yaml)",
+    # Sync with template (was in settings.json but missing here)
+    "Edit(**/pending-reviews.json)",
+    "Write(**/pending-reviews.json)",
 }
 
 # Old forensic deny rules — removed during migration re-deploy
