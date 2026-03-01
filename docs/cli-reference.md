@@ -74,6 +74,18 @@ aiir case migrate --examiner alice
 aiir case migrate --import-all    # Merge all examiners' data
 ```
 
+## Dashboard
+
+### `aiir dashboard`
+
+Open the case review dashboard in the default browser.
+
+```bash
+aiir dashboard
+```
+
+The dashboard displays all findings for the active case with inline editing for confidence, justification, observation, interpretation, MITRE IDs, and IOCs. Edits are saved to `pending-reviews.json` in the case directory. Run `aiir approve --review` to apply pending edits.
+
 ## Review
 
 ### `aiir review`
@@ -129,6 +141,7 @@ aiir approve F-alice-004 --edit                 # Edit in $EDITOR first
 aiir approve --findings-only                    # Review only findings
 aiir approve --timeline-only                    # Review only timeline
 aiir approve --by bob                           # Review items by examiner
+aiir approve --review                           # Apply pending dashboard edits
 ```
 
 | Option | Description |
@@ -140,6 +153,7 @@ aiir approve --by bob                           # Review items by examiner
 | `--by` | Filter items by creator examiner |
 | `--findings-only` | Review only findings |
 | `--timeline-only` | Review only timeline events |
+| `--review` | Apply pending dashboard edits from `pending-reviews.json`, recompute hashes and HMAC signatures |
 
 ### `aiir reject`
 

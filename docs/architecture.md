@@ -26,6 +26,7 @@ sift-mcp ──► SIFT forensic tools
 forensic-rag-mcp
 windows-triage-mcp
 opencti-mcp
+case-dashboard ──► Review UI
 ```
 
 ## Invariants
@@ -92,6 +93,10 @@ Semantic search across 23K+ forensic knowledge records from Sigma rules, MITRE A
 ### windows-triage-mcp
 
 Offline Windows baseline validation. Checks files, processes, services, scheduled tasks, registry, DLLs, and named pipes against known-good databases. 13 tools.
+
+### case-dashboard
+
+Web-based finding review interface served by the gateway at `/dashboard/`. Provides inline editing of findings (confidence, justification, observation, interpretation, MITRE IDs, IOCs), evidence artifact display, and an integrity section showing verification status, provenance, and content hashes. Edits are saved to `pending-reviews.json` and applied via `aiir approve --review`.
 
 ### opencti-mcp
 
@@ -190,6 +195,7 @@ cases/INC-2026-0225/
 ├── actions.jsonl                # Investigative actions (append-only)
 ├── evidence_access.jsonl        # Chain-of-custody log
 ├── approvals.jsonl              # Approval audit trail
+├── pending-reviews.json         # Dashboard edits awaiting approval
 └── audit/
     ├── forensic-mcp.jsonl
     ├── sift-mcp.jsonl
@@ -232,7 +238,7 @@ Every forensic tool response is wrapped in a structured envelope with forensic-k
 
 | Repo | Purpose |
 |------|---------|
-| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | SIFT monorepo: 10 packages, installer, platform docs |
+| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | SIFT monorepo: 11 packages, installer, platform docs |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows tool execution MCP + installer |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI + architecture reference |
 

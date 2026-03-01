@@ -1,6 +1,6 @@
 # MCP Reference
 
-70 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine.
+70 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine. The case-dashboard is a web UI served by the gateway (not an MCP backend).
 
 ## forensic-mcp (12 core tools + 14 discipline resources)
 

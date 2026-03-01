@@ -70,11 +70,13 @@ The LLM records findings through forensic-mcp's `record_finding()` tool. The int
 |-------|-------------|
 | `title` | Short description of the finding |
 | `description` | Detailed explanation with evidence |
-| `confidence` | HIGH, MEDIUM, or LOW |
+| `confidence` | HIGH, MEDIUM, LOW, or SPECULATIVE |
+| `confidence_justification` | Reasoning for the confidence level |
 | `mitre_ids` | MITRE ATT&CK technique IDs |
 | `iocs` | Indicators of compromise |
 | `evidence_ids` | References to tool execution evidence IDs |
-| `supporting_commands` | Shell commands used (for SHELL provenance) |
+| `artifacts` | Evidence artifacts — source file, extraction command, raw content, content type, purpose |
+| `supporting_commands` | Shell commands used (for SHELL provenance) — command, output excerpt, purpose |
 
 ### Provenance Enforcement
 
@@ -165,6 +167,33 @@ aiir approve F-alice-003 --interpretation "Confirmed malicious based on YARA mat
 ```bash
 aiir reject F-alice-004 --reason "Insufficient evidence, timestamp inconsistency"
 ```
+
+### Dashboard Review
+
+The case-dashboard provides a web-based interface for reviewing findings. Open it with:
+
+```bash
+aiir dashboard
+```
+
+The dashboard displays all findings with inline editing for:
+
+- **Confidence** — select HIGH / MEDIUM / LOW / SPECULATIVE
+- **Justification** — explain the confidence level
+- **Observation** — what was observed
+- **Interpretation** — what it means
+- **MITRE IDs** — ATT&CK technique references
+- **IOCs** — indicators of compromise
+
+Findings that include `artifacts` (source files, extraction commands, raw content) display them in the Evidence section. Findings without artifacts fall back to showing `supporting_commands`.
+
+Edits are saved to `pending-reviews.json` in the case directory. To apply them:
+
+```bash
+aiir approve --review
+```
+
+This applies all pending edits, recomputes content hashes, and updates HMAC signatures. The `pending-reviews.json` file is removed after successful application.
 
 ## Report Generation
 
