@@ -305,7 +305,7 @@ def find_draft_item(
 
 # --- Content hashing ---
 
-_HASH_EXCLUDE_KEYS = {
+HASH_EXCLUDE_KEYS = {
     "status",
     "approved_at",
     "approved_by",
@@ -327,9 +327,20 @@ def compute_content_hash(item: dict) -> str:
     Volatile fields (status, approval metadata, content_hash itself, modified_at)
     are excluded so the hash covers only the substantive content.
     """
-    hashable = {k: v for k, v in item.items() if k not in _HASH_EXCLUDE_KEYS}
+    hashable = {k: v for k, v in item.items() if k not in HASH_EXCLUDE_KEYS}
     canonical = json.dumps(hashable, sort_keys=True, default=str)
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def hmac_text(item: dict) -> str:
+    """Canonical text for HMAC signing.
+
+    Signs all substantive fields — everything except volatile/derived
+    metadata. Same exclusion set as compute_content_hash(). Used for
+    both findings and timeline events (same formula, no type branching).
+    """
+    hashable = {k: v for k, v in item.items() if k not in HASH_EXCLUDE_KEYS}
+    return json.dumps(hashable, sort_keys=True, default=str)
 
 
 # --- Integrity verification ---

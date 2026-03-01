@@ -82,7 +82,7 @@ def verify_items(case_id: str, pin: str, salt: bytes, examiner: str) -> list[dic
     for entry in entries:
         if entry.get("approved_by") != examiner:
             continue
-        expected = compute_hmac(derived_key, entry.get("description_snapshot", ""))
+        expected = compute_hmac(derived_key, entry.get("content_snapshot", ""))
         actual = entry.get("hmac", "")
         results.append(
             {
@@ -128,7 +128,7 @@ def rehmac_entries(
             updated.append(entry)
             continue
         # Verify old HMAC first
-        desc = entry.get("description_snapshot", "")
+        desc = entry.get("content_snapshot", "")
         expected = compute_hmac(old_key, desc)
         actual = entry.get("hmac", "")
         if not hmac.compare_digest(expected, actual):

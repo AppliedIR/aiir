@@ -64,11 +64,21 @@ def test_approve_writes_ledger_entry(case_dir, config_path, tmp_path):
     assert len(entries) == 1
     assert entries[0]["finding_id"] == "F-alice-20260226-001"
     assert entries[0]["type"] == "finding"
-    # HMAC signs observation + "\n" + interpretation for findings
-    assert (
-        entries[0]["description_snapshot"]
-        == "Suspicious process found on host A\nLikely lateral movement"
+    # HMAC signs all substantive fields as canonical JSON
+    import json
+
+    expected = json.dumps(
+        {
+            "id": "F-alice-20260226-001",
+            "observation": "Suspicious process found on host A",
+            "interpretation": "Likely lateral movement",
+            "title": "Suspicious process",
+        },
+        sort_keys=True,
+        default=str,
     )
+    assert entries[0]["content_snapshot"] == expected
+    assert entries[0]["hmac_version"] == 2
     assert entries[0]["approved_by"] == "alice"
     assert entries[0]["case_id"] == "INC-2026-TEST"
     assert len(entries[0]["hmac"]) == 64  # hex SHA-256

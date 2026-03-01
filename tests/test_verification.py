@@ -52,7 +52,7 @@ def test_write_and_read_ledger(tmp_path):
         "finding_id": "F-001",
         "type": "finding",
         "hmac": "deadbeef",
-        "description_snapshot": "Test finding",
+        "content_snapshot": "Test finding",
         "approved_by": "alice",
         "approved_at": "2026-01-01T00:00:00Z",
         "case_id": "INC-2026-001",
@@ -61,7 +61,7 @@ def test_write_and_read_ledger(tmp_path):
     entries = read_ledger("INC-2026-001")
     assert len(entries) == 1
     assert entries[0]["finding_id"] == "F-001"
-    assert entries[0]["description_snapshot"] == "Test finding"
+    assert entries[0]["content_snapshot"] == "Test finding"
 
 
 def test_verify_items_correct_pin(tmp_path):
@@ -75,7 +75,7 @@ def test_verify_items_correct_pin(tmp_path):
         "finding_id": "F-001",
         "type": "finding",
         "hmac": compute_hmac(key, desc),
-        "description_snapshot": desc,
+        "content_snapshot": desc,
         "approved_by": "alice",
         "approved_at": "2026-01-01T00:00:00Z",
         "case_id": "INC-2026-001",
@@ -100,7 +100,7 @@ def test_verify_items_wrong_pin(tmp_path):
         "finding_id": "F-001",
         "type": "finding",
         "hmac": compute_hmac(key, desc),
-        "description_snapshot": desc,
+        "content_snapshot": desc,
         "approved_by": "alice",
         "approved_at": "2026-01-01T00:00:00Z",
         "case_id": "INC-2026-001",
@@ -124,7 +124,7 @@ def test_verify_items_tampered_description(tmp_path):
         "finding_id": "F-001",
         "type": "finding",
         "hmac": compute_hmac(key, original_desc),
-        "description_snapshot": tampered_desc,  # Tampered
+        "content_snapshot": tampered_desc,  # Tampered
         "approved_by": "alice",
         "approved_at": "2026-01-01T00:00:00Z",
         "case_id": "INC-2026-001",
@@ -141,7 +141,7 @@ def test_copy_ledger_to_case(tmp_path):
     entry = {
         "finding_id": "F-001",
         "hmac": "test",
-        "description_snapshot": "test",
+        "content_snapshot": "test",
         "approved_by": "alice",
         "case_id": "INC-2026-001",
     }
@@ -168,7 +168,7 @@ def test_rehmac_entries(tmp_path):
         "finding_id": "F-001",
         "type": "finding",
         "hmac": compute_hmac(old_key, desc),
-        "description_snapshot": desc,
+        "content_snapshot": desc,
         "approved_by": "alice",
         "approved_at": "2026-01-01T00:00:00Z",
         "case_id": "INC-2026-001",
