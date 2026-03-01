@@ -129,6 +129,7 @@ graph TB
         FR["forensic-rag-mcp<br/>Knowledge search"]
         WTR["windows-triage-mcp<br/>Baseline validation"]
         OC["opencti-mcp<br/>Threat intelligence"]
+        CD["case-dashboard<br/>Review UI"]
         FK["forensic-knowledge<br/>(shared YAML data package)"]
         CASE["Case Directory"]
 
@@ -139,11 +140,13 @@ graph TB
         GW -->|stdio| FR
         GW -->|stdio| WTR
         GW -->|stdio| OC
+        GW --> CD
         FM --> FK
         SM --> FK
         FM --> CASE
         CM --> CASE
         RM --> CASE
+        CD --> CASE
         CLI --> CASE
     end
 
@@ -166,25 +169,36 @@ In Path 1 (co-located), the LLM client also runs on SIFT and no SSH is needed. I
 
 ### Human-in-the-Loop Workflow
 
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI. Approvals require a PIN to prevent AI from overriding human review.
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI or the web dashboard. Approvals require a PIN to prevent AI from overriding human review.
+
+![Dashboard](docs/images/dashboard.png)
 
 ```mermaid
 sequenceDiagram
     participant AI as LLM + MCP Tools
     participant Case as Case Directory
+    participant Dash as Dashboard (browser)
     participant Human as aiir CLI (human)
 
     AI->>Case: record_finding() -> DRAFT
     AI->>Case: record_timeline_event() -> DRAFT
     Note over Case: Staged for review
 
-    Human->>Case: aiir approve (interactive review)
-    Human-->>Case: Edit, add note, or approve as-is
+    alt CLI review
+        Human->>Case: aiir approve (interactive review)
+        Human-->>Case: Edit, add note, or approve as-is
+    else Dashboard review
+        Dash->>Case: Edit findings in browser
+        Note over Case: pending-reviews.json
+        Human->>Case: aiir approve --review
+    end
     Human->>Case: APPROVED or REJECTED
 
     Note over Case: Only APPROVED items<br/>appear in reports
     Human->>Case: aiir report --full
 ```
+
+The **dashboard** provides a visual interface for reviewing findings with inline editing — examiners can modify confidence, justification, observation, interpretation, MITRE IDs, and IOCs directly in the browser. Edits are saved to `pending-reviews.json` and applied as a batch with `aiir approve --review`, which recomputes content hashes and HMAC signatures.
 
 ### Where Things Run
 
@@ -198,6 +212,7 @@ sequenceDiagram
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI (10 tools) |
+| case-dashboard | SIFT | (via gateway) | Web-based finding review and triage UI |
 | wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows (7 tools) |
 | aiir CLI | SIFT | -- | Human-only: approve/reject findings, review cases, manage evidence. Remote examiners access via SSH. |
 | forensic-knowledge | anywhere | -- | Shared YAML data package (tools, artifacts, discipline) |
@@ -413,6 +428,7 @@ cases/INC-2026-0219/
 ├── actions.jsonl                # Investigative actions (append-only)
 ├── evidence_access.jsonl        # Chain-of-custody log
 ├── approvals.jsonl              # Approval audit trail
+├── pending-reviews.json         # Dashboard edits awaiting approval
 └── audit/
     ├── forensic-mcp.jsonl
     ├── sift-mcp.jsonl
@@ -493,9 +509,10 @@ aiir approve F-alice-001 --note "Malware family unconfirmed"  # Approve with exa
 aiir approve --by jane                                   # Filter to IDs with jane's examiner prefix
 aiir approve --findings-only                             # Skip timeline events
 aiir approve --timeline-only                             # Skip findings
+aiir approve --review                                    # Apply pending dashboard edits
 ```
 
-Requires PIN entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key.
+Requires PIN entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the dashboard (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file.
 
 #### reject
 
@@ -544,6 +561,14 @@ Verification requires the examiner's PIN to derive the HMAC key and confirm inte
 ### All Commands
 
 The remaining commands can also be performed through MCP tools (case-mcp, forensic-mcp, report-mcp) when working with an MCP-connected client. The CLI equivalents are listed here for reference and for use outside MCP sessions.
+
+#### dashboard
+
+```
+aiir dashboard                                           # Open case review dashboard in browser
+```
+
+Opens the case-dashboard web UI for the active case. The dashboard displays all findings with inline editing for confidence, justification, observation, interpretation, MITRE IDs, and IOCs. Edits are saved to `pending-reviews.json` in the case directory. Run `aiir approve --review` to apply pending edits.
 
 #### case
 
@@ -723,7 +748,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 
 | Repo | Purpose |
 |------|---------|
-| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 10 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
+| [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 11 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, case-dashboard, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
@@ -745,8 +770,9 @@ and runs a connectivity smoke test.
 
 Both modes share the same Python venv, triage databases, and RAG index. Full
 AIIR adds the gateway (7 MCP backends behind one HTTP endpoint), 4 additional
-MCP servers (forensic-mcp, case-mcp, report-mcp, sift-mcp), structured case
-management, sandbox enforcement, and HMAC-signed approvals.
+MCP servers (forensic-mcp, case-mcp, report-mcp, sift-mcp), a web-based review
+dashboard, structured case management, sandbox enforcement, and HMAC-signed
+approvals.
 
 To upgrade, run `setup-sift.sh` from your existing sift-mcp clone. The
 installer reuses the existing venv and databases. Lite case data (markdown
