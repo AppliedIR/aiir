@@ -207,6 +207,29 @@ def _show_findings_detail(case_dir: Path) -> None:
                 else:
                     print(f"    [NONE]  {eid} {_EM_DASH} no audit record")
 
+        # Artifacts (raw evidence)
+        artifacts = f.get("artifacts", [])
+        if artifacts:
+            print("\n  Artifacts:")
+            for i, art in enumerate(artifacts, 1):
+                source = art.get("source", "?")
+                extraction = art.get("extraction", "")
+                content = art.get("content", "")
+                content_type = art.get("content_type", "")
+                badge = f" [{content_type}]" if content_type else ""
+                print(f"    [{i}]{badge} {source}")
+                if extraction:
+                    print(f"        $ {extraction}")
+                if content:
+                    display = content[:200]
+                    if len(content) > 200:
+                        display += "..."
+                    # Indent multiline content
+                    lines = display.split("\n")
+                    print(f"        {lines[0]}")
+                    for line in lines[1:]:
+                        print(f"        {line}")
+
         # Supporting commands
         supporting = f.get("supporting_commands", [])
         if supporting:
