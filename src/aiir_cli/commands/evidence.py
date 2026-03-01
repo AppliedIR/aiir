@@ -161,9 +161,7 @@ def register_evidence_data(
     if not in_case:
         # Resolved path is outside — check unresolved (symlink in case dir)
         evidence_path_abs = (
-            evidence_path
-            if evidence_path.is_absolute()
-            else case_dir / evidence_path
+            evidence_path if evidence_path.is_absolute() else case_dir / evidence_path
         )
         normalized = Path(os.path.normpath(evidence_path_abs))
         case_norm = Path(os.path.normpath(case_resolved))
@@ -206,9 +204,7 @@ def register_evidence_data(
             else:
                 # Same path, different hash — file changed. Update entry.
                 existing["sha256"] = file_hash
-                existing["registered_at"] = datetime.now(
-                    timezone.utc
-                ).isoformat()
+                existing["registered_at"] = datetime.now(timezone.utc).isoformat()
                 existing["registered_by"] = examiner
                 if description:
                     existing["description"] = description
