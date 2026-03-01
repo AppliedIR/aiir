@@ -73,9 +73,7 @@ _FORENSIC_DENY_RULES = {
 # Old forensic deny rules — removed during migration re-deploy
 _OLD_FORENSIC_DENY_RULES = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
 
-# AIIR backend names — used for uninstall identification.
-# External MCPs (zeltser-ir-writing, microsoft-learn) are intentionally excluded
-# so uninstall does not remove MCPs the user may have configured independently.
+# AIIR MCP names — used for uninstall identification.
 _AIIR_BACKEND_NAMES = {
     "forensic-mcp",
     "case-mcp",
@@ -87,6 +85,8 @@ _AIIR_BACKEND_NAMES = {
     "wintools-mcp",
     "remnux-mcp",
     "aiir",
+    "zeltser-ir-writing",
+    "microsoft-learn",
 }
 
 
@@ -1010,6 +1010,15 @@ def _uninstall_sift() -> None:
                 p = rules_dir / name
                 if p.is_file():
                     p.unlink()
+            # Also remove commands (welcome.md)
+            commands_dir = Path.home() / ".claude" / "commands"
+            welcome = commands_dir / "welcome.md"
+            if welcome.is_file():
+                welcome.unlink()
+                try:
+                    commands_dir.rmdir()
+                except OSError:
+                    pass  # Other files exist
             print("      Removed discipline docs.")
         else:
             print("      Skipped.")
@@ -1052,6 +1061,12 @@ def _uninstall_sift() -> None:
             print("      Removed.")
         else:
             print("      Skipped.")
+
+    # Generated config file
+    mcp_config = Path.home() / "aiir-mcp-config.json"
+    if mcp_config.is_file():
+        mcp_config.unlink()
+        print("      Removed ~/aiir-mcp-config.json")
 
     print("\nUninstall complete.")
 
