@@ -514,6 +514,7 @@ def _merge_items(
         "modified_at",
         "created_by",
         "examiner",
+        "provenance",
     }
 
     for item in incoming:

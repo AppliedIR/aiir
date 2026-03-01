@@ -627,6 +627,11 @@ def _display_item(item: dict) -> None:
 
 # --- Dashboard review mode ---
 
+_DELTA_EDITABLE_FIELDS = {
+    "title", "observation", "interpretation", "confidence",
+    "confidence_justification", "mitre_ids", "iocs",
+}
+
 _RED = "\033[31m"
 _GREEN = "\033[32m"
 _YELLOW = "\033[33m"
@@ -879,9 +884,11 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
         if mod_conflict:
             continue
 
-        # Apply modifications
+        # Apply modifications (only editable fields)
         if modifications:
             for field, mod in modifications.items():
+                if field not in _DELTA_EDITABLE_FIELDS:
+                    continue
                 item[field] = mod.get("modified")
                 item.setdefault("examiner_modifications", {})[field] = {
                     "original": mod.get("original"),
