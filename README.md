@@ -22,10 +22,20 @@ a RAG index over 22,000+ forensic knowledge records. This one-time setup
 takes approximately 15-30 minutes depending on internet speed and CPU.
 Subsequent runs reuse existing databases and index.
 
-```bash
+```
 claude
 /welcome
 ```
+
+To update an existing AIIR Lite installation, simply run:
+
+```
+cd sift-mcp && git pull
+./quickstart-lite.sh
+```
+
+The installer is idempotent — it reuses the existing venv, skips databases
+and RAG index if already present, and redeploys config files.
 
 #### AIIR Lite
 
@@ -419,14 +429,14 @@ cases/INC-2026-0219/
 
 Requires Python 3.11+ and sudo access.
 
-```bash
+```
 # One-command quickstart (SIFT workstation)
 curl -fsSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/aiir-quickstart.sh && bash /tmp/aiir-quickstart.sh
 ```
 
 Or step by step:
 
-```bash
+```
 git clone https://github.com/AppliedIR/sift-mcp.git && cd sift-mcp
 ./setup-sift.sh
 ```
@@ -437,7 +447,7 @@ For tier selection (quick, recommended, custom) or remote access, run `setup-sif
 
 ### Windows Forensic Workstation (optional)
 
-```powershell
+```
 # Option 1: git clone
 git clone https://github.com/AppliedIR/wintools-mcp.git; cd wintools-mcp
 
@@ -448,7 +458,7 @@ Expand-Archive wintools.zip -DestinationPath .; cd wintools-mcp-main
 
 Then run the installer:
 
-```powershell
+```
 .\scripts\setup-windows.ps1
 ```
 
@@ -667,7 +677,7 @@ aiir setup client --sift=SIFT_IP:4508 --windows=WIN_IP:4624               # SIFT
 
 For remote orchestrator setups (Path 2), remote examiners run a platform-specific setup script that creates a `~/aiir/` workspace with MCP config, forensic controls, and discipline docs:
 
-```bash
+```
 # Linux
 curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-linux.sh \
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
@@ -677,7 +687,7 @@ curl -sSL https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-mac
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
 
-```powershell
+```
 # Windows
 Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/aiir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
 .\setup-client-windows.ps1 -Sift https://SIFT_IP:4508 -Code XXXX-XXXX
@@ -729,18 +739,6 @@ aiir update --no-restart # Update without restarting the gateway
 The update command pulls the latest code from both repos (sift-mcp and aiir),
 reinstalls all packages, redeploys forensic controls, restarts the gateway,
 and runs a connectivity smoke test.
-
-### AIIR Lite
-
-Re-run the installer from an updated clone:
-
-```bash
-cd sift-mcp && git pull
-./quickstart-lite.sh
-```
-
-The installer is idempotent — it reuses the existing venv, skips databases
-and RAG index if already present, and redeploys config files.
 
 ## Upgrading from Lite to Full
 
