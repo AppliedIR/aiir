@@ -27,10 +27,11 @@ claude
 /welcome
 ```
 
-To update an existing AIIR Lite installation, simply run:
+To update an existing AIIR Lite installation, re-run the installer from an updated clone (first step changes into wherever you installed the sift-mcp repo on initial installation):
 
 ```
-cd sift-mcp && git pull
+cd sift-mcp
+git pull
 ./quickstart-lite.sh
 ```
 
