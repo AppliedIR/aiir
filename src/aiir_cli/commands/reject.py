@@ -36,7 +36,10 @@ def cmd_reject(args, identity: dict) -> None:
         return
 
     if not args.ids:
-        print("Error: provide IDs to reject, or use --review for interactive mode.", file=sys.stderr)
+        print(
+            "Error: provide IDs to reject, or use --review for interactive mode.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     findings = load_findings(case_dir)
@@ -93,9 +96,7 @@ def cmd_reject(args, identity: dict) -> None:
     print(msg)
 
 
-def _interactive_reject(
-    case_dir: Path, identity: dict, config_path: Path
-) -> None:
+def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> None:
     """Walk through DRAFT items, prompting to reject or skip each."""
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)

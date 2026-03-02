@@ -628,8 +628,13 @@ def _display_item(item: dict) -> None:
 # --- Dashboard review mode ---
 
 _DELTA_EDITABLE_FIELDS = {
-    "title", "observation", "interpretation", "confidence",
-    "confidence_justification", "mitre_ids", "iocs",
+    "title",
+    "observation",
+    "interpretation",
+    "confidence",
+    "confidence_justification",
+    "mitre_ids",
+    "iocs",
 }
 
 _RED = "\033[31m"

@@ -96,7 +96,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--reason", default="", help="Reason for rejection (optional)"
     )
     p_reject.add_argument(
-        "--review", action="store_true", help="Interactive review: walk through DRAFT items"
+        "--review",
+        action="store_true",
+        help="Interactive review: walk through DRAFT items",
     )
     p_reject.add_argument(
         "--examiner", dest="examiner_override", help="Override examiner identity"
@@ -182,7 +184,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     # exec
     p_exec = sub.add_parser("exec", help="Execute forensic command with audit trail")
-    p_exec.add_argument("--purpose", required=True, help="Why this command is being run (must appear BEFORE '--')")
+    p_exec.add_argument(
+        "--purpose",
+        required=True,
+        help="Why this command is being run (must appear BEFORE '--')",
+    )
     p_exec.add_argument(
         "cmd", nargs=argparse.REMAINDER, help="Command to execute (after --)"
     )
@@ -265,7 +271,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_client.add_argument(
         "--client",
-        choices=["claude-code", "claude-desktop", "cursor", "librechat", "chatgpt", "other"],
+        choices=[
+            "claude-code",
+            "claude-desktop",
+            "cursor",
+            "librechat",
+            "chatgpt",
+            "other",
+        ],
         help="Target LLM client",
     )
     p_client.add_argument(
