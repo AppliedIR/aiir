@@ -112,15 +112,15 @@ def _show_todos(case_dir: Path, open_only: bool = False) -> None:
         print("No TODOs found.")
         return
 
-    print(f"{'ID':<20} {'Status':<11} {'Priority':<9} {'Assignee':<12} Description")
+    print(f"{'ID':<16} {'Status':<11} {'Priority':<9} {'Assignee':<12} Description")
     print("-" * 90)
     for t in todos:
         todo_id = t["todo_id"]
         status = t.get("status", "open")
         priority = t.get("priority", "medium")
         assignee = t.get("assignee", "") or "-"
-        desc = t.get("description", "")[:35]
-        print(f"{todo_id:<20} {status:<11} {priority:<9} {assignee:<12} {desc}")
+        desc = t.get("description", "")[:40]
+        print(f"{todo_id:<16} {status:<11} {priority:<9} {assignee:<12} {desc}")
 
     if any(t.get("notes") for t in todos):
         print()

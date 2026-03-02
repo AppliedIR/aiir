@@ -25,6 +25,20 @@ def cmd_reject(args, identity: dict) -> None:
     """Reject specific findings/timeline events."""
     case_dir = get_case_dir(getattr(args, "case", None))
     config_path = Path.home() / ".aiir" / "config.yaml"
+
+    review = getattr(args, "review", False)
+    if review and args.ids:
+        print("Error: --review cannot be used with specific IDs.", file=sys.stderr)
+        sys.exit(1)
+
+    if review:
+        _interactive_reject(case_dir, identity, config_path)
+        return
+
+    if not args.ids:
+        print("Error: provide IDs to reject, or use --review for interactive mode.", file=sys.stderr)
+        sys.exit(1)
+
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)
     to_reject = []
@@ -77,6 +91,84 @@ def cmd_reject(args, identity: dict) -> None:
     if reason:
         msg += f" — reason: {reason}"
     print(msg)
+
+
+def _interactive_reject(
+    case_dir: Path, identity: dict, config_path: Path
+) -> None:
+    """Walk through DRAFT items, prompting to reject or skip each."""
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
+
+    drafts = [f for f in findings if f.get("status") == "DRAFT"]
+    draft_events = [t for t in timeline if t.get("status") == "DRAFT"]
+    all_items = drafts + draft_events
+
+    if not all_items:
+        print("No DRAFT items to review.")
+        return
+
+    print(f"Reviewing {len(all_items)} DRAFT item(s) for rejection...\n")
+
+    mode, _pin = require_confirmation(config_path, identity["examiner"])
+
+    to_reject: list[tuple[str, str]] = []  # (id, reason)
+
+    for item in all_items:
+        _display_item(item)
+        while True:
+            try:
+                choice = input("  [r]eject / [s]kip / [q]uit? ").strip().lower()
+            except EOFError:
+                choice = "q"
+            if choice in ("r", "reject"):
+                try:
+                    reason = input("  Reason (optional): ").strip()
+                except EOFError:
+                    reason = ""
+                to_reject.append((item["id"], reason))
+                print("  -> REJECT")
+                break
+            elif choice in ("s", "skip"):
+                print("  -> skip (remains DRAFT)")
+                break
+            elif choice in ("q", "quit"):
+                print("  Stopping review.")
+                break
+            else:
+                print("  Enter r, s, or q.")
+        if choice in ("q", "quit"):
+            break
+
+    if not to_reject:
+        print("\nNo items rejected.")
+        return
+
+    # Reload and apply
+    findings = load_findings(case_dir)
+    timeline = load_timeline(case_dir)
+    now = datetime.now(timezone.utc).isoformat()
+    rejected = []
+
+    for item_id, reason in to_reject:
+        item = find_draft_item(item_id, findings, timeline)
+        if item is None:
+            continue
+        item["status"] = "REJECTED"
+        item["rejected_at"] = now
+        item["rejected_by"] = identity["examiner"]
+        item["modified_at"] = now
+        if reason:
+            item["rejection_reason"] = reason
+        write_approval_log(
+            case_dir, item_id, "REJECTED", identity, reason=reason, mode=mode
+        )
+        rejected.append(item_id)
+
+    save_findings(case_dir, findings)
+    save_timeline(case_dir, timeline)
+
+    print(f"\nRejected {len(rejected)} item(s): {', '.join(rejected)}")
 
 
 def _display_item(item: dict) -> None:

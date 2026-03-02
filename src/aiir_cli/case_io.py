@@ -19,23 +19,22 @@ import yaml
 _EXAMINER_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,19}$")
 
 
+class CaseError(Exception):
+    """Raised when case directory cannot be resolved or validation fails."""
+
+
 def _validate_case_id(case_id: str) -> None:
     """Validate case_id to prevent path traversal."""
     if not case_id:
-        print("Case ID cannot be empty", file=sys.stderr)
-        sys.exit(1)
+        raise CaseError("Case ID cannot be empty")
     if ".." in case_id or "/" in case_id or "\\" in case_id:
-        print(
-            f"Invalid case ID (path traversal characters): {case_id}", file=sys.stderr
-        )
-        sys.exit(1)
+        raise CaseError(f"Invalid case ID (path traversal characters): {case_id}")
 
 
 def _validate_examiner(examiner: str) -> None:
     """Validate examiner slug: lowercase alphanumeric + hyphens, max 20 chars."""
     if not examiner or not _EXAMINER_RE.match(examiner):
-        print(f"Invalid examiner slug: {examiner!r}", file=sys.stderr)
-        sys.exit(1)
+        raise CaseError(f"Invalid examiner slug: {examiner!r}")
 
 
 def _atomic_write(path: Path, content: str) -> None:
@@ -80,8 +79,7 @@ def get_case_dir(case_id: str | None = None) -> Path:
         cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
         case_dir = cases_dir / case_id
         if not case_dir.exists():
-            print(f"Case not found: {case_id}", file=sys.stderr)
-            sys.exit(1)
+            raise CaseError(f"Case not found: {case_id}")
         return case_dir
 
     # Check AIIR_CASE_DIR env var
@@ -89,8 +87,7 @@ def get_case_dir(case_id: str | None = None) -> Path:
     if env_dir:
         case_dir = Path(env_dir)
         if not case_dir.is_dir():
-            print(f"Error: case directory does not exist: {case_dir}", file=sys.stderr)
-            sys.exit(1)
+            raise CaseError(f"Case directory does not exist: {case_dir}")
         return case_dir
 
     # Check ~/.aiir/active_case pointer (absolute path or legacy bare ID)
@@ -105,12 +102,10 @@ def get_case_dir(case_id: str | None = None) -> Path:
             cases_dir = Path(os.environ.get("AIIR_CASES_DIR", "cases"))
             case_dir = cases_dir / content
         if not case_dir.is_dir():
-            print(f"Error: case directory does not exist: {case_dir}", file=sys.stderr)
-            sys.exit(1)
+            raise CaseError(f"Case directory does not exist: {case_dir}")
         return case_dir
 
-    print("No active case. Use --case <id> or set AIIR_CASE_DIR.", file=sys.stderr)
-    sys.exit(1)
+    raise CaseError("No active case. Use --case <id> or set AIIR_CASE_DIR.")
 
 
 def get_examiner(case_dir: Path | None = None) -> str:

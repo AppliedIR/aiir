@@ -505,8 +505,8 @@ def cmd_evidence_log(args, identity: dict) -> None:
         action = e.get("action", "?")
         examiner = e.get("examiner", "?")
         detail = e.get("detail", "")
-        if len(detail) > 40:
-            detail = detail[:37] + "..."
+        if len(detail) > 80:
+            detail = detail[:77] + "..."
         print(f"{ts:<22} {action:<10} {examiner:<12} {detail}")
 
     print(f"\n{len(entries)} entries")

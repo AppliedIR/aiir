@@ -15,6 +15,7 @@ import sys
 import argcomplete
 
 from aiir_cli import __version__
+from aiir_cli.case_io import CaseError
 from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.config import cmd_config
@@ -90,9 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     # reject
     p_reject = sub.add_parser("reject", help="Reject staged findings/timeline events")
-    p_reject.add_argument("ids", nargs="+", help="Finding/event IDs to reject")
+    p_reject.add_argument("ids", nargs="*", help="Finding/event IDs to reject")
     p_reject.add_argument(
         "--reason", default="", help="Reason for rejection (optional)"
+    )
+    p_reject.add_argument(
+        "--review", action="store_true", help="Interactive review: walk through DRAFT items"
     )
     p_reject.add_argument(
         "--examiner", dest="examiner_override", help="Override examiner identity"
@@ -178,7 +182,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # exec
     p_exec = sub.add_parser("exec", help="Execute forensic command with audit trail")
-    p_exec.add_argument("--purpose", required=True, help="Purpose of command execution")
+    p_exec.add_argument("--purpose", required=True, help="Why this command is being run (must appear BEFORE '--')")
     p_exec.add_argument(
         "cmd", nargs=argparse.REMAINDER, help="Command to execute (after --)"
     )
@@ -261,7 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_client.add_argument(
         "--client",
-        choices=["claude-code", "claude-desktop", "cursor", "librechat"],
+        choices=["claude-code", "claude-desktop", "cursor", "librechat", "chatgpt", "other"],
         help="Target LLM client",
     )
     p_client.add_argument(
@@ -488,7 +492,11 @@ def main() -> None:
 
     handler = dispatch.get(args.command)
     if handler:
-        handler(args, identity)
+        try:
+            handler(args, identity)
+        except CaseError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
     else:
         parser.print_help()
         sys.exit(1)
@@ -909,6 +917,11 @@ def _case_close(args, identity: dict) -> None:
     if not case_dir.exists():
         print(f"Case not found: {case_id}", file=sys.stderr)
         sys.exit(1)
+
+    confirm = input(f"Close case {case_id}? [y/N] ")
+    if confirm.lower() != "y":
+        print("Cancelled.")
+        return
 
     meta_file = case_dir / "CASE.yaml"
     with open(meta_file) as f:

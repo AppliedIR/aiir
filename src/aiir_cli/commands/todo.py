@@ -42,7 +42,7 @@ def _todo_list(case_dir, args) -> None:
         return
 
     # Table header
-    print(f"{'ID':<12} {'Status':<11} {'Priority':<9} {'Assignee':<12} Description")
+    print(f"{'ID':<16} {'Status':<11} {'Priority':<9} {'Assignee':<12} Description")
     print("-" * 80)
     for t in todos:
         todo_id = t["todo_id"]
@@ -50,7 +50,7 @@ def _todo_list(case_dir, args) -> None:
         priority = t.get("priority", "medium")
         assignee = t.get("assignee", "") or "-"
         desc = t.get("description", "")[:40]
-        print(f"{todo_id:<12} {status:<11} {priority:<9} {assignee:<12} {desc}")
+        print(f"{todo_id:<16} {status:<11} {priority:<9} {assignee:<12} {desc}")
 
 
 def _todo_add(case_dir, args, identity: dict) -> None:

@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from aiir_cli.case_io import (
+    CaseError,
     compute_content_hash,
     export_bundle,
     get_case_dir,
@@ -45,7 +46,7 @@ class TestGetCaseDir:
         monkeypatch.delenv("AIIR_CASE_DIR", raising=False)
         monkeypatch.delenv("AIIR_CASES_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        with pytest.raises(SystemExit):
+        with pytest.raises(CaseError):
             get_case_dir()
 
 
@@ -134,17 +135,17 @@ class TestPathTraversal:
 
     def test_case_id_dotdot_rejected(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
-        with pytest.raises(SystemExit):
+        with pytest.raises(CaseError):
             get_case_dir("../../etc")
 
     def test_case_id_slash_rejected(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
-        with pytest.raises(SystemExit):
+        with pytest.raises(CaseError):
             get_case_dir("foo/bar")
 
     def test_case_id_backslash_rejected(self, tmp_path, monkeypatch):
         monkeypatch.setenv("AIIR_CASES_DIR", str(tmp_path))
-        with pytest.raises(SystemExit):
+        with pytest.raises(CaseError):
             get_case_dir("foo\\bar")
 
     def test_import_bundle_merges(self, case_dir, monkeypatch):
