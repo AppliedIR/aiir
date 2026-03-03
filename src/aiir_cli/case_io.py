@@ -483,6 +483,16 @@ def import_bundle(case_dir: Path, bundle: dict | list) -> dict:
     }
 
 
+def _parse_ts(ts: str) -> datetime:
+    """Parse ISO timestamp, normalizing Z to +00:00."""
+    if ts.endswith("Z"):
+        ts = ts[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
 def _merge_items(
     case_dir: Path, filename: str, incoming: list[dict], id_field: str
 ) -> dict:
@@ -534,7 +544,7 @@ def _merge_items(
                 continue
             inc_ts = item.get("modified_at", item.get("staged", ""))
             loc_ts = existing.get("modified_at", existing.get("staged", ""))
-            if inc_ts > loc_ts:
+            if _parse_ts(inc_ts) > _parse_ts(loc_ts):
                 idx = next(i for i, x in enumerate(local) if x.get(id_field) == item_id)
                 local[idx] = cleaned
                 local_by_id[item_id] = cleaned

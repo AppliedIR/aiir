@@ -34,6 +34,14 @@ def cmd_join(args, identity: dict) -> None:
     ca_cert = getattr(args, "ca_cert", None) or _find_ca_cert()
     verify = ca_cert if ca_cert else False
 
+    if not verify and sift_url.startswith("https"):
+        print(
+            "WARNING: TLS certificate verification disabled. "
+            "Connection is encrypted but server identity is not verified. "
+            "Use --ca-cert to specify a CA certificate.",
+            file=sys.stderr,
+        )
+
     # POST to /api/v1/setup/join
     try:
         import requests
@@ -112,12 +120,20 @@ def cmd_setup_join_code(args, identity: dict) -> None:
         return
 
     expires = getattr(args, "expires", None) or 2
+    ca = _find_ca_cert()
+    verify = ca if ca else False
+    if not verify and gateway_url.startswith("https"):
+        print(
+            "WARNING: TLS certificate verification disabled for join-code request. "
+            "Use ~/.aiir/tls/ca-cert.pem to enable verification.",
+            file=sys.stderr,
+        )
     try:
         resp = requests.post(
             f"{gateway_url}/api/v1/setup/join-code",
             headers={"Authorization": f"Bearer {token}"},
             json={"expires_hours": expires},
-            verify=False,
+            verify=verify,
             timeout=10,
         )
     except requests.exceptions.ConnectionError as e:
@@ -204,9 +220,13 @@ def _join_code_urllib(gateway_url, token, args):
     expires = getattr(args, "expires", None) or 2
     payload = json.dumps({"expires_hours": expires}).encode("utf-8")
 
+    ca = _find_ca_cert()
     ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
+    if not ca:
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    else:
+        ctx.load_verify_locations(ca)
 
     req = urllib.request.Request(
         f"{gateway_url}/api/v1/setup/join-code",

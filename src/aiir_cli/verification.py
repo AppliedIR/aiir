@@ -45,6 +45,7 @@ def compute_hmac(derived_key: bytes, description: str) -> str:
 def write_ledger_entry(case_id: str, entry: dict) -> None:
     """Append entry to /var/lib/aiir/verification/{case_id}.jsonl."""
     _validate_case_id(case_id)
+    VERIFICATION_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = VERIFICATION_DIR / f"{case_id}.jsonl"
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")

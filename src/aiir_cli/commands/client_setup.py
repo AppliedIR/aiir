@@ -67,7 +67,9 @@ _FORENSIC_DENY_RULES = {
     "Edit(/var/lib/aiir/**)",
     "Write(/var/lib/aiir/**)",
     "Bash(aiir approve*)",
+    "Bash(*aiir approve*)",
     "Bash(aiir reject*)",
+    "Bash(*aiir reject*)",
     # Control file self-protection (anti-accident, anti-injection)
     "Edit(**/.claude/settings.json)",
     "Write(**/.claude/settings.json)",
