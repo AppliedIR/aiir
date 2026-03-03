@@ -206,7 +206,7 @@ The **dashboard** provides a visual interface for reviewing findings with inline
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
 | forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, discipline (12 tools + 14 resources) |
-| case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration (13 tools) |
+| case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration (14 tools) |
 | report-mcp | SIFT | (via gateway) | Report generation with profiles, IOC aggregation, MITRE mapping (6 tools) |
 | sift-mcp | SIFT | (via gateway) | Denylist-protected forensic tool execution on Linux/SIFT (6 tools) |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |

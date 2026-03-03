@@ -72,7 +72,7 @@ The investigation state machine. Manages findings, timeline events, evidence lis
 
 ### case-mcp
 
-Case lifecycle management. Init, activate, close, migrate, list, status. Evidence registration and verification. Export/import for multi-examiner collaboration. Audit summary. Action and reasoning logging. 13 tools with SAFE/CONFIRM safety tiers.
+Case lifecycle management. Init, activate, close, migrate, list, status. Evidence registration and verification. Export/import for multi-examiner collaboration. Audit summary. Action and reasoning logging. Dashboard access. 14 tools with SAFE/CONFIRM safety tiers.
 
 ### report-mcp
 

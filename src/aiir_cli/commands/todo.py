@@ -1,6 +1,6 @@
 """TODO management commands.
 
-Operates on .audit/todos.json in the active case directory.
+Operates on todos.json in the active case directory.
 """
 
 from __future__ import annotations

@@ -474,9 +474,7 @@ def main() -> None:
         sys.exit(0)
 
     # Identity check on every command
-    flag_override = getattr(args, "examiner_override", None) or getattr(
-        args, "analyst", None
-    )
+    flag_override = getattr(args, "examiner_override", None)
     identity = get_examiner_identity(flag_override)
     warn_if_unconfigured(identity)
 

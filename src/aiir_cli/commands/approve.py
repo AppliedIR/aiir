@@ -409,7 +409,10 @@ def _write_verification_entries(
         try:
             write_ledger_entry(case_id, entry)
         except OSError:
-            pass  # Non-fatal — verification dir may not exist yet
+            print(
+                "WARNING: HMAC verification ledger unavailable — was setup-sift.sh run?",
+                file=sys.stderr,
+            )
 
 
 def _prompt_choice() -> str:

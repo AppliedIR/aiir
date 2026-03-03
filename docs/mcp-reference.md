@@ -1,6 +1,6 @@
 # MCP Reference
 
-70 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine. The case-dashboard is a web UI served by the gateway (not an MCP backend).
+71 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine. The case-dashboard is a web UI served by the gateway (not an MCP backend).
 
 ## forensic-mcp (12 core tools + 14 discipline resources)
 
@@ -51,19 +51,19 @@ These are available as MCP resources by default. Clients without resource suppor
 | `forensic-mcp://investigation-framework` | Full methodology framework |
 | `forensic-mcp://rules` | Investigation rules |
 | `forensic-mcp://checkpoint/{action_type}` | Checkpoint requirements |
+| `forensic-mcp://validation-schema` | Finding validation schema |
 | `forensic-mcp://evidence-standards` | Evidence quality standards |
 | `forensic-mcp://confidence-definitions` | Confidence levels |
 | `forensic-mcp://anti-patterns` | Anti-patterns |
 | `forensic-mcp://evidence-template` | Evidence template |
 | `forensic-mcp://tool-guidance/{tool_name}` | Tool guidance |
 | `forensic-mcp://false-positive-context/{tool_name}/{finding_type}` | False positive context |
-| `forensic-mcp://corroboration-suggestions/{artifact_type}` | Corroboration suggestions |
+| `forensic-mcp://corroboration/{finding_type}` | Corroboration suggestions |
 | `forensic-mcp://playbooks` | Playbook list |
-| `forensic-mcp://playbooks/{playbook_id}` | Specific playbook |
+| `forensic-mcp://playbook/{name}` | Specific playbook |
 | `forensic-mcp://collection-checklist/{artifact_type}` | Collection checklist |
-| `forensic-mcp://discipline-reminders` | Discipline reminders |
 
-## case-mcp (13 tools)
+## case-mcp (14 tools)
 
 Case lifecycle management, evidence operations, export/import, and audit.
 
@@ -82,6 +82,7 @@ Case lifecycle management, evidence operations, export/import, and audit.
 | `record_action` | AUTO | Record an investigative action |
 | `log_reasoning` | AUTO | Log analytical reasoning (audit only, no approval needed) |
 | `log_external_action` | AUTO | Log a non-MCP tool execution |
+| `open_case_dashboard` | SAFE | Open the web-based case dashboard |
 
 **Safety tiers:**
 - **SAFE**: Read-only, no side effects

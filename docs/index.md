@@ -16,7 +16,7 @@ AIIR (AI-Assisted Incident Response) is a forensic investigation platform that c
 |-----------|---------|
 | **sift-gateway** | HTTP gateway aggregating all SIFT-local MCPs behind one endpoint |
 | **forensic-mcp** | Findings, timeline, evidence, TODOs, discipline rules (12 tools + 14 resources) |
-| **case-mcp** | Case lifecycle, evidence management, export/import, audit (13 tools) |
+| **case-mcp** | Case lifecycle, evidence management, export/import, audit (14 tools) |
 | **report-mcp** | Report generation with 6 profile types (6 tools) |
 | **sift-mcp** | Linux forensic tool execution with FK enrichment (6 tools) |
 | **forensic-rag-mcp** | Semantic search across 23K+ forensic knowledge records (3 tools) |
