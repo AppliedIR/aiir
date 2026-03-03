@@ -116,15 +116,39 @@ Alerts are included in the generated report as `verification_alerts`.
 
 ### L9 — Kernel Sandbox (bubblewrap)
 
-Claude Code's sandbox uses bubblewrap (`bwrap`) to isolate Bash commands in Linux namespaces. It enforces filesystem write restrictions (only the working directory is writable) and network isolation (all traffic routed through a proxy with domain allowlists). MCP servers run outside the sandbox with full access. Only Bash commands and their children are confined.
+Claude Code's sandbox uses bubblewrap (`bwrap`) to isolate Bash commands in
+Linux namespaces. It enforces network isolation (`--unshare-net`) and PID
+namespace isolation (`--unshare-pid`), plus filesystem write restrictions
+(only the working directory is writable). MCP servers run outside the sandbox
+with full access. Only Bash commands and their children are confined.
 
-On Ubuntu 24.04+, the default AppArmor setting `kernel.apparmor_restrict_unprivileged_userns=1` blocks bwrap from creating user namespaces. Without a fix, the sandbox fails silently and L9 is non-functional.
+On non-setuid bwrap (all Ubuntu 18.10+), namespace creation requires
+unprivileged user namespace support in the kernel. Multiple mechanisms can
+block this:
 
-`setup-sift.sh` detects this restriction at install time and writes a targeted AppArmor profile at `/etc/apparmor.d/bwrap` that grants only `/usr/bin/bwrap` the `userns` permission. This restores sandbox functionality without weakening kernel hardening for other processes. The profile is removed on uninstall.
+| Mechanism | Versions | Detection |
+|-----------|----------|-----------|
+| AppArmor `restrict_unprivileged_userns` | Ubuntu 23.10+ | sysctl check + AppArmor profile fix |
+| `unprivileged_userns_clone=0` | Any (hardened kernels, cloud images) | sysctl check + persistent fix |
+| Container restrictions | Any | `systemd-detect-virt` + marker files + cgroup check |
+| WSL1 | Any | `uname -r` check |
+| `max_user_namespaces=0` | Any | sysctl check |
 
-`aiir setup test` includes a sandbox health check that verifies bwrap can create user namespaces.
+`setup-sift.sh` detects these restrictions at install time and provides
+environment-specific remediation. On Ubuntu 23.10+, it writes a targeted
+AppArmor profile at `/etc/apparmor.d/bwrap` that grants only `/usr/bin/bwrap`
+the `userns` permission. On older systems with `unprivileged_userns_clone=0`,
+it provides the sysctl command to re-enable user namespaces.
 
-If the AppArmor fix cannot be applied (e.g., sudo unavailable), the installer warns but continues. L9 is defense-in-depth — L1-L8 function independently. With `allowUnsandboxedCommands: false` (the default), Claude Code will refuse to run Bash commands rather than running them unsandboxed.
+`aiir setup test` includes a sandbox health check with the same diagnostic
+cascade.
+
+If the sandbox cannot be enabled (e.g., containers without privileged
+namespaces), Claude Code's `enableWeakerNestedSandbox` setting provides
+partial isolation (network + filesystem restrictions remain, process
+isolation is reduced). By default, `allowUnsandboxedCommands: false` means
+Claude Code will refuse to run Bash commands rather than running them
+unsandboxed.
 
 ### Provenance Tiers
 

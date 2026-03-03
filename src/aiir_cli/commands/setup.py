@@ -143,6 +143,7 @@ def cmd_setup(args, identity: dict) -> None:
 def _run_connectivity_test() -> None:
     """Test connectivity to the gateway and all MCP backends."""
     import json
+    import re
     import shutil
     import subprocess
     import time
@@ -161,36 +162,155 @@ def _run_connectivity_test() -> None:
         print("    Install: sudo apt install bubblewrap")
     else:
         try:
-            subprocess.run(
-                [bwrap, "--unshare-user", "--", "true"],
+            result = subprocess.run(
+                [bwrap, "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/true"],
                 capture_output=True,
+                text=True,
                 timeout=5,
-                check=True,
             )
-            print("    bwrap: OK (user namespace works)")
-        except subprocess.CalledProcessError:
-            # Check if AppArmor userns restriction is the cause
-            userns_val = ""
+        except subprocess.TimeoutExpired:
+            result = None
+            print("    bwrap: FAIL — test timed out (5s)")
+            print("    bwrap may be hanging on a kernel call.")
+            print(
+                "    Run: timeout 5 bwrap --ro-bind / / --unshare-net -- /bin/true"
+            )
+        except Exception as e:
+            result = None
+            print(f"    bwrap: ERROR ({e})")
+
+        if result is not None and result.returncode == 0:
+            print("    bwrap: OK (network namespace works)")
+        elif result is not None:
+            bwrap_err = result.stderr.strip()
+
+            # Diagnostic cascade — container detection
+            is_container = False
+            if shutil.which("systemd-detect-virt"):
+                try:
+                    r = subprocess.run(
+                        ["systemd-detect-virt", "--container"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    is_container = (
+                        r.returncode == 0 and r.stdout.strip() != "wsl"
+                    )
+                except Exception:
+                    pass
+            if not is_container:
+                is_container = (
+                    Path("/.dockerenv").exists()
+                    or Path("/run/.containerenv").exists()
+                )
+            if not is_container:
+                try:
+                    cgroup = Path("/proc/1/cgroup").read_text()
+                    is_container = bool(
+                        re.search(
+                            r"/(docker|lxc|containerd|kubepods)", cgroup
+                        )
+                    )
+                except Exception:
+                    pass
+
+            uname_r = ""
             try:
-                result = subprocess.run(
-                    ["sysctl", "-n", "kernel.apparmor_restrict_unprivileged_userns"],
+                uname_r = subprocess.run(
+                    ["uname", "-r"],
                     capture_output=True,
                     text=True,
                     timeout=5,
-                )
-                userns_val = result.stdout.strip()
+                ).stdout.strip()
             except Exception:
                 pass
-            if userns_val == "1":
-                print("    bwrap: FAIL — AppArmor blocks user namespaces")
+
+            is_wsl1 = (
+                ("Microsoft" in uname_r or "WSL" in uname_r)
+                and "microsoft-standard-WSL2" not in uname_r
+            )
+
+            def _sysctl(name: str) -> str:
+                try:
+                    r = subprocess.run(
+                        ["sysctl", "-n", name],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    return r.stdout.strip() if r.returncode == 0 else ""
+                except Exception:
+                    return ""
+
+            if is_container:
+                print("    bwrap: FAIL — running inside a container")
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print("    Containers restrict namespace creation by default.")
                 print(
-                    "    Fix: sudo apparmor_parser -rT /etc/apparmor.d/bwrap (or reboot)"
+                    "    Docker: --privileged or"
+                    " --security-opt seccomp=unconfined"
+                )
+                print("    LXC/LXD: security.nesting=true")
+            elif is_wsl1:
+                print(
+                    "    bwrap: FAIL — WSL1 does not support user namespaces"
+                )
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print("    Upgrade to WSL2: wsl --set-version <distro> 2")
+            elif (
+                _sysctl("kernel.apparmor_restrict_unprivileged_userns") == "1"
+            ):
+                print("    bwrap: FAIL — AppArmor blocks user namespaces")
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print(
+                    "    Fix: sudo apparmor_parser -rT /etc/apparmor.d/bwrap"
+                    " (or reboot)"
                 )
                 print("    If no profile exists: re-run setup-sift.sh")
+            elif _sysctl("kernel.unprivileged_userns_clone") == "0":
+                print(
+                    "    bwrap: FAIL — user namespaces disabled by sysctl"
+                )
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print(
+                    "    Temporary: sudo sysctl -w"
+                    " kernel.unprivileged_userns_clone=1"
+                )
+                print(
+                    "    Permanent: echo"
+                    " 'kernel.unprivileged_userns_clone=1' |"
+                    " sudo tee /etc/sysctl.d/60-userns.conf"
+                    " && sudo sysctl --system"
+                )
+            elif _sysctl("user.max_user_namespaces") == "0":
+                print("    bwrap: FAIL — user namespace limit is zero")
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print(
+                    "    Fix: sudo sysctl -w user.max_user_namespaces=15000"
+                )
             else:
-                print("    bwrap: FAIL — cannot create user namespace")
-        except Exception as e:
-            print(f"    bwrap: ERROR ({e})")
+                print(
+                    "    bwrap: FAIL — cannot create network namespace"
+                )
+                if bwrap_err:
+                    print(f"    bwrap stderr: {bwrap_err}")
+                print(
+                    "    Run: bwrap --ro-bind / / --unshare-net -- /bin/true"
+                )
+
+    # --- Socat check (sandbox network proxy requires it) ---
+    socat = shutil.which("socat")
+    if bwrap and not socat:
+        print("    socat: NOT INSTALLED — sandbox network proxy requires it")
+        print("    Install: sudo apt install socat")
+    elif bwrap and socat:
+        print("    socat: OK")
 
     # Resolve gateway URL
     gateway_url = "http://127.0.0.1:4508"
