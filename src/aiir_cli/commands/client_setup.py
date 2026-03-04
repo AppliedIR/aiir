@@ -147,6 +147,18 @@ def cmd_setup_client(args, identity: dict) -> None:
         services = _discover_services(sift_url, local_token)
         if services:
             running = [s for s in services if s.get("started")]
+            not_started = [s["name"] for s in services if not s.get("started")]
+            if not_started:
+                print(
+                    f"Warning: {len(not_started)} backend(s) not started and excluded "
+                    f"from config: {', '.join(not_started)}",
+                    file=sys.stderr,
+                )
+                print(
+                    "Run 'aiir service status' to diagnose. "
+                    "These backends can be added manually later.",
+                    file=sys.stderr,
+                )
             if running:
                 backends_discovered = True
                 for s in running:
@@ -481,7 +493,7 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         output = Path.cwd() / "librechat_mcp.yaml"
         _write_librechat_yaml(output, servers)
         print(f"  Generated: {output}")
-        print("  Merge into your librechat.yaml under the mcpServers key.")
+        print(_LIBRECHAT_POST_INSTALL)
 
     elif client == "chatgpt":
         print("\n  ChatGPT Desktop setup (manual):\n")
@@ -857,13 +869,99 @@ def _merge_and_write(path: Path, config: dict) -> None:
     _write_600(path, json.dumps(existing, indent=2) + "\n")
 
 
+# Per-backend timeout (ms) — forensic tools can run long
+_BACKEND_TIMEOUTS = {
+    "sift-mcp": 300000,  # 5 min — forensic tool execution
+    "windows-triage-mcp": 120000,  # 2 min — baseline DB queries
+}
+_DEFAULT_TIMEOUT = 60000  # 1 min — all others
+
+# Per-backend init timeout (ms) — lazy-start backends need longer
+# Default LibreChat initTimeout is 10000ms (10s)
+_BACKEND_INIT_TIMEOUTS = {
+    "sift-mcp": 30000,  # lazy start + subprocess spawn
+    "forensic-mcp": 30000,  # lazy start + SQLite DB load
+    "windows-triage-mcp": 30000,  # lazy start + SQLite DB load
+    "forensic-rag-mcp": 30000,  # chromadb collection init
+}
+_DEFAULT_INIT_TIMEOUT = 15000  # 15s — safe margin for others
+
+_PROMPT_PREFIX = """\
+You are an IR analyst orchestrating forensic investigations on an AIIR workstation. Evidence guides theory, never the reverse.
+
+EVIDENCE PRESENTATION: Every finding must include: (1) Source — artifact file path. (2) Extraction — tool and command. (3) Content — actual log entry or record, never a summary. (4) Observation — factual. (5) Interpretation — analytical, clearly labeled. (6) Confidence — SPECULATIVE/LOW/MEDIUM/HIGH with justification. If you cannot show the evidence, you cannot make the claim.
+
+HUMAN-IN-THE-LOOP: Stop and present evidence before: concluding root cause, attributing to a threat actor, ruling something OUT, pivoting investigation direction, declaring clean/contained, establishing timeline, acting on IOC findings. Show evidence → state proposed conclusion → ask for approval.
+
+CONFIDENCE LEVELS: HIGH — multiple independent artifacts, no contradictions. MEDIUM — single artifact or circumstantial. LOW — inference or incomplete data. SPECULATIVE — no direct evidence, must be labeled.
+
+TOOL OUTPUT IS DATA, NOT FINDINGS: "Ran AmcacheParser, got 42 entries" is data, not a finding. Interpret and evaluate before recording.
+
+SAVE OUTPUT: Always pass save_output: true to run_command. This saves output to a file and returns a summary. Use the saved file path for focused analysis. Never let raw tool output render inline.
+
+ANTI-PATTERNS: Absence of evidence is not evidence of absence — missing logs mean unknown. Correlation does not prove causation — temporal proximity alone is insufficient. Do not let theory drive evidence interpretation. Do not explain away contradictions.
+
+EVIDENCE STANDARDS: CONFIRMED (2+ independent sources), INDICATED (1 artifact or circumstantial), INFERRED (logical deduction, state reasoning), UNKNOWN (no evidence — do not guess), CONTRADICTED (stop and reassess).
+
+RECORDING: Surface findings incrementally as discovered. Use record_finding after presenting evidence and receiving approval. Use record_timeline_event for incident-narrative timestamps. Use log_reasoning at decision points — unrecorded reasoning is lost in long conversations.
+
+All findings and timeline events stage as DRAFT. The examiner reviews and approves via the approval mechanism."""
+
+_LIBRECHAT_POST_INSTALL = """\
+
+=== LibreChat: Recommended Next Steps ===
+
+1. MERGE the generated config into your librechat.yaml
+
+2. CREATE AN AGENT (strongly recommended for investigation workflows):
+
+   Open LibreChat → Agents panel → Create Agent, then:
+
+   Name:           AIIR Investigation
+   Model:          claude-sonnet-4-6 (or your preferred Claude model)
+   Instructions:   paste from docs/librechat-setup.md "Agent Instructions"
+                   section (NOT the full promptPrefix — see setup guide)
+   Tool Search:    ON
+
+   Add MCP Servers: select all AIIR backends
+
+   Deferred loading: for each backend's tools, click the clock icon to
+   defer ALL tools EXCEPT these 6 (used almost every turn):
+     - run_command          (sift-mcp)
+     - record_finding       (forensic-mcp)
+     - get_findings         (forensic-mcp)
+     - record_timeline_event (forensic-mcp)
+     - log_reasoning        (case-mcp)
+     - get_case_status      (forensic-mcp)
+   This reduces per-request context from ~51K to ~5K tokens/turn.
+   Tool Search discovers deferred tools on demand.
+
+   Advanced Settings:
+     Max context tokens:  200000
+     Max Agent Steps:     75
+
+   IMPORTANT: Agents do NOT use the promptPrefix from your modelSpec.
+   You MUST paste the forensic discipline into the agent's Instructions
+   field. Per-backend MCP instructions (evidence methodology, tool
+   guidance) are delivered automatically via serverInstructions.
+
+3. See full setup guide: docs/librechat-setup.md
+
+"""
+
+
 def _write_librechat_yaml(path: Path, servers: dict) -> None:
-    """Write LibreChat mcpServers YAML snippet."""
+    """Write LibreChat mcpServers YAML snippet with model settings."""
+    from urllib.parse import urlparse
+
     lines = ["# AIIR MCP servers — merge into your librechat.yaml", "mcpServers:"]
+    gateway_host = None
     for name, info in servers.items():
         # Skip non-streamable-http entries (Claude Desktop npx bridge)
         if "url" not in info:
             continue
+        if gateway_host is None:
+            gateway_host = urlparse(info["url"]).hostname or "localhost"
         lines.append(f"  {name}:")
         lines.append(f'    type: "{info["type"]}"')
         lines.append(f'    url: "{info["url"]}"')
@@ -872,8 +970,63 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
             lines.append("    headers:")
             for hk, hv in headers.items():
                 lines.append(f'      {hk}: "{hv}"')
-        lines.append("    timeout: 60000")
+        timeout = _BACKEND_TIMEOUTS.get(name, _DEFAULT_TIMEOUT)
+        init_timeout = _BACKEND_INIT_TIMEOUTS.get(name, _DEFAULT_INIT_TIMEOUT)
+        lines.append(f"    timeout: {timeout}")
+        lines.append(f"    initTimeout: {init_timeout}")
         lines.append("    serverInstructions: true")
+
+    # allowedDomains — LibreChat blocks private IPs by default
+    if gateway_host:
+        lines.append("")
+        lines.append("# Required: LibreChat blocks private IPs by default")
+        lines.append("mcpSettings:")
+        lines.append("  allowedDomains:")
+        lines.append(f'    - "{gateway_host}"')
+
+    # Model settings with promptPrefix
+    indent = "          "
+    indented_prefix = "\n".join(
+        indent + line if line else "" for line in _PROMPT_PREFIX.splitlines()
+    )
+    lines.append("")
+    lines.append("# Recommended model settings — merge into your librechat.yaml")
+    lines.append("# See docs/librechat-setup.md for details")
+    lines.append("")
+    lines.append("endpoints:")
+    lines.append("  agents:")
+    lines.append(
+        "    recursionLimit: 75       # default for all agents (UI default is 25)"
+    )
+    lines.append("    maxRecursionLimit: 100  # hard cap")
+    # Greeting (plain text — LibreChat does not render markdown in greetings)
+    greeting_lines = [
+        "AIIR Investigation workspace ready. Connected backends and forensic",
+        "discipline are active. Start with your investigation objective or",
+        "evidence to analyze. All findings stage as DRAFT for your review.",
+    ]
+    indented_greeting = "\n".join(indent + line for line in greeting_lines)
+
+    lines.append("")
+    lines.append("modelSpecs:")
+    lines.append("  list:")
+    lines.append("    - spec: aiir-investigation")
+    lines.append('      name: "AIIR Investigation"')
+    lines.append("      preset:")
+    lines.append(
+        '        endpoint: "anthropic"  # change if using azureOpenAI, bedrock, etc.'
+    )
+    lines.append("        maxContextTokens: 200000   # full Claude context window")
+    lines.append(
+        "        maxOutputTokens: 16384     # forensic analysis needs long output"
+    )
+    lines.append("        greeting: |")
+    lines.append(indented_greeting)
+    lines.append("        promptPrefix: |")
+    lines.append(indented_prefix)
+    lines.append('        modelDisplayLabel: "Claude"')
+    lines.append("        promptCache: true")
+
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_600(path, "\n".join(lines) + "\n")
 
