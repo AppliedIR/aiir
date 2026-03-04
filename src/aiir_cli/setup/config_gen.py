@@ -101,10 +101,16 @@ def generate_gateway_yaml(
     # Local stdio backends
     for mcp in mcps:
         name = mcp["name"]
+        args = ["-m", mcp["module"]]
+        # forensic-mcp uses --deferred-tools so discipline resources are
+        # exposed as tools (which the gateway proxies) instead of MCP
+        # resources (which the gateway does not proxy).
+        if name == "forensic-mcp":
+            args.append("--deferred-tools")
         backend = {
             "type": "stdio",
             "command": mcp["python_path"],
-            "args": ["-m", mcp["module"]],
+            "args": args,
             "enabled": True,
         }
         if name == "opencti-mcp" and opencti_config:
