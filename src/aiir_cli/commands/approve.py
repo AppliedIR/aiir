@@ -714,6 +714,7 @@ def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
         "APPROVE": _GREEN,
         "REJECT": _RED,
         "TODO": _YELLOW,
+        "EDIT": _CYAN,
     }.get(action, _CYAN)
 
     # Header
@@ -772,6 +773,10 @@ def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
     elif action == "REJECT":
         print(
             f"  Status:         {_DIM}{current_status}{_RESET} → {_RED}REJECTED{_RESET}"
+        )
+    elif action == "EDIT":
+        print(
+            f"  Status:         {_DIM}{current_status}{_RESET} → {_CYAN}EDITED (pending approval){_RESET}"
         )
 
 
@@ -897,6 +902,7 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
     approvals = []
     rejections = []
     todos = []
+    edits = []
     stale_warnings = []
 
     for entry in items:
@@ -920,6 +926,8 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
             rejections.append(entry)
         elif action == "todo":
             todos.append(entry)
+        elif action == "edit":
+            edits.append(entry)
 
     # Stale warnings
     for sid in stale_warnings:
@@ -929,11 +937,11 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
     print(f"\n{'=' * 60}")
     print(
         f"  Apply {len(approvals)} approval(s), {len(rejections)} rejection(s), "
-        f"{len(todos)} TODO(s)?"
+        f"{len(edits)} edit(s), {len(todos)} TODO(s)?"
     )
     print(f"{'=' * 60}")
 
-    if not approvals and not rejections and not todos:
+    if not approvals and not rejections and not todos and not edits:
         processing_path.unlink(missing_ok=True)
         print("Nothing to apply.")
         return
@@ -994,6 +1002,49 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
         item["modified_at"] = now
         approved_ids.append(item_id)
 
+    # Process edits (modifications only, no status change)
+    edited_ids = []
+    for entry in edits:
+        item_id = entry.get("id", "")
+        item = item_by_id.get(item_id)
+        if item is None:
+            skipped.append((item_id, "not found"))
+            continue
+
+        modifications = entry.get("modifications", {})
+        if not modifications:
+            continue
+
+        # Verify originals match
+        mod_conflict = False
+        for field, mod in modifications.items():
+            current_val = item.get(field)
+            original_val = mod.get("original")
+            if current_val != original_val:
+                skipped.append((item_id, f"field '{field}' changed since review"))
+                mod_conflict = True
+                break
+        if mod_conflict:
+            continue
+
+        # Apply modifications only
+        for field, mod in modifications.items():
+            if field not in _DELTA_EDITABLE_FIELDS:
+                continue
+            item[field] = mod.get("modified")
+            item.setdefault("examiner_modifications", {})[field] = {
+                "original": mod.get("original"),
+                "modified": mod.get("modified"),
+                "modified_by": identity["examiner"],
+                "modified_at": now,
+            }
+
+        # Recompute hash
+        new_hash = compute_content_hash(item)
+        item["content_hash"] = new_hash
+        item["modified_at"] = now
+        edited_ids.append(item_id)
+
     # Process rejections (in-memory)
     rejected_ids = []
     for entry in rejections:
@@ -1043,6 +1094,17 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
                 case_dir, item_id, "REJECTED", identity, reason=reason, mode=mode
             ):
                 log_failures.append(item_id)
+    for item_id in edited_ids:
+        item = item_by_id.get(item_id)
+        if item and not write_approval_log(
+            case_dir,
+            item_id,
+            "EDITED",
+            identity,
+            mode=mode,
+            content_hash=item.get("content_hash", ""),
+        ):
+            log_failures.append(item_id)
 
     # Step 3: HMAC ledger (warn on failure)
     approved_items = [item_by_id[aid] for aid in approved_ids if aid in item_by_id]
@@ -1089,7 +1151,7 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
 
     print(
         f"\nApplied: {len(approved_ids)} approved, {len(rejected_ids)} rejected, "
-        f"{len(todos)} TODO(s)."
+        f"{len(edited_ids)} edited, {len(todos)} TODO(s)."
     )
     if log_failures:
         print(f"  WARNING: Approval log failed for: {', '.join(log_failures)}")
