@@ -679,6 +679,7 @@ def _display_item(item: dict) -> None:
 # --- Dashboard review mode ---
 
 _DELTA_EDITABLE_FIELDS = {
+    # Finding fields
     "title",
     "observation",
     "interpretation",
@@ -687,6 +688,10 @@ _DELTA_EDITABLE_FIELDS = {
     "mitre_ids",
     "iocs",
     "context",
+    # Timeline event fields
+    "timestamp",
+    "description",
+    "source",
 }
 
 _RED = "\033[31m"
