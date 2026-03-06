@@ -79,7 +79,7 @@ The LLM cannot forge ledger entries because it does not know the password-derive
 
 ### L3 — Case Data Deny Rules
 
-When Claude Code is the LLM client, 44 deny rules block Read/Edit/Write tool access to protected files:
+When Claude Code is the LLM client, 41 deny rules block Read/Edit/Write tool access to protected files:
 
 - Case data: `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`, `evidence.json`, `pending-reviews.json`
 - System: `/var/lib/aiir/**` (verification ledger + password hashes)
@@ -165,7 +165,7 @@ unsandboxed.
 When Claude Code is the LLM client, `aiir setup client --client=claude-code` deploys:
 
 - **Kernel-level sandbox**: Restricts Bash writes and network access via bubblewrap (L9). On Ubuntu 24.04+, requires AppArmor profile installed by `setup-sift.sh`
-- **Case data deny rules**: 44 rules blocking Read/Edit/Write to protected case files, evidence registry, verification ledger, and control files (L3)
+- **Case data deny rules**: 41 rules blocking Read/Edit/Write to protected case files, evidence registry, verification ledger, and control files (L3)
 - **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`
 - **Provenance enforcement**: Findings without an evidence trail are rejected
