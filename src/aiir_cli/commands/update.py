@@ -49,6 +49,58 @@ _PACKAGE_PATHS = {
 }
 
 
+def _ensure_password_dir() -> None:
+    """Ensure /var/lib/aiir/passwords/ exists, migrating from pins/ if needed."""
+    passwords_dir = Path("/var/lib/aiir/passwords")
+    pins_dir = Path("/var/lib/aiir/pins")
+
+    if passwords_dir.is_dir():
+        return
+
+    # Migrate pins/ → passwords/ (requires sudo because parent is root-owned)
+    if pins_dir.is_dir():
+        print(
+            "  Migrating password storage (pins/ → passwords/)... ", end="", flush=True
+        )
+        result = subprocess.run(
+            ["sudo", "mv", str(pins_dir), str(passwords_dir)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            print("done")
+            return
+        print(f"failed ({result.stderr.strip()})")
+
+    # Create fresh directory
+    import getpass
+
+    user = getpass.getuser()
+    print("  Creating password storage directory... ", end="", flush=True)
+    result = subprocess.run(
+        [
+            "sudo",
+            "sh",
+            "-c",
+            f"mkdir -p {passwords_dir} && chown {user}:{user} {passwords_dir} && chmod 700 {passwords_dir}",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    if result.returncode == 0:
+        print("done")
+    else:
+        print("failed")
+        print(
+            f"  Run manually: sudo mkdir -p {passwords_dir} && "
+            f"sudo chown $USER:$USER {passwords_dir} && "
+            f"sudo chmod 700 {passwords_dir}",
+            file=sys.stderr,
+        )
+
+
 def cmd_update(args, identity: dict) -> None:
     """Pull latest code and redeploy AIIR installation."""
     check_only = getattr(args, "check", False)
@@ -210,6 +262,9 @@ def cmd_update(args, identity: dict) -> None:
             sys.exit(1)
         count += 1
     print(f"  Reinstalling packages... {count} packages")
+
+    # Step 4.5: Ensure password storage directory exists
+    _ensure_password_dir()
 
     # Step 5: Redeploy forensic controls
     client = manifest.get("client")

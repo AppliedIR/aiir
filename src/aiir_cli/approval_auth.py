@@ -241,6 +241,8 @@ def setup_password(
     Returns the raw password string (needed for HMAC re-signing during rotation).
     """
     passwords_dir = passwords_dir or _PASSWORDS_DIR
+    _maybe_migrate_pin_dir()
+    _maybe_migrate(config_path, passwords_dir, analyst)
     pw1 = getpass_prompt("Enter new password: ")
     if not pw1:
         print("Password cannot be empty.", file=sys.stderr)
@@ -261,19 +263,18 @@ def setup_password(
 
     entry = {"hash": pw_hash, "salt": salt.hex()}
 
-    # Try new location first
     try:
         _save_password_entry(passwords_dir, analyst, entry)
     except OSError:
-        # Fall back to config.yaml if /var/lib/aiir/passwords not writable
-        config_path.parent.mkdir(parents=True, exist_ok=True)
-        config = _load_config(config_path)
-        if "passwords" not in config:
-            config["passwords"] = {}
-        config["passwords"][analyst] = entry
-        _save_config(config_path, config)
-        print(f"Password configured for analyst '{analyst}'.")
-        return pw1
+        print(
+            f"\nCannot write to {passwords_dir}/\n\n"
+            f"  Run:  sudo mkdir -p {passwords_dir} && "
+            f"sudo chown $USER:$USER {passwords_dir} && "
+            f"sudo chmod 700 {passwords_dir}\n\n"
+            f"  Then re-run:  aiir config --setup-password",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     # Strip old location if present
     config = _load_config(config_path)

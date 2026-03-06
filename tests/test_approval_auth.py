@@ -59,8 +59,8 @@ class TestPasswordSetup:
             config = yaml.safe_load(config_path.read_text())
             assert "passwords" not in (config or {})
 
-    def test_setup_password_fallback_to_config(self, config_path, tmp_path):
-        """When passwords_dir doesn't exist and can't be created, falls back to config.yaml."""
+    def test_setup_password_fails_when_dir_not_writable(self, config_path, tmp_path):
+        """When passwords_dir can't be written, exits with clear error instead of falling back."""
         blocker = tmp_path / "blocker"
         blocker.write_text("file")
         bad_passwords = blocker / "passwords"
@@ -68,10 +68,13 @@ class TestPasswordSetup:
             "aiir_cli.approval_auth.getpass_prompt",
             side_effect=["mypasswd1", "mypasswd1"],
         ):
-            setup_password(config_path, "steve", passwords_dir=bad_passwords)
-        assert config_path.exists()
-        config = yaml.safe_load(config_path.read_text())
-        assert "steve" in config["passwords"]
+            with pytest.raises(SystemExit) as exc_info:
+                setup_password(config_path, "steve", passwords_dir=bad_passwords)
+            assert exc_info.value.code == 1
+        # Must NOT fall back to config.yaml
+        if config_path.exists():
+            config = yaml.safe_load(config_path.read_text()) or {}
+            assert "passwords" not in config
 
     def test_setup_password_verify_roundtrip(self, config_path, passwords_dir):
         with patch(

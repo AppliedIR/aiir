@@ -58,6 +58,15 @@ def config_path(tmp_path):
     return tmp_path / ".aiir" / "config.yaml"
 
 
+@pytest.fixture(autouse=True)
+def isolate_passwords_dir(tmp_path, monkeypatch):
+    """Point _PASSWORDS_DIR to temp dir so tests never touch /var/lib/aiir/."""
+    d = tmp_path / "passwords"
+    d.mkdir(mode=0o700)
+    monkeypatch.setattr("aiir_cli.approval_auth._PASSWORDS_DIR", d)
+    return d
+
+
 @pytest.fixture
 def pw_config(config_path):
     """Set up a password for analyst1 and return config_path."""
