@@ -129,12 +129,11 @@ The LLM client, the case dashboard, and the aiir CLI are the three human-facing 
 graph TB
     subgraph analyst ["Analyst Machine (Path 2)"]
         CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(dashboard)"]
-        SSH["SSH Session<br/>(setup only)"]
+        BR["Browser<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
-        CLI["aiir CLI<br/>(human interface)"]
+        CLI["aiir CLI"]
         GW["sift-gateway<br/>:4508"]
         FM["forensic-mcp<br/>Findings + discipline"]
         CM["case-mcp<br/>Case management"]
@@ -143,7 +142,7 @@ graph TB
         FR["forensic-rag-mcp<br/>Knowledge search"]
         WTR["windows-triage-mcp<br/>Baseline validation"]
         OC["opencti-mcp<br/>Threat intelligence"]
-        CD["case-dashboard<br/>Review UI"]
+        CD["case-dashboard<br/>Review + approval"]
         FK["forensic-knowledge<br/>(shared YAML data package)"]
         CASE["Case Directory"]
 
@@ -175,17 +174,14 @@ graph TB
     CC -->|"streamable-http"| GW
     CC -->|"streamable-http"| WAPI
     BR -->|"HTTPS"| GW
-    SSH -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
-    style SSH fill:#e0e0e0,stroke:#999,color:#333
-    style BR fill:#e8f5e9,stroke:#4caf50,color:#333
 ```
 
-In Path 1 (co-located), everything runs on SIFT — no SSH or remote access needed. In Path 2, the examiner reviews and commits findings through the dashboard in their browser. SSH is only needed for CLI-exclusive operations (case init, evidence register, unlock, exec, verify).
+In Path 1 (co-located), everything runs on SIFT — no remote access needed. In Path 2, the LLM client and browser run on the analyst machine; the browser connects to the dashboard via HTTPS on the gateway.
 
 ### Human-in-the-Loop Workflow
 
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI or the web dashboard. Approvals require a password to prevent AI from overriding human review.
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them — via the case dashboard (browser) or the aiir CLI. Both paths produce identical HMAC-signed approval records. The AI cannot approve its own findings.
 
 ![Dashboard — Findings](docs/images/dashboard.png)
 
@@ -195,34 +191,20 @@ All findings and timeline events are staged as DRAFT by the AI. Only a human exa
 sequenceDiagram
     participant AI as LLM + MCP Tools
     participant Case as Case Directory
-    participant Dash as Dashboard (browser)
-    participant Human as aiir CLI (human)
+    participant Human as Examiner<br/>(Dashboard or CLI)
 
-    AI->>Case: record_finding() -> DRAFT
-    AI->>Case: record_timeline_event() -> DRAFT
+    AI->>Case: record_finding() → DRAFT
+    AI->>Case: record_timeline_event() → DRAFT
     Note over Case: Staged for review
 
-    alt CLI review
-        Human->>Case: aiir approve (interactive review)
-        Human-->>Case: Edit, add note, or approve as-is
-        Human->>Case: APPROVED or REJECTED
-    else Dashboard review
-        Dash->>Case: Review, edit, approve/reject in browser
-        Dash->>Case: Commit (Shift+C, challenge-response auth)
-        Note over Dash: Password never leaves browser
-        Dash->>Case: APPROVED or REJECTED + HMAC signed
-    else Dashboard + CLI review
-        Dash->>Case: Edit findings in browser
-        Note over Case: pending-reviews.json
-        Human->>Case: aiir approve --review
-        Human->>Case: APPROVED or REJECTED
-    end
+    Human->>Case: Review, edit, approve/reject
+    Human->>Case: Commit (password + HMAC signing)
 
     Note over Case: Only APPROVED items<br/>appear in reports
     Human->>Case: aiir report --full
 ```
 
-The **case dashboard** is the primary review interface. Examiners review findings and timeline events, edit fields (confidence, justification, observation, interpretation, MITRE IDs, IOCs), approve or reject items, and commit decisions — all in the browser. The Commit button (Shift+C) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. Alternatively, `aiir approve --review` applies dashboard edits from the CLI.
+The **case dashboard** is the primary review interface. Examiners review findings and timeline events, edit fields (confidence, justification, observation, interpretation, MITRE IDs, IOCs), approve or reject items, and commit decisions — all in the browser. The Commit button (Shift+C) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. The CLI's `aiir approve` provides the same functionality from the terminal.
 
 ### Where Things Run
 
@@ -267,7 +249,8 @@ Two primary deployment paths:
 graph LR
     subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
-        CLI["aiir CLI<br/>(human interface)"]
+        BR["Browser<br/>(human interface)"]
+        CLI["aiir CLI"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         CM[case-mcp]
@@ -279,6 +262,7 @@ graph LR
         CASE[Case Directory]
 
         CC -->|"streamable-http"| GW
+        BR -->|"HTTPS"| GW
         GW -->|stdio| FM
         GW -->|stdio| CM
         GW -->|stdio| RM
@@ -299,7 +283,8 @@ graph LR
 graph LR
     subgraph sift ["SIFT Workstation"]
         CC["LLM Client<br/>(human interface)"]
-        CLI["aiir CLI<br/>(human interface)"]
+        BR["Browser<br/>(human interface)"]
+        CLI["aiir CLI"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         CM[case-mcp]
@@ -311,6 +296,7 @@ graph LR
         CASE[Case Directory]
 
         CC -->|"streamable-http"| GW
+        BR -->|"HTTPS"| GW
         GW -->|stdio| FM
         GW -->|stdio| CM
         GW -->|stdio| RM
@@ -341,12 +327,11 @@ graph LR
 graph LR
     subgraph analyst ["Analyst Machine"]
         CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(dashboard)"]
-        SSH["SSH Session<br/>(setup only)"]
+        BR["Browser<br/>(human interface)"]
     end
 
     subgraph sift ["SIFT Workstation"]
-        CLI["aiir CLI<br/>(human interface)"]
+        CLI["aiir CLI"]
         GW["sift-gateway<br/>:4508"]
         FM[forensic-mcp]
         CM[case-mcp]
@@ -401,10 +386,7 @@ graph LR
     CC -->|"HTTPS"| ZE
     OC -->|"HTTP(S)"| OCTI
     BR -->|"HTTPS"| GW
-    SSH -.->|"SSH"| CLI
     WM -->|"SMB"| CASE
-    style SSH fill:#e0e0e0,stroke:#999,color:#333
-    style BR fill:#e8f5e9,stroke:#4caf50,color:#333
 ```
 
 #### Multi-Examiner Team
@@ -413,12 +395,14 @@ graph LR
 graph LR
     subgraph e1 ["Examiner 1 — SIFT Workstation"]
         CC1["LLM Client<br/>(human interface)"]
-        CLI1["aiir CLI<br/>(human interface)"]
+        BR1["Browser<br/>(human interface)"]
+        CLI1["aiir CLI"]
         GW1["sift-gateway<br/>:4508"]
         MCPs1["forensic-mcp · case-mcp · report-mcp<br/>sift-mcp · forensic-rag-mcp<br/>windows-triage-mcp · opencti-mcp"]
         CASE1["Case Directory"]
 
         CC1 -->|"streamable-http"| GW1
+        BR1 -->|"HTTPS"| GW1
         GW1 -->|stdio| MCPs1
         MCPs1 --> CASE1
         CLI1 --> CASE1
@@ -426,12 +410,14 @@ graph LR
 
     subgraph e2 ["Examiner 2 — SIFT Workstation"]
         CC2["LLM Client<br/>(human interface)"]
-        CLI2["aiir CLI<br/>(human interface)"]
+        BR2["Browser<br/>(human interface)"]
+        CLI2["aiir CLI"]
         GW2["sift-gateway<br/>:4508"]
         MCPs2["forensic-mcp · case-mcp · report-mcp<br/>sift-mcp · forensic-rag-mcp<br/>windows-triage-mcp · opencti-mcp"]
         CASE2["Case Directory"]
 
         CC2 -->|"streamable-http"| GW2
+        BR2 -->|"HTTPS"| GW2
         GW2 -->|stdio| MCPs2
         MCPs2 --> CASE2
         CLI2 --> CASE2
