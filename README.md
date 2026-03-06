@@ -115,7 +115,7 @@ No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via B
 
 ## Full AIIR — Structural Enforcement
 
-For use cases where more definitive human-in-the-loop approval is desired, the full AIIR suite ensures accountability and enforces human review of findings through cryptographic signing, PIN-gated approvals, and multiple layered controls.
+For use cases where more definitive human-in-the-loop approval is desired, the full AIIR suite ensures accountability and enforces human review of findings through cryptographic signing, password-gated approvals, and multiple layered controls.
 
 Full AIIR is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, LibreChat, Cherry Studio, and any MCP-only client that supports Streamable HTTP transport with Bearer token authentication. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
 
@@ -182,7 +182,7 @@ In Path 1 (co-located), the LLM client also runs on SIFT and no SSH is needed. I
 
 ### Human-in-the-Loop Workflow
 
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI or the web dashboard. Approvals require a PIN to prevent AI from overriding human review.
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them via the `aiir` CLI or the web dashboard. Approvals require a password to prevent AI from overriding human review.
 
 ![Dashboard](docs/images/dashboard.png)
 
@@ -247,7 +247,7 @@ http://localhost:4508/mcp/opencti-mcp
 
 Two primary deployment paths:
 
-- **Path 1 — Co-located.** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. All forensic controls apply (sandbox, audit hooks, PIN gate). Simplest setup — single machine, one installer.
+- **Path 1 — Co-located.** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. All forensic controls apply (sandbox, audit hooks, password gate). Simplest setup — single machine, one installer.
 - **Path 2 — Remote orchestrator.** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. The examiner must have SSH access to SIFT for CLI operations (approve, reject, evidence unlock, execute). Run `setup-sift.sh --remote` to generate TLS certificates and bind the gateway to all interfaces. MCP-only clients (Claude Desktop, LibreChat) are well suited for this path — they can only reach SIFT through audited MCP tools.
 
 #### Solo Analyst on SIFT (Path 1)
@@ -457,7 +457,7 @@ cases/INC-2026-0219/
 
 ### SIFT Workstation
 
-Requires Python 3.11+ and sudo access. The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Other clients get MCP config only.
+Requires Python 3.11+ and sudo access. The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, password-gated human approval with HMAC signing). Other clients get MCP config only.
 
 **Quick** — Core platform only, no databases (~70 MB):
 
@@ -514,7 +514,7 @@ AIIR is designed so that AI interactions flow through MCP tools, enabling securi
 
 Most `aiir` CLI operations have MCP equivalents via case-mcp, forensic-mcp, and report-mcp. When working with an MCP-connected client, you can ask the AI to handle case management, evidence registration, report generation, and more — the AI operates through audited MCP tools rather than direct CLI invocation.
 
-The commands below that require human interaction at the terminal (`/dev/tty`) **cannot** be delegated to the AI. These are intentional human-in-the-loop checkpoints — they use PIN entry, interactive review, or terminal confirmation to ensure the human examiner retains control over approval, rejection, and security-sensitive operations.
+The commands below that require human interaction at the terminal (`/dev/tty`) **cannot** be delegated to the AI. These are intentional human-in-the-loop checkpoints — they use password entry, interactive review, or terminal confirmation to ensure the human examiner retains control over approval, rejection, and security-sensitive operations.
 
 ### Human-Only Commands (require terminal)
 
@@ -533,7 +533,7 @@ aiir approve --timeline-only                             # Skip findings
 aiir approve --review                                    # Apply pending dashboard edits
 ```
 
-Requires PIN entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the dashboard (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file.
+Requires password entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the dashboard (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file. Alternatively, use the dashboard's Commit button (Shift+C) which performs the same operation via challenge-response authentication — the password never leaves the browser.
 
 #### reject
 
@@ -542,7 +542,7 @@ aiir reject F-alice-003 --reason "Insufficient evidence for attribution"
 aiir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 ```
 
-Requires PIN confirmation via `/dev/tty`.
+Requires password confirmation via `/dev/tty`.
 
 #### exec
 
@@ -561,14 +561,14 @@ aiir evidence unlock
 
 Requires `/dev/tty` confirmation. Unlocking evidence allows writes to the evidence directory.
 
-#### PIN management
+#### Password management
 
 ```
-aiir config --setup-pin                    # Set approval PIN (PBKDF2-hashed)
-aiir config --reset-pin                    # Reset PIN (requires current)
+aiir config --setup-password               # Set approval password (PBKDF2-hashed, min 8 chars)
+aiir config --reset-password               # Reset password (requires current, re-signs ledger)
 ```
 
-PIN entry uses masked input via `/dev/tty` with termios. No echo, no stdin — the AI cannot read or supply the PIN.
+Password entry uses masked input via `/dev/tty` with termios. No echo, no stdin — the AI cannot read or supply the password.
 
 #### HMAC verification
 
@@ -577,7 +577,7 @@ aiir review --findings --verify            # Cross-check content hashes + HMAC v
 aiir review --findings --verify --mine    # HMAC verification for current examiner only
 ```
 
-Verification requires the examiner's PIN to derive the HMAC key and confirm integrity.
+Verification requires the examiner's password to derive the HMAC key and confirm integrity.
 
 ### All Commands
 

@@ -454,8 +454,8 @@ $settingsObj = @{
             "Write(**/.aiir/gateway.yaml)",
             "Edit(**/.aiir/config.yaml)",
             "Write(**/.aiir/config.yaml)",
-            "Edit(**/.aiir/.pin_lockout)",
-            "Write(**/.aiir/.pin_lockout)",
+            "Edit(**/.aiir/.password_lockout)",
+            "Write(**/.aiir/.password_lockout)",
             "Edit(**/pending-reviews.json)",
             "Write(**/pending-reviews.json)"
         )
@@ -579,7 +579,7 @@ Write-Host "SSH Access" -ForegroundColor White
 Write-Host "  SSH access to SIFT is required for finding approval and rejection"
 Write-Host "  (aiir approve, aiir reject), evidence unlocking (aiir evidence"
 Write-Host "  unlock), and command execution (aiir execute). These operations"
-Write-Host "  require PIN or terminal confirmation and are not available through"
+Write-Host "  require password or terminal confirmation and are not available through"
 Write-Host "  MCP. All other operations are available through MCP tools."
 Write-Host ""
 Write-Host "  Windows SSH clients: OpenSSH (built-in), PuTTY, or Windows Terminal."

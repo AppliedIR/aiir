@@ -131,7 +131,7 @@ aiir review --verify --mine              # HMAC verification for current examine
 
 ### `aiir approve`
 
-Approve staged findings and/or timeline events. Requires PIN confirmation.
+Approve staged findings and/or timeline events. Requires password confirmation.
 
 ```bash
 aiir approve                                    # Interactive review
@@ -395,8 +395,8 @@ Manage AIIR settings.
 ```bash
 aiir config --show                     # Show current config
 aiir config --examiner alice           # Set examiner identity
-aiir config --setup-pin                # Set approval PIN
-aiir config --reset-pin                # Reset PIN (requires current PIN)
+aiir config --setup-password           # Set approval password (min 8 chars)
+aiir config --reset-password           # Reset password (requires current)
 ```
 
 ## Join (Remote Setup)

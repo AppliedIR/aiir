@@ -67,23 +67,24 @@ All findings and timeline events stage as DRAFT. Only the aiir CLI (which requir
 
 ### L2 — HMAC Verification Ledger
 
-When an examiner approves findings, an HMAC-SHA256 signature is computed over the substantive text (observation + interpretation for findings, description for timeline events) using a key derived from the examiner's PIN (PBKDF2, 600K iterations). These signatures are stored in `/var/lib/aiir/verification/{case-id}.jsonl` — outside the case directory and outside the Claude Code sandbox.
+When an examiner approves findings, an HMAC-SHA256 signature is computed over the substantive text (observation + interpretation for findings, description for timeline events) using a key derived from the examiner's password (PBKDF2, 600K iterations). These signatures are stored in `/var/lib/aiir/verification/{case-id}.jsonl` — outside the case directory and outside the Claude Code sandbox.
 
-- `aiir review --verify` performs full HMAC verification with per-examiner PIN prompts
+- `aiir review --verify` performs full HMAC verification with per-examiner password prompts
 - `aiir review --verify --mine` filters to the current examiner only
-- Report generation includes automatic reconciliation (no PIN needed) that detects mismatches between approved items and ledger entries
-- PIN rotation (`aiir config --reset-pin`) re-signs all ledger entries with the new key
+- Report generation includes automatic reconciliation (no password needed) that detects mismatches between approved items and ledger entries
+- Password rotation (`aiir config --reset-password`) re-signs all ledger entries with the new key
 - Case close copies the verification ledger into the case directory for archival
 
-The LLM cannot forge ledger entries because it does not know the PIN-derived key.
+The LLM cannot forge ledger entries because it does not know the password-derived key.
 
 ### L3 — Case Data Deny Rules
 
-When Claude Code is the LLM client, 21 deny rules block Read/Edit/Write tool access to protected case data files:
+When Claude Code is the LLM client, 44 deny rules block Read/Edit/Write tool access to protected files:
 
-- `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`, `evidence.json`
-- `/var/lib/aiir/**` (HMAC verification ledger — Read/Edit/Write all blocked)
-- `Bash(aiir approve*)` and `Bash(aiir reject*)` are also denied
+- Case data: `findings.json`, `timeline.json`, `approvals.jsonl`, `todos.json`, `CASE.yaml`, `actions.jsonl`, `audit/*.jsonl`, `evidence.json`, `pending-reviews.json`
+- System: `/var/lib/aiir/**` (verification ledger + password hashes)
+- CLI: `Bash(aiir approve*)` and `Bash(aiir reject*)` (including path-qualified variants)
+- Control files: `.claude/settings.json`, `.claude/CLAUDE.md`, `.claude/rules/**`, `.aiir/hooks/**`, `.aiir/active_case`, `.aiir/gateway.yaml`, `.aiir/config.yaml`, `.aiir/.password_lockout`
 
 These rules replace the previous generic denylist (rm -rf, mkfs, dd) with targeted protection for case integrity.
 
@@ -99,7 +100,7 @@ At case initialization, the filesystem is checked. Non-POSIX filesystems (NTFS, 
 
 ### L6 — Report Reconciliation
 
-When generating reports, report-mcp performs a bidirectional reconciliation between approved items and the verification ledger. This does not require a PIN. It detects:
+When generating reports, report-mcp performs a bidirectional reconciliation between approved items and the verification ledger. This does not require a password. It detects:
 
 - Items approved but missing from the ledger (APPROVED_NO_VERIFICATION)
 - Ledger entries with no corresponding approved item (VERIFICATION_NO_FINDING)
@@ -110,7 +111,7 @@ Alerts are included in the generated report as `verification_alerts`.
 
 ### L7-L8 — Integrity Controls
 
-- **PIN authentication**: The `aiir approve` command requires PIN confirmation. PINs are set per examiner via `aiir config --setup-pin`.
+- **Password authentication**: The `aiir approve` command requires password confirmation. Passwords are set per examiner via `aiir config --setup-password` (minimum 8 characters).
 - **Provenance enforcement**: Findings must be traceable to evidence (MCP > HOOK > SHELL > NONE). NONE provenance with no supporting commands is rejected by a hard gate in `record_finding()`.
 - **Content hash integrity**: SHA-256 hashes computed at staging, verified at approval. `aiir review --verify` detects post-approval tampering via cross-file hash comparison.
 
@@ -168,13 +169,13 @@ When Claude Code is the LLM client, `aiir setup client --client=claude-code` dep
 - **PreToolUse hook**: Blocks Bash redirections targeting protected files (L4)
 - **PostToolUse audit hook**: Captures every Bash command and output to `audit/claude-code.jsonl`
 - **Provenance enforcement**: Findings without an evidence trail are rejected
-- **PIN-gated human approval**: Approval requires the examiner's PIN + writes HMAC ledger entry (L2)
+- **Password-gated human approval**: Approval requires the examiner's password + writes HMAC ledger entry (L2)
 
 ## SSH Security Consideration
 
-Remote deployments (Path 2) require SSH access to SIFT for CLI operations: finding approval/rejection, evidence unlocking, and command execution. These operations require PIN or terminal confirmation and are not available through MCP.
+Remote deployments (Path 2) require SSH access to SIFT for CLI operations: finding approval/rejection, evidence unlocking, and command execution. These operations require password or terminal confirmation and are not available through MCP.
 
-If the remote LLM client has terminal access (e.g., Claude Code), it can potentially use the examiner's SSH credentials to run commands on SIFT outside of MCP controls. The PIN + TTY gate on `aiir approve` prevents the LLM from approving findings, but other operations (file modification, evidence access) are not PIN-gated.
+If the remote LLM client has terminal access (e.g., Claude Code), it can potentially use the examiner's SSH credentials to run commands on SIFT outside of MCP controls. The password + TTY gate on `aiir approve` prevents the LLM from approving findings, but other operations (file modification, evidence access) are not password-gated.
 
 For production forensic work with remote Claude Code, examiners should use SSH authentication that requires human interaction per use:
 

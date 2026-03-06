@@ -509,8 +509,8 @@ SETTINGS_CONTENT=$(cat << SETTINGS
       "Write(**/.aiir/gateway.yaml)",
       "Edit(**/.aiir/config.yaml)",
       "Write(**/.aiir/config.yaml)",
-      "Edit(**/.aiir/.pin_lockout)",
-      "Write(**/.aiir/.pin_lockout)",
+      "Edit(**/.aiir/.password_lockout)",
+      "Write(**/.aiir/.password_lockout)",
       "Edit(**/pending-reviews.json)",
       "Write(**/pending-reviews.json)"
     ]
@@ -667,7 +667,7 @@ echo -e "${BOLD}SSH Access${NC}"
 echo "  SSH access to SIFT is required for finding approval and rejection"
 echo "  (aiir approve, aiir reject), evidence unlocking (aiir evidence"
 echo "  unlock), and command execution (aiir execute). These operations"
-echo "  require PIN or terminal confirmation and are not available through"
+echo "  require password or terminal confirmation and are not available through"
 echo "  MCP. All other operations are available through MCP tools."
 
 if [[ "$CLIENT" == "claude-code" ]]; then
