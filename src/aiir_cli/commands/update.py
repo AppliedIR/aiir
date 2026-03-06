@@ -218,11 +218,6 @@ def cmd_update(args, identity: dict) -> None:
 
         print("  Redeploying forensic controls...")
         _deploy_claude_code_assets()
-    elif client == "cursor":
-        from aiir_cli.commands.client_setup import _write_cursor_rules
-
-        print("  Redeploying cursor rules...")
-        _write_cursor_rules()
     elif client:
         print(f"  Client: {client} (no local controls to redeploy)")
     else:
@@ -269,7 +264,7 @@ def cmd_update(args, identity: dict) -> None:
     hashes = manifest.get("git", {})
     parts = [f"{name}@{h[:7]}" for name, h in sorted(hashes.items())]
     print(f"\n  Updated to {', '.join(parts)}")
-    if client in ("claude-code", "cursor"):
+    if client == "claude-code":
         print("  Restart your LLM client to pick up new rules.")
 
 

@@ -325,12 +325,7 @@ aiir exec --purpose "Extract prefetch files" -- cp -r /mnt/evidence/prefetch/ ex
 
 ### `aiir setup`
 
-Interactive setup wizard for all MCP servers.
-
-```bash
-aiir setup
-aiir setup --force-reprompt    # Re-prompt for all values
-```
+Routes to setup subcommands. Run `aiir setup client` to configure your LLM client.
 
 ### `aiir setup client`
 
@@ -345,7 +340,7 @@ aiir setup client --remote --token=aiir_gw_...       # Remote with auth
 
 | Option | Description |
 |--------|-------------|
-| `--client` | Target client: claude-code, claude-desktop, cursor, librechat |
+| `--client` | Target client: claude-code, claude-desktop, librechat, other |
 | `--sift` | SIFT gateway URL |
 | `--windows` | Windows wintools-mcp endpoint |
 | `--remnux` | REMnux endpoint |

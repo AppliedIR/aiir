@@ -259,16 +259,14 @@ api_keys:
 {
   "mcpServers": {
     "aiir": {
-      "type": "streamable-http",
-      "url": "http://127.0.0.1:4508/mcp"
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://127.0.0.1:4508/mcp",
+               "--header", "Authorization:${AUTH_HEADER}"],
+      "env": { "AUTH_HEADER": "Bearer <your-token>" }
     }
   }
 }
 ```
-
-### Cursor
-
-`aiir setup client --client=cursor` generates `.cursor/mcp.json`.
 
 ### External MCPs
 

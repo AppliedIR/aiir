@@ -368,19 +368,15 @@ def _wizard_client() -> str:
     print("Which LLM client will connect to your AIIR endpoints?\n")
     print("  1. Claude Code      CLI agent (writes .mcp.json + CLAUDE.md)")
     print("  2. Claude Desktop   Desktop app (writes claude_desktop_config.json)")
-    print("  3. Cursor           IDE (writes .cursor/mcp.json + .cursor/rules/)")
-    print("  4. LibreChat        Web UI (writes librechat_mcp.yaml)")
-    print("  5. ChatGPT Desktop  Manual setup (prints instructions)")
-    print("  6. Other / manual   Raw JSON config for any MCP client")
+    print("  3. LibreChat        Web UI (writes librechat_mcp.yaml)")
+    print("  4. Other / manual   Raw JSON config for any MCP client")
 
     choice = _prompt("\nChoose", "1")
     return {
         "1": "claude-code",
         "2": "claude-desktop",
-        "3": "cursor",
-        "4": "librechat",
-        "5": "chatgpt",
-        "6": "other",
+        "3": "librechat",
+        "4": "other",
     }.get(choice, "other")
 
 
@@ -483,38 +479,11 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
         print("  the MCP protocol. Project instructions provide additional")
         print("  context for your investigation workflow.")
 
-    elif client == "cursor":
-        output = Path.cwd() / ".cursor" / "mcp.json"
-        _merge_and_write(output, config)
-        _write_cursor_rules()
-        print(f"  Generated: {output}")
-
     elif client == "librechat":
         output = Path.cwd() / "librechat_mcp.yaml"
         _write_librechat_yaml(output, servers)
         print(f"  Generated: {output}")
         print(_LIBRECHAT_POST_INSTALL)
-
-    elif client == "chatgpt":
-        print("\n  ChatGPT Desktop setup (manual):\n")
-        print("    1. Open ChatGPT Desktop → Settings → Developer")
-        print("    2. Enable Developer Mode")
-        print("    3. Add MCP connector for each backend:")
-        for name, info in servers.items():
-            url = info.get("url", "")
-            if url:
-                print(f"       {name}: {url}")
-        # Show token if present in any entry
-        sample = next(iter(servers.values()), {})
-        token = (sample.get("headers") or {}).get("Authorization", "")
-        if token:
-            print(f"    4. Add Authorization header: {token}")
-        print("")
-        print("    5. Go to Settings → Personalization → Custom Instructions")
-        print("    6. Paste the forensic discipline summary (note: 1500 char limit)")
-        print("")
-        print("  Note: ChatGPT has a 1500-character limit on custom instructions.")
-        print("  The MCP servers provide full discipline via the protocol.")
 
     else:
         # Manual / other — just dump JSON
@@ -1068,40 +1037,6 @@ def _copy_agents_md(target: Path) -> None:
         )
 
 
-def _write_cursor_rules() -> None:
-    """Write .cursor/rules/aiir.mdc (modern) + .cursorrules (legacy fallback)."""
-    src = _find_agents_md()
-    if not src:
-        print(
-            "  Warning: AGENTS.md not found. Copy it manually from the sift-mcp repo."
-        )
-        return
-
-    content = src.read_text()
-
-    # Modern Cursor (v0.47+): .cursor/rules/aiir.mdc with YAML frontmatter
-    rules_dir = Path.cwd() / ".cursor" / "rules"
-    rules_dir.mkdir(parents=True, exist_ok=True)
-    mdc_path = rules_dir / "aiir.mdc"
-    mdc_content = (
-        "---\n"
-        "description: AIIR forensic investigation rules\n"
-        "alwaysApply: true\n"
-        "---\n"
-        f"{content}\n"
-    )
-    mdc_path.write_text(mdc_content)
-    print(f"  Generated: {mdc_path}")
-
-    # Legacy fallback: .cursorrules
-    legacy = Path.cwd() / ".cursorrules"
-    try:
-        shutil.copy2(src, legacy)
-        print(f"  Copied:    {src.name} -> {legacy.name}")
-    except OSError as e:
-        print(f"  Warning: failed to copy {src} to {legacy}: {e}", file=sys.stderr)
-
-
 # ---------------------------------------------------------------------------
 # Uninstall
 # ---------------------------------------------------------------------------
@@ -1578,9 +1513,9 @@ def _cmd_setup_client_remote(args, identity: dict) -> None:
 def _format_server_entry(client: str, url: str, token: str | None) -> dict:
     """Format a server entry appropriate for the target client.
 
-    Claude Desktop needs mcp-remote bridge (npx subprocess) because it
-    doesn't support streamable-http natively. Other clients use native
-    streamable-http with Authorization header.
+    Claude Desktop's config file supports stdio transport only.
+    Uses mcp-remote to bridge to the gateway's streamable-http endpoint.
+    All other clients use native streamable-http with Authorization header.
     """
     if client == "claude-desktop" and token:
         if not shutil.which("npx"):

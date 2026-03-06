@@ -254,15 +254,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # setup
-    p_setup = sub.add_parser("setup", help="Interactive setup for all MCP servers")
-    p_setup.add_argument(
-        "--force-reprompt",
-        action="store_true",
-        help="Force re-prompting for all values",
-    )
-    p_setup.add_argument(
-        "--non-interactive", action="store_true", help="Skip interactive prompts"
-    )
+    p_setup = sub.add_parser("setup", help="Configure LLM client and test connectivity")
     setup_sub = p_setup.add_subparsers(dest="setup_action")
     setup_sub.add_parser("test", help="Test connectivity to all detected MCP servers")
 
@@ -274,9 +266,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[
             "claude-code",
             "claude-desktop",
-            "cursor",
             "librechat",
-            "chatgpt",
             "other",
         ],
         help="Target LLM client",

@@ -15,7 +15,7 @@ def cmd_dashboard(args, identity: dict) -> None:
     if not config_path.is_file():
         print(
             "Error: Gateway config not found (~/.aiir/gateway.yaml).\n"
-            "Run `aiir setup` to configure the gateway.",
+            "Run `aiir setup client` to configure the gateway.",
             file=sys.stderr,
         )
         sys.exit(1)

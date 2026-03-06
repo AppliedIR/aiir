@@ -5,7 +5,7 @@
 - SIFT Workstation (Ubuntu-based) or any Ubuntu 22.04+ system
 - Python 3.11+
 - sudo access (required for HMAC verification ledger at `/var/lib/aiir/verification/`)
-- An LLM client with MCP support (Claude Code, Claude Desktop, Cursor, etc.)
+- An LLM client with MCP support (Claude Code, Claude Desktop, LibreChat, etc.)
 
 ## Installation
 
@@ -30,7 +30,7 @@ The installer prompts for:
 
 - **Installation tier**: Quick (core only), Recommended (core + RAG + triage), or Custom
 - **Examiner identity**: Your name slug (e.g., `alice`)
-- **Client type**: Claude Code, Claude Desktop, Cursor, or generic
+- **Client type**: Claude Code, Claude Desktop, LibreChat, or Other
 - **Remote access**: Whether to enable TLS and bearer token auth
 
 ### Windows Forensic Workstation (Optional)

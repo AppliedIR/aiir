@@ -117,7 +117,7 @@ No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via B
 
 For use cases where more definitive human-in-the-loop approval is desired, the full AIIR suite ensures accountability and enforces human review of findings through cryptographic signing, PIN-gated approvals, and multiple layered controls.
 
-Full AIIR is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, Cursor, LibreChat, ChatGPT, and any client that can speak to a local MCP. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
+Full AIIR is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, LibreChat, Cherry Studio, and any MCP-only client that supports Streamable HTTP transport with Bearer token authentication. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
 
 ## Platform Architecture
 
@@ -457,7 +457,7 @@ cases/INC-2026-0219/
 
 ### SIFT Workstation
 
-Requires Python 3.11+ and sudo access. The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Non-shell clients (Claude Desktop, Cursor, etc.) get MCP config only.
+Requires Python 3.11+ and sudo access. The installer handles everything: MCP servers, gateway, aiir CLI, HMAC verification ledger, examiner identity, and LLM client configuration. When you select Claude Code, additional forensic controls are deployed (kernel-level sandbox, case data deny rules, PreToolUse guard hook, PostToolUse audit hook, provenance enforcement, PIN-gated human approval with HMAC signing). Other clients get MCP config only.
 
 **Quick** — Core platform only, no databases (~70 MB):
 
@@ -742,16 +742,17 @@ Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/aiir/main/set
 
 Always launch your LLM client from `~/aiir/` or a subdirectory. Forensic controls only apply when started from within the workspace. To uninstall, re-run the setup script with `--uninstall` (Linux/macOS) or `-Uninstall` (Windows).
 
-Claude Desktop requires the [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge for Streamable HTTP support.
+Claude Desktop's config file supports stdio transport only. The [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge is used to connect to the gateway. `aiir setup client --client=claude-desktop` generates the correct mcp-remote config automatically.
 
-| Client | Config file | Extras |
-|--------|-------------|--------|
-| Claude Code | `~/aiir/.mcp.json` (non-SIFT) or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json` (deny rules + PreToolUse guard + PostToolUse audit + sandbox), `forensic-audit.sh`, `pre-bash-guard.sh`, `FORENSIC_DISCIPLINE.md`, `TOOL_REFERENCE.md` |
-| Claude Desktop | `~/.config/claude/claude_desktop_config.json` | Requires mcp-remote for Streamable HTTP |
-| Cursor | `.cursor/mcp.json` | Copies `AGENTS.md` as `.cursorrules` |
-| Cherry Studio | `cherry-studio-mcp.json` | Manual import into Cherry Studio settings |
-| LibreChat | `librechat_mcp.yaml` | Merge into `librechat.yaml` |
-| Other | `aiir-mcp-config.json` | Manual integration |
+| Client | Platforms | Config file | Extras |
+|--------|-----------|-------------|--------|
+| Claude Code | Linux, macOS, Windows | `~/aiir/.mcp.json` or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json`, sandbox, audit hooks |
+| Claude Desktop | macOS, Windows | `claude_desktop_config.json` (see note) | Requires mcp-remote bridge. Project instructions from AGENTS.md |
+| Cherry Studio | Linux, macOS, Windows | JSON import (manual) | `baseUrl` field, `streamableHttp` type (camelCase) |
+| LibreChat | Any (browser) | `librechat.yaml` (`mcpServers` section) | AIIR generates `librechat_mcp.yaml` reference to merge |
+| Other | Any | `aiir-mcp-config.json` | Manual integration |
+
+Claude Code on Windows requires Git for Windows (provides Git Bash) or WSL. Claude Desktop is not available on Linux. Claude Desktop's config file supports stdio transport only — the `aiir setup client` wizard generates mcp-remote bridge configs automatically. Config path is platform-specific: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Any MCP client that supports Streamable HTTP transport with Bearer token authentication headers will work — the gateway is not client-specific.
 
 ## Examiner Identity
 

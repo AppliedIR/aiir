@@ -83,6 +83,13 @@ prompt_yn_strict() {
     done
 }
 
+prompt() {
+    local msg="$1" default="$2" reply
+    printf "  %s [%s]: " "$msg" "$default" >&2
+    read -r reply
+    echo "${reply:-$default}"
+}
+
 # =============================================================================
 # Banner
 # =============================================================================
@@ -252,7 +259,6 @@ header "AIIR Workspace"
 
 DEPLOY_DIR="$HOME/aiir"
 mkdir -p "$DEPLOY_DIR/cases"
-mkdir -p "$DEPLOY_DIR/.claude/hooks"
 
 # ---- MCP Config ----
 
@@ -277,6 +283,26 @@ build_mcp_entry_noauth() {
       "url": "$url"
     }
 ENTRY
+}
+
+build_mcp_entry_stdio() {
+    local name="$1" url="$2" token="$3"
+    if [[ -n "$token" ]]; then
+        cat << ENTRY
+    "$name": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "$url", "--header", "Authorization:\${AUTH_HEADER}"],
+      "env": { "AUTH_HEADER": "Bearer $token" }
+    }
+ENTRY
+    else
+        cat << ENTRY
+    "$name": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "$url"]
+    }
+ENTRY
+    fi
 }
 
 MCP_ENTRIES=""
@@ -304,8 +330,88 @@ $MCP_ENTRIES
   }
 }"
 
-(umask 077 && echo "$MCP_JSON" > "$DEPLOY_DIR/.mcp.json")
-ok "Written: $DEPLOY_DIR/.mcp.json"
+# Build stdio-format config for Claude Desktop (mcp-remote bridge)
+MCP_ENTRIES_STDIO=""
+FIRST_STDIO=true
+while IFS= read -r backend; do
+    [[ -z "$backend" ]] && continue
+    if $FIRST_STDIO; then
+        FIRST_STDIO=false
+    else
+        MCP_ENTRIES_STDIO="$MCP_ENTRIES_STDIO,"
+    fi
+    MCP_ENTRIES_STDIO="$MCP_ENTRIES_STDIO
+$(build_mcp_entry_stdio "$backend" "$GATEWAY_URL/mcp/$backend" "$GATEWAY_TOKEN")"
+done <<< "$BACKENDS"
+
+# External MCPs (no auth needed — mcp-remote still required for stdio bridge)
+MCP_ENTRIES_STDIO="$MCP_ENTRIES_STDIO,
+$(build_mcp_entry_stdio "zeltser-ir-writing" "https://website-mcp.zeltser.com/mcp" "")"
+MCP_ENTRIES_STDIO="$MCP_ENTRIES_STDIO,
+$(build_mcp_entry_stdio "microsoft-learn" "https://learn.microsoft.com/api/mcp" "")"
+
+MCP_JSON_STDIO="{
+  \"mcpServers\": {
+$MCP_ENTRIES_STDIO
+  }
+}"
+
+# ---- Client Choice ----
+
+echo ""
+echo "  Which LLM client?"
+echo "  1. Claude Code"
+echo "  2. Claude Desktop"
+echo "  3. LibreChat"
+echo "  4. Other"
+echo ""
+CHOICE=$(prompt "Choose" "1")
+case "$CHOICE" in
+    1) CLIENT="claude-code" ;;
+    2) CLIENT="claude-desktop" ;;
+    3) CLIENT="librechat" ;;
+    *) CLIENT="other" ;;
+esac
+
+# ---- Write client-specific config ----
+
+case "$CLIENT" in
+    claude-code)
+        CONFIG_FILE="$DEPLOY_DIR/.mcp.json"
+        (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
+        ok "Written: $CONFIG_FILE"
+        ;;
+    claude-desktop)
+        if ! command -v npx &>/dev/null; then
+            warn "Claude Desktop requires npx (Node.js) for mcp-remote bridge."
+            warn "Install Node.js: https://nodejs.org/ or: brew install node"
+            warn "Skipping Claude Desktop config generation."
+        else
+            CONFIG_DIR="$HOME/Library/Application Support/Claude"
+            mkdir -p "$CONFIG_DIR"
+            CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
+            (umask 077 && echo "$MCP_JSON_STDIO" > "$CONFIG_FILE")
+            ok "Written: $CONFIG_FILE (stdio via mcp-remote)"
+        fi
+        ;;
+    librechat)
+        CONFIG_FILE="$DEPLOY_DIR/librechat_mcp.yaml"
+        (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
+        ok "Written: $CONFIG_FILE (merge into librechat.yaml)"
+        ;;
+    *)
+        CONFIG_FILE="$DEPLOY_DIR/aiir-mcp-config.json"
+        (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
+        ok "Written: $CONFIG_FILE (reference config)"
+        info "Configure your LLM client using the entries in this file."
+        ;;
+esac
+
+# ---- Claude Code assets (skip for other clients) ----
+
+if [[ "$CLIENT" == "claude-code" ]]; then
+
+mkdir -p "$DEPLOY_DIR/.claude/hooks"
 
 # ---- Settings.json ----
 
@@ -386,7 +492,9 @@ SETTINGS_CONTENT=$(cat << SETTINGS
       "Edit(/var/lib/aiir/**)",
       "Write(/var/lib/aiir/**)",
       "Bash(aiir approve*)",
+      "Bash(*aiir approve*)",
       "Bash(aiir reject*)",
+      "Bash(*aiir reject*)",
       "Edit(**/.claude/settings.json)",
       "Write(**/.claude/settings.json)",
       "Edit(**/.claude/CLAUDE.md)",
@@ -399,6 +507,10 @@ SETTINGS_CONTENT=$(cat << SETTINGS
       "Write(**/.aiir/active_case)",
       "Edit(**/.aiir/gateway.yaml)",
       "Write(**/.aiir/gateway.yaml)",
+      "Edit(**/.aiir/config.yaml)",
+      "Write(**/.aiir/config.yaml)",
+      "Edit(**/.aiir/.pin_lockout)",
+      "Write(**/.aiir/.pin_lockout)",
       "Edit(**/pending-reviews.json)",
       "Write(**/pending-reviews.json)"
     ]
@@ -539,6 +651,8 @@ if (( ERRORS > 0 )); then
     warn "$ERRORS asset(s) could not be fetched. Re-run or download manually."
 fi
 
+fi  # end CLIENT == claude-code
+
 # =============================================================================
 # Summary
 # =============================================================================
@@ -556,32 +670,35 @@ echo "  unlock), and command execution (aiir execute). These operations"
 echo "  require PIN or terminal confirmation and are not available through"
 echo "  MCP. All other operations are available through MCP tools."
 
-echo ""
-echo -e "${YELLOW}${BOLD}IMPORTANT: Terminal-Access LLM Clients${NC}"
-echo "  If you use Claude Code or another LLM client with terminal access,"
-echo "  the LLM can use your SSH credentials to run commands directly on"
-echo "  SIFT, bypassing MCP audit controls and forensic integrity features."
-echo "  We recommend MCP-only clients (Claude Desktop, LibreChat) which can"
-echo "  only interact with SIFT through audited MCP tools."
-echo ""
-echo "  If you choose to use a terminal-access LLM, ensure your SSH"
-echo "  authentication to SIFT requires human interaction per use (password"
-echo "  auth, ssh-add -c, or hardware security keys) so the LLM cannot"
-echo "  authenticate automatically."
+if [[ "$CLIENT" == "claude-code" ]]; then
+    echo ""
+    echo -e "${YELLOW}${BOLD}SSH Security Advisory${NC}"
+    echo "  Claude Code has terminal access and can use your SSH credentials"
+    echo "  to run commands directly on SIFT, bypassing MCP audit controls."
+    echo "  To mitigate this, ensure your SSH authentication to SIFT requires"
+    echo "  human interaction per use:"
+    echo "    - Password-only auth (no agent-forwarded keys)"
+    echo "    - ssh-add -c (agent confirmation per use)"
+    echo "    - Hardware security keys (FIDO2/U2F)"
+    echo ""
+    echo "  Alternatively, use an MCP-only client (Claude Desktop, LibreChat,"
+    echo "  or any client without terminal access) which can only interact"
+    echo "  with SIFT through audited MCP tools."
 
-echo ""
-echo -e "${BOLD}AIIR workspace created at ~/aiir/${NC}"
-echo ""
-echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} Always launch Claude Code from ~/aiir/ or a subdirectory."
-echo "Forensic controls (audit logging, guardrails, MCP tools) only apply"
-echo "when Claude Code is started from within this directory."
-echo ""
-echo "  cd ~/aiir && claude"
-echo ""
-echo "To organize case work while maintaining controls:"
-echo ""
-echo "  mkdir ~/aiir/cases/INC-2026-001"
-echo "  cd ~/aiir/cases/INC-2026-001 && claude"
+    echo ""
+    echo -e "${BOLD}AIIR workspace created at ~/aiir/${NC}"
+    echo ""
+    echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} Always launch Claude Code from ~/aiir/ or a subdirectory."
+    echo "Forensic controls (audit logging, guardrails, MCP tools) only apply"
+    echo "when Claude Code is started from within this directory."
+    echo ""
+    echo "  cd ~/aiir && claude"
+    echo ""
+    echo "To organize case work while maintaining controls:"
+    echo ""
+    echo "  mkdir ~/aiir/cases/INC-2026-001"
+    echo "  cd ~/aiir/cases/INC-2026-001 && claude"
+fi
 
 echo ""
 echo -e "${BOLD}Documentation:${NC} https://appliedir.github.io/aiir/"

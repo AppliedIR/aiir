@@ -240,11 +240,11 @@ def test_client_written_to_manifest(tmp_path):
     with patch("pathlib.Path.home", return_value=tmp_path):
         # Simulate the manifest write logic directly
         manifest = json.loads(manifest_path.read_text())
-        manifest["client"] = "cursor"
+        manifest["client"] = "librechat"
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
     result = json.loads(manifest_path.read_text())
-    assert result["client"] == "cursor"
+    assert result["client"] == "librechat"
 
 
 def test_wrong_branch_fails(manifest_dir):

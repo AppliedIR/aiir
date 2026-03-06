@@ -39,7 +39,7 @@ These are structural facts. If any other document contradicts these, the invaria
 4. **Clients connect to two endpoints at most:** the gateway (SIFT tools) and wintools-mcp (Windows tools).
 5. **The case directory is local per examiner.** Multi-examiner collaboration uses export/merge, not shared filesystem.
 6. **Human approval is structural.** The AI cannot approve its own work. Only the aiir CLI can move findings to APPROVED.
-7. **AGENTS.md is the source of truth for forensic rules.** Per-client config files (CLAUDE.md, .cursorrules) are copies, not sources.
+7. **AGENTS.md is the source of truth for forensic rules.** Per-client config files (CLAUDE.md) are copies, not sources.
 8. **forensic-knowledge is a shared data package.** It has no runtime state.
 
 ## Component Details

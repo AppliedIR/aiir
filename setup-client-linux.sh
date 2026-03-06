@@ -44,7 +44,7 @@ for arg in "$@"; do
             echo "Usage: setup-client-linux.sh [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --client=CLIENT    LLM client (claude-code, claude-desktop, librechat, other)"
+            echo "  --client=CLIENT    LLM client (claude-code, librechat, other)"
             echo "  --examiner=NAME    Examiner identity"
             echo "  --sift=URL         Gateway URL (forces remote mode)"
             echo "  --code=CODE        Join code (remote mode)"
@@ -185,7 +185,8 @@ if $UNINSTALL; then
     # Remove empty ~/.aiir/ directory
     rmdir "$HOME/.aiir" 2>/dev/null || true
 
-    # Claude Desktop config
+    # Claude Desktop config (safety net — old installer wrote this on Linux,
+    # even though there's no official Linux build)
     CLAUDE_DESKTOP_CFG="$HOME/.config/claude/claude_desktop_config.json"
     if [[ -f "$CLAUDE_DESKTOP_CFG" ]]; then
         echo ""
@@ -387,15 +388,13 @@ header "LLM Client"
 
 if [[ -z "$CLIENT" ]]; then
     echo "  1. Claude Code"
-    echo "  2. Claude Desktop"
-    echo "  3. LibreChat"
-    echo "  4. Other"
+    echo "  2. LibreChat"
+    echo "  3. Other"
     echo ""
     CHOICE=$(prompt "Which LLM client?" "1")
     case "$CHOICE" in
         1) CLIENT="claude-code" ;;
-        2) CLIENT="claude-desktop" ;;
-        3) CLIENT="librechat" ;;
+        2) CLIENT="librechat" ;;
         *) CLIENT="other" ;;
     esac
 fi
@@ -469,15 +468,14 @@ case "$CLIENT" in
         (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
         ok "Written: $CONFIG_FILE"
         ;;
-    claude-desktop)
-        CONFIG_DIR="$HOME/.config/claude"
-        mkdir -p "$CONFIG_DIR"
-        CONFIG_FILE="$CONFIG_DIR/claude_desktop_config.json"
+    librechat)
+        CONFIG_FILE="$DEPLOY_DIR/librechat_mcp.yaml"
+        # Shell installer writes JSON reference; examiner merges into librechat.yaml
         (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
-        ok "Written: $CONFIG_FILE"
+        ok "Written: $CONFIG_FILE (merge into librechat.yaml)"
         ;;
     *)
-        CONFIG_FILE="$DEPLOY_DIR/.mcp.json"
+        CONFIG_FILE="$DEPLOY_DIR/aiir-mcp-config.json"
         (umask 077 && echo "$MCP_JSON" > "$CONFIG_FILE")
         ok "Written: $CONFIG_FILE (reference config)"
         info "Configure your LLM client using the entries in this file."
@@ -774,8 +772,9 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     echo "    - ssh-add -c (agent confirmation per use)"
     echo "    - Hardware security keys (FIDO2/U2F)"
     echo ""
-    echo "  Alternatively, use an MCP-only client (Claude Desktop, LibreChat)"
-    echo "  which can only interact with SIFT through audited MCP tools."
+    echo "  Alternatively, use an MCP-only client (LibreChat, or any client"
+    echo "  without terminal access) which can only interact with SIFT through"
+    echo "  audited MCP tools."
 
     echo ""
     echo -e "${BOLD}AIIR workspace created at ~/aiir/${NC}"

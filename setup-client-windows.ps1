@@ -245,7 +245,6 @@ $claudeDir = Join-Path $deployDir ".claude"
 $hooksDir = Join-Path $claudeDir "hooks"
 
 New-Item -ItemType Directory -Path $casesDir -Force | Out-Null
-New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
 
 # ---- MCP Config ----
 
@@ -273,16 +272,93 @@ $mcpServers["microsoft-learn"] = @{
 }
 
 $mcpConfig = @{ mcpServers = $mcpServers }
-$mcpJsonPath = Join-Path $deployDir ".mcp.json"
-$mcpConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $mcpJsonPath -Encoding UTF8
-$acl = Get-Acl $mcpJsonPath
-$acl.SetAccessRuleProtection($true, $false)
-$rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
-    [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,
-    "FullControl", "Allow")
-$acl.SetAccessRule($rule)
-Set-Acl -Path $mcpJsonPath -AclObject $acl
-Write-Ok "Written: $mcpJsonPath"
+
+# Build stdio-format config for Claude Desktop (mcp-remote bridge)
+$mcpServersStdio = @{}
+foreach ($backend in $backends) {
+    $mcpServersStdio[$backend] = @{
+        command = "npx"
+        args = @("-y", "mcp-remote", "$gatewayUrl/mcp/$backend",
+                 "--header", "Authorization:`${AUTH_HEADER}")
+        env = @{ AUTH_HEADER = "Bearer $gatewayToken" }
+    }
+}
+$mcpServersStdio["zeltser-ir-writing"] = @{
+    command = "npx"
+    args = @("-y", "mcp-remote", "https://website-mcp.zeltser.com/mcp")
+}
+$mcpServersStdio["microsoft-learn"] = @{
+    command = "npx"
+    args = @("-y", "mcp-remote", "https://learn.microsoft.com/api/mcp")
+}
+$mcpConfigStdio = @{ mcpServers = $mcpServersStdio }
+
+# ---- Client Choice ----
+
+Write-Host ""
+Write-Host "  Which LLM client?"
+Write-Host "  1. Claude Code"
+Write-Host "  2. Claude Desktop"
+Write-Host "  3. LibreChat"
+Write-Host "  4. Other"
+Write-Host ""
+$clientChoice = Read-Host "  Choose [1]"
+if (-not $clientChoice) { $clientChoice = "1" }
+$clientType = switch ($clientChoice) {
+    "1" { "claude-code" }
+    "2" { "claude-desktop" }
+    "3" { "librechat" }
+    default { "other" }
+}
+
+# ---- Write client-specific config ----
+
+switch ($clientType) {
+    "claude-code" {
+        $mcpJsonPath = Join-Path $deployDir ".mcp.json"
+        $mcpConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $mcpJsonPath -Encoding UTF8
+        $acl = Get-Acl $mcpJsonPath
+        $acl.SetAccessRuleProtection($true, $false)
+        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+            [System.Security.Principal.WindowsIdentity]::GetCurrent().Name,
+            "FullControl", "Allow")
+        $acl.SetAccessRule($rule)
+        Set-Acl -Path $mcpJsonPath -AclObject $acl
+        Write-Ok "Written: $mcpJsonPath"
+    }
+    "claude-desktop" {
+        if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
+            Write-Warn "Claude Desktop requires npx (Node.js) for mcp-remote bridge."
+            Write-Warn "Install Node.js: https://nodejs.org/"
+            Write-Warn "Skipping Claude Desktop config generation."
+        } else {
+            $claudeDir2 = Join-Path $env:APPDATA "Claude"
+            if (-not (Test-Path $claudeDir2)) {
+                New-Item -ItemType Directory -Path $claudeDir2 -Force | Out-Null
+            }
+            $configPath = Join-Path $claudeDir2 "claude_desktop_config.json"
+            $mcpConfigStdio | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding UTF8
+            Write-Ok "Written: $configPath (stdio via mcp-remote)"
+        }
+    }
+    "librechat" {
+        $configPath = Join-Path $deployDir "librechat_mcp.yaml"
+        $mcpConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding UTF8
+        Write-Ok "Written: $configPath (merge into librechat.yaml)"
+    }
+    default {
+        $configPath = Join-Path $deployDir "aiir-mcp-config.json"
+        $mcpConfig | ConvertTo-Json -Depth 5 | Set-Content -Path $configPath -Encoding UTF8
+        Write-Ok "Written: $configPath (reference config)"
+        Write-Info "Configure your LLM client using the entries in this file."
+    }
+}
+
+# ---- Claude Code assets (skip for other clients) ----
+
+if ($clientType -eq "claude-code") {
+
+New-Item -ItemType Directory -Path $hooksDir -Force | Out-Null
 
 # ---- Settings.json ----
 
@@ -361,7 +437,9 @@ $settingsObj = @{
             "Edit(/var/lib/aiir/**)",
             "Write(/var/lib/aiir/**)",
             "Bash(aiir approve*)",
+            "Bash(*aiir approve*)",
             "Bash(aiir reject*)",
+            "Bash(*aiir reject*)",
             "Edit(**/.claude/settings.json)",
             "Write(**/.claude/settings.json)",
             "Edit(**/.claude/CLAUDE.md)",
@@ -374,6 +452,10 @@ $settingsObj = @{
             "Write(**/.aiir/active_case)",
             "Edit(**/.aiir/gateway.yaml)",
             "Write(**/.aiir/gateway.yaml)",
+            "Edit(**/.aiir/config.yaml)",
+            "Write(**/.aiir/config.yaml)",
+            "Edit(**/.aiir/.pin_lockout)",
+            "Write(**/.aiir/.pin_lockout)",
             "Edit(**/pending-reviews.json)",
             "Write(**/pending-reviews.json)"
         )
@@ -479,6 +561,8 @@ if ($errors -gt 0) {
     Write-Warn "$errors asset(s) could not be fetched. Re-run or download manually."
 }
 
+}  # end clientType -eq "claude-code"
+
 # =============================================================================
 # Summary
 # =============================================================================
@@ -502,32 +586,35 @@ Write-Host "  Windows SSH clients: OpenSSH (built-in), PuTTY, or Windows Termina
 Write-Host "  If using ssh-agent or pageant, configure per-use confirmation to"
 Write-Host "  prevent automated key access."
 
-Write-Host ""
-Write-Host "IMPORTANT: Terminal-Access LLM Clients" -ForegroundColor Yellow
-Write-Host "  If you use Claude Code or another LLM client with terminal access,"
-Write-Host "  the LLM can use your SSH credentials to run commands directly on"
-Write-Host "  SIFT, bypassing MCP audit controls and forensic integrity features."
-Write-Host "  We recommend MCP-only clients (Claude Desktop, LibreChat) which can"
-Write-Host "  only interact with SIFT through audited MCP tools."
-Write-Host ""
-Write-Host "  If you choose to use a terminal-access LLM, ensure your SSH"
-Write-Host "  authentication to SIFT requires human interaction per use (password"
-Write-Host "  auth, ssh-agent confirmation, or hardware security keys) so the LLM"
-Write-Host "  cannot authenticate automatically."
+if ($clientType -eq "claude-code") {
+    Write-Host ""
+    Write-Host "SSH Security Advisory" -ForegroundColor Yellow
+    Write-Host "  Claude Code has terminal access and can use your SSH credentials"
+    Write-Host "  to run commands directly on SIFT, bypassing MCP audit controls."
+    Write-Host "  To mitigate this, ensure your SSH authentication to SIFT requires"
+    Write-Host "  human interaction per use:"
+    Write-Host "    - Password-only auth (no agent-forwarded keys)"
+    Write-Host "    - ssh-agent confirmation per use"
+    Write-Host "    - Hardware security keys (FIDO2/U2F)"
+    Write-Host ""
+    Write-Host "  Alternatively, use an MCP-only client (Claude Desktop, LibreChat,"
+    Write-Host "  or any client without terminal access) which can only interact"
+    Write-Host "  with SIFT through audited MCP tools."
 
-Write-Host ""
-Write-Host "AIIR workspace created at $deployDir\" -ForegroundColor White
-Write-Host ""
-Write-Host "IMPORTANT: Always launch Claude Code from $deployDir\ or a subdirectory." -ForegroundColor Yellow
-Write-Host "Forensic controls (audit logging, guardrails, MCP tools) only apply"
-Write-Host "when Claude Code is started from within this directory."
-Write-Host ""
-Write-Host "  cd $deployDir; claude"
-Write-Host ""
-Write-Host "To organize case work while maintaining controls:"
-Write-Host ""
-Write-Host "  mkdir $deployDir\cases\INC-2026-001"
-Write-Host "  cd $deployDir\cases\INC-2026-001; claude"
+    Write-Host ""
+    Write-Host "AIIR workspace created at $deployDir\" -ForegroundColor White
+    Write-Host ""
+    Write-Host "IMPORTANT: Always launch Claude Code from $deployDir\ or a subdirectory." -ForegroundColor Yellow
+    Write-Host "Forensic controls (audit logging, guardrails, MCP tools) only apply"
+    Write-Host "when Claude Code is started from within this directory."
+    Write-Host ""
+    Write-Host "  cd $deployDir; claude"
+    Write-Host ""
+    Write-Host "To organize case work while maintaining controls:"
+    Write-Host ""
+    Write-Host "  mkdir $deployDir\cases\INC-2026-001"
+    Write-Host "  cd $deployDir\cases\INC-2026-001; claude"
+}
 
 Write-Host ""
 Write-Host "Documentation: https://appliedir.github.io/aiir/" -ForegroundColor White

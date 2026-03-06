@@ -265,18 +265,6 @@ class TestCmdSetupClient:
         assert "remnux-mcp" in data["mcpServers"]
         assert data["mcpServers"]["remnux-mcp"]["url"] == "http://10.0.0.5:3000/mcp"
 
-    def test_cursor_config(self, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)
-        self._isolate_home(monkeypatch, tmp_path)
-        args = self._make_args(client="cursor")
-        identity = {"examiner": "testuser"}
-        cmd_setup_client(args, identity)
-
-        config_path = tmp_path / ".cursor" / "mcp.json"
-        assert config_path.is_file()
-        data = json.loads(config_path.read_text())
-        assert "aiir" in data["mcpServers"]
-
     def test_claude_desktop_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         # Redirect home to tmp_path so we don't write to real home
@@ -357,25 +345,6 @@ class TestCmdSetupClient:
         content = (tmp_path / "librechat_mcp.yaml").read_text()
         assert "serverInstructions: true" in content
 
-    def test_cursor_writes_mdc_file(self, tmp_path, monkeypatch):
-        """Verify Cursor setup creates .cursor/rules/aiir.mdc with frontmatter."""
-        monkeypatch.chdir(tmp_path)
-        self._isolate_home(monkeypatch, tmp_path)
-        # Create a mock AGENTS.md in cwd so _find_agents_md() finds it
-        (tmp_path / "AGENTS.md").write_text("# Test AGENTS content\nRule Zero applies.")
-        args = self._make_args(client="cursor")
-        identity = {"examiner": "testuser"}
-        cmd_setup_client(args, identity)
-
-        mdc_path = tmp_path / ".cursor" / "rules" / "aiir.mdc"
-        assert mdc_path.is_file()
-        content = mdc_path.read_text()
-        assert content.startswith("---\n")
-        assert "alwaysApply: true" in content
-        assert "Rule Zero applies." in content
-        # Legacy fallback also written
-        assert (tmp_path / ".cursorrules").is_file()
-
     def test_librechat_no_json_merge(self, tmp_path, monkeypatch):
         """LibreChat writes YAML, not JSON — no .mcp.json created."""
         monkeypatch.chdir(tmp_path)
@@ -389,16 +358,12 @@ class TestCmdSetupClient:
 
 
 class TestWizardClient:
-    def test_choice_4_maps_to_librechat(self, monkeypatch):
-        monkeypatch.setattr("builtins.input", lambda _: "4")
+    def test_choice_3_maps_to_librechat(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "3")
         assert _wizard_client() == "librechat"
 
-    def test_choice_5_maps_to_chatgpt(self, monkeypatch):
-        monkeypatch.setattr("builtins.input", lambda _: "5")
-        assert _wizard_client() == "chatgpt"
-
-    def test_choice_6_maps_to_other(self, monkeypatch):
-        monkeypatch.setattr("builtins.input", lambda _: "6")
+    def test_choice_4_maps_to_other(self, monkeypatch):
+        monkeypatch.setattr("builtins.input", lambda _: "4")
         assert _wizard_client() == "other"
 
     def test_unrecognized_falls_back_to_other(self, monkeypatch):
@@ -442,11 +407,6 @@ class TestFormatServerEntry:
                 _format_server_entry(
                     "claude-desktop", "https://sift:4508/mcp", "tok123"
                 )
-
-    def test_cursor_with_token(self):
-        entry = _format_server_entry("cursor", "https://sift:4508/mcp", "tok")
-        assert entry["type"] == "streamable-http"
-        assert entry["headers"]["Authorization"] == "Bearer tok"
 
 
 class TestRemoteSetup:
