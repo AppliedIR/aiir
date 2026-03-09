@@ -384,7 +384,7 @@ def _ensure_remote_binding() -> None:
         )
         return
 
-    # Update gateway.yaml atomically
+    # Update gateway.yaml
     config["gateway"]["host"] = "0.0.0.0"
     try:
         fd = os.open(str(gateway_config), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
