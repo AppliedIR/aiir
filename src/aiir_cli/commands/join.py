@@ -534,8 +534,20 @@ def _setup_firewall(wintools_ip: str) -> None:
 
 def _setup_samba_share(join_code: str) -> str:
     """Set up Samba share with PBKDF2-derived credentials. Returns wintools IP."""
-    import re
     import subprocess
+
+    # Idempotency: skip if already configured
+    samba_yaml = Path.home() / ".aiir" / "samba.yaml"
+    if samba_yaml.is_file():
+        try:
+            doc = yaml.safe_load(samba_yaml.read_text()) or {}
+            if doc.get("share_name") and doc.get("wintools_ip"):
+                print(f"Samba share already configured for {doc['wintools_ip']}")
+                answer = input("Reconfigure? [y/N] ").strip().lower()
+                if answer not in ("y", "yes"):
+                    return doc["wintools_ip"]
+        except (yaml.YAMLError, OSError):
+            pass
 
     try:
         subprocess.run(
@@ -617,26 +629,31 @@ def _setup_samba_share(join_code: str) -> str:
         raise RuntimeError(f"Failed to set SMB password: {e}") from e
 
     # Prompt for wintools IP
+    import ipaddress
+
     wintools_ip = input("Enter the Windows machine's IP address: ").strip()
-    if not re.match(r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)", wintools_ip):
+    try:
+        addr = ipaddress.IPv4Address(wintools_ip)
+    except (ipaddress.AddressValueError, ValueError) as e:
+        raise RuntimeError(f"Invalid IPv4 address: {wintools_ip}") from e
+    if not addr.is_private:
         raise RuntimeError(
             f"IP must be a private address (10.x, 172.16-31.x, 192.168.x): {wintools_ip}"
         )
 
-    # Determine share path
-    cases_dir = os.environ.get("AIIR_CASES_DIR", "")
-    if not cases_dir:
-        cases_dir = str(Path.home() / "cases")
+    # Share starts at inactive placeholder — repointed per-case on activation
+    placeholder = str(Path.home() / ".aiir" / "share-inactive")
+    Path(placeholder).mkdir(parents=True, exist_ok=True)
 
     # Write Samba config
     smb_conf = f"""[cases]
-    path = {cases_dir}
-    browsable = yes
-    writable = yes
+    path = {placeholder}
     valid users = aiir-smb
-    create mask = 0664
-    directory mask = 2775
+    read only = no
+    create mask = 0644
+    directory mask = 0755
     force group = sift
+    browsable = no
     hosts allow = {wintools_ip}
 """
     smb_conf_path = "/etc/samba/smb.conf.d/aiir-cases.conf"
@@ -699,6 +716,31 @@ def _setup_samba_share(join_code: str) -> str:
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Failed to restart smbd: {e}") from e
 
+    # Create sudoers.d entry for passwordless repoint
+    username = os.environ.get("USER") or os.getlogin()
+    sudoers_content = (
+        f"{username} ALL=(root) NOPASSWD: /usr/bin/tee {smb_conf_path}\n"
+        f"{username} ALL=(root) NOPASSWD: /usr/bin/smbcontrol smbd reload-config\n"
+        f"{username} ALL=(root) NOPASSWD: /usr/bin/smbcontrol smbd close-share cases\n"
+    )
+    try:
+        subprocess.run(
+            ["sudo", "tee", "/etc/sudoers.d/aiir-samba"],
+            input=sudoers_content.encode(),
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+        subprocess.run(
+            ["sudo", "chmod", "0440", "/etc/sudoers.d/aiir-samba"],
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: Failed to create sudoers entry: {e}", file=sys.stderr)
+        print("Case operations may require sudo password.", file=sys.stderr)
+
     # Write ~/.aiir/samba.yaml
     import datetime
 
@@ -706,18 +748,16 @@ def _setup_samba_share(join_code: str) -> str:
     aiir_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     samba_data = {
         "share_name": "cases",
-        "share_path": cases_dir,
         "smb_user": "aiir-smb",
         "wintools_ip": wintools_ip,
+        "active_share_target": placeholder,
         "configured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
     (aiir_dir / "samba.yaml").write_text(
         yaml.dump(samba_data, default_flow_style=False)
     )
 
-    print(
-        f"Samba share configured: //{_get_sift_ip() or 'SIFT_IP'}/cases → {cases_dir}"
-    )
+    print(f"Samba share configured: //{_get_sift_ip() or 'SIFT_IP'}/cases (per-case)")
     print("Note: Log out and back in for sift group membership to take effect.")
     return wintools_ip
 
@@ -725,7 +765,10 @@ def _setup_samba_share(join_code: str) -> str:
 def _post_join_code_setup(data: dict, static_ip: str | None) -> None:
     """Samba setup, firewall, and display — called after join code generation."""
     join_code = data["code"]
-    sift_host = static_ip or _get_sift_ip() or _detect_ip()
+    try:
+        sift_host = static_ip or _get_sift_ip() or _detect_ip()
+    except OSError:
+        sift_host = static_ip or _get_sift_ip() or "SIFT_IP"
 
     try:
         wintools_ip = _setup_samba_share(join_code)
@@ -734,9 +777,21 @@ def _post_join_code_setup(data: dict, static_ip: str | None) -> None:
         print(f"\nWarning: Samba/firewall setup failed: {e}", file=sys.stderr)
         print("Complete later with 'aiir setup join-code'", file=sys.stderr)
 
+    gw_port = 4508
+    try:
+        gw_config = Path.home() / ".aiir" / "gateway.yaml"
+        if gw_config.is_file():
+            gw_doc = yaml.safe_load(gw_config.read_text())
+            gw_port = gw_doc.get("gateway", {}).get("port", 4508)
+    except (yaml.YAMLError, OSError):
+        pass
+
     print(f"\nJoin code: {join_code} (expires in {data['expires_hours']} hours)")
     print("\nOn Windows, run:")
-    print(f"  .\\setup-windows.ps1 -JoinCode {join_code} -GatewayHost {sift_host}")
+    port_flag = f" -GatewayPort {gw_port}" if gw_port != 4508 else ""
+    print(
+        f"  .\\setup-windows.ps1 -JoinCode {join_code} -GatewayHost {sift_host}{port_flag}"
+    )
 
 
 def notify_wintools_case_activated(case_id: str) -> None:
@@ -752,12 +807,13 @@ def notify_wintools_case_activated(case_id: str) -> None:
     except Exception:
         return
     wt = config.get("backends", {}).get("wintools-mcp", {})
-    if not wt:
+    url = wt.get("url", "")
+    token = wt.get("bearer_token", "")
+    if not url or not token:
         return
 
-    parsed = urlparse(wt["url"])
+    parsed = urlparse(url)
     activate_url = urlunparse(parsed._replace(path="/cases/activate"))
-    token = wt["bearer_token"]
 
     payload = json.dumps({"case_id": case_id}).encode()
     req = urllib.request.Request(
@@ -771,8 +827,118 @@ def notify_wintools_case_activated(case_id: str) -> None:
     try:
         with urllib.request.urlopen(req, timeout=10):
             pass
+    except Exception as e:
+        print(f"Warning: failed to notify wintools of activation: {e}", file=sys.stderr)
+
+
+def notify_wintools_case_deactivated() -> None:
+    """Notify wintools-mcp of case deactivation. Non-fatal on failure."""
+    import urllib.request
+    from urllib.parse import urlparse, urlunparse
+
+    gateway_config = Path.home() / ".aiir" / "gateway.yaml"
+    if not gateway_config.is_file():
+        return
+    try:
+        config = yaml.safe_load(gateway_config.read_text())
     except Exception:
-        pass
+        return
+    wt = config.get("backends", {}).get("wintools-mcp", {})
+    url = wt.get("url", "")
+    token = wt.get("bearer_token", "")
+    if not url or not token:
+        return
+
+    parsed = urlparse(url)
+    deactivate_url = urlunparse(parsed._replace(path="/cases/deactivate"))
+
+    req = urllib.request.Request(
+        deactivate_url,
+        data=b"{}",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+    except Exception as e:
+        print(
+            f"Warning: failed to notify wintools of deactivation: {e}", file=sys.stderr
+        )
+
+
+def _repoint_samba_share(case_dir: Path | None) -> None:
+    """Update the Samba share to point at a specific case directory.
+
+    If case_dir is None, points to an inactive placeholder.
+    Uses smbcontrol reload (not smbd restart) for zero-downtime.
+    """
+    import subprocess
+
+    samba_yaml = Path.home() / ".aiir" / "samba.yaml"
+    if not samba_yaml.is_file():
+        return  # Samba not configured
+
+    doc = yaml.safe_load(samba_yaml.read_text()) or {}
+    wintools_ip = doc.get("wintools_ip", "")
+    current_target = doc.get("active_share_target", "")
+
+    placeholder = Path.home() / ".aiir" / "share-inactive"
+    target = str(case_dir) if case_dir else str(placeholder)
+
+    if target == current_target:
+        return  # No-op
+
+    placeholder.mkdir(parents=True, exist_ok=True)
+
+    conf_path = "/etc/samba/smb.conf.d/aiir-cases.conf"
+    smb_conf = f"""[cases]
+    path = {target}
+    valid users = aiir-smb
+    read only = no
+    create mask = 0644
+    directory mask = 0755
+    force group = sift
+    browsable = no
+    hosts allow = {wintools_ip}
+"""
+    try:
+        subprocess.run(
+            ["sudo", "tee", conf_path],
+            input=smb_conf.encode(),
+            check=True,
+            capture_output=True,
+            timeout=10,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Warning: failed to write Samba config: {e}", file=sys.stderr)
+        return
+
+    # Update tracker AFTER tee succeeds — if tee failed, next call retries.
+    doc["active_share_target"] = target
+    samba_yaml.write_text(yaml.dump(doc, default_flow_style=False))
+
+    result = subprocess.run(
+        ["sudo", "smbcontrol", "smbd", "reload-config"],
+        capture_output=True,
+        timeout=15,
+    )
+    if result.returncode != 0:
+        print(
+            f"Warning: smbcontrol reload failed: {result.stderr.decode().strip()}",
+            file=sys.stderr,
+        )
+
+    # Force-close existing connections so clients pick up the new path.
+    # Windows SMB redirector auto-reconnects using cached LSASS credentials.
+    subprocess.run(
+        ["sudo", "smbcontrol", "smbd", "close-share", "cases"],
+        capture_output=True,
+        timeout=15,
+    )
 
 
 def _ensure_static_ip() -> str | None:
@@ -811,9 +977,14 @@ def _ensure_static_ip() -> str | None:
         return None
 
     # Validate RFC1918
-    import re
+    import ipaddress
 
-    if not re.match(r"^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)", ip):
+    try:
+        addr = ipaddress.IPv4Address(ip)
+    except (ipaddress.AddressValueError, ValueError):
+        print(f"Invalid IPv4 address: {ip}", file=sys.stderr)
+        return None
+    if not addr.is_private:
         print(
             "IP must be a private address (10.x, 172.16-31.x, 192.168.x)",
             file=sys.stderr,
@@ -928,6 +1099,12 @@ def _ensure_static_ip() -> str | None:
             return None
 
     # Write netplan config
+    routes_block = ""
+    if gateway:
+        routes_block = f"""      routes:
+        - to: default
+          via: {gateway}
+"""
     netplan_content = f"""network:
   version: 2
   ethernets:
@@ -935,10 +1112,7 @@ def _ensure_static_ip() -> str | None:
       dhcp4: false
       addresses:
         - {ip}/{prefix}
-      routes:
-        - to: default
-          via: {gateway}
-      nameservers:
+{routes_block}      nameservers:
         addresses: [{", ".join(dns_servers)}]
 """
     try:

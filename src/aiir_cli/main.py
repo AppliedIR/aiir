@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 import argcomplete
 
@@ -828,7 +829,7 @@ def _case_init_data(
     return result
 
 
-def _set_case_wintools_permissions(case_dir) -> None:
+def _set_case_wintools_permissions(case_dir: Path) -> None:
     """Set group-based permissions for wintools access on a case directory."""
     import grp
     import os
@@ -917,9 +918,13 @@ def _case_init(args, identity: dict) -> None:
         share = input("Share this case with wintools? [y/N] ").strip().lower()
         if share in ("y", "yes"):
             try:
-                from aiir_cli.commands.join import notify_wintools_case_activated
+                from aiir_cli.commands.join import (
+                    _repoint_samba_share,
+                    notify_wintools_case_activated,
+                )
 
                 _set_case_wintools_permissions(Path(data["case_dir"]))
+                _repoint_samba_share(Path(data["case_dir"]))
                 notify_wintools_case_activated(data["case_id"])
                 print("Case permissions set for wintools")
             except Exception as e:
@@ -997,16 +1002,25 @@ def _case_activate(args, identity: dict) -> None:
 
     print(f"Active case: {data['case_id']}")
 
-    # Notify wintools if this case is shared
+    # Repoint share and notify wintools
     case_path = Path(data["case_dir"])
-    if _wintools_configured() and (case_path / "extractions" / "wintools").is_dir():
+    if _wintools_configured():
         try:
-            from aiir_cli.commands.join import notify_wintools_case_activated
+            from aiir_cli.commands.join import (
+                _repoint_samba_share,
+                notify_wintools_case_activated,
+                notify_wintools_case_deactivated,
+            )
 
-            notify_wintools_case_activated(args.case_id)
+            if (case_path / "extractions" / "wintools").is_dir():
+                _repoint_samba_share(case_path)
+                notify_wintools_case_activated(args.case_id)
+            else:
+                _repoint_samba_share(None)
+                notify_wintools_case_deactivated()
         except Exception as e:
             print(
-                f"Warning: Failed to notify wintools of case change: {e}",
+                f"Warning: wintools share update failed: {e}",
                 file=sys.stderr,
             )
 
@@ -1052,6 +1066,19 @@ def _case_close(args, identity: dict) -> None:
     from aiir_cli.case_io import _atomic_write as _aw
 
     _aw(meta_file, yaml.dump(meta, default_flow_style=False))
+
+    # Clear wintools share
+    if _wintools_configured() and (case_dir / "extractions" / "wintools").is_dir():
+        try:
+            from aiir_cli.commands.join import (
+                _repoint_samba_share,
+                notify_wintools_case_deactivated,
+            )
+
+            _repoint_samba_share(None)
+            notify_wintools_case_deactivated()
+        except Exception as e:
+            print(f"Warning: failed to clear wintools share: {e}", file=sys.stderr)
 
     # Copy verification ledger into case directory
     try:
@@ -1116,6 +1143,19 @@ def _case_reopen(args, identity: dict) -> None:
     _atomic_write(aiir_dir / "active_case", str(case_dir.resolve()))
 
     print(f"Case {case_id} reopened and set as active.")
+
+    # Repoint share if this case is shared
+    if _wintools_configured() and (case_dir / "extractions" / "wintools").is_dir():
+        try:
+            from aiir_cli.commands.join import (
+                _repoint_samba_share,
+                notify_wintools_case_activated,
+            )
+
+            _repoint_samba_share(case_dir)
+            notify_wintools_case_activated(case_id)
+        except Exception as e:
+            print(f"Warning: wintools share update failed: {e}", file=sys.stderr)
 
 
 if __name__ == "__main__":
