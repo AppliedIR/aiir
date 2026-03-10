@@ -8,6 +8,11 @@ AI Incident Response platform with varying levels of human-in-the-loop review an
 **[Platform Documentation](https://appliedir.github.io/aiir/)** ·
 [CLI Reference](https://appliedir.github.io/aiir/cli-reference/)
 
+> **Public Beta** — This project is undergoing active feature development.
+> Backward compatibility with future releases is not guaranteed. Consider
+> this a public beta for feature testing and evaluation rather than a
+> production-ready tool for real case data.
+
 ## AIIR Lite — Get Started in Minutes
 
 In its simplest form, AIIR Lite provides Claude Code with forensic knowledge and instructions on how to enforce forensic rigor, present findings for human review, and audit actions taken. MCP servers enhance accuracy by providing authoritative information — a forensic knowledge RAG and a Windows triage database — plus optional OpenCTI threat intelligence and REMnux malware analysis.
@@ -809,9 +814,13 @@ Evidence integrity is verified by SHA-256 hashes recorded at registration. Exami
 
 Case directories can reside on external or removable media. ext4 is preferred for full permission support. NTFS and exFAT are acceptable but file permission controls (read-only protection) will be silently ineffective. FAT32 is discouraged due to the 4 GB file size limit.
 
-## Responsible Use
+## Responsible Use and Legal
 
-This project demonstrates the capabilities of AI-assisted incident response. While steps have been taken to enforce human-in-the-loop controls, it is ultimately the responsibility of each examiner to ensure that their findings are accurate and complete. Ultimate responsibility rests with the human. The AI, like a hex editor, is a tool to be used by properly trained incident response professionals. Users are responsible for ensuring their use complies with applicable laws, regulations, and organizational policies.
+While steps have been taken to enforce human-in-the-loop controls, it is ultimately the responsibility of each examiner to ensure that their findings are accurate and complete. The AI, like a hex editor, is a tool to be used by properly trained incident response professionals. Users are responsible for ensuring their use complies with applicable laws, regulations, and organizational policies. Use only on systems and data you are authorized to analyze.
+
+This software is provided "as is" without warranty of any kind. See [LICENSE](LICENSE) for full terms.
+
+MITRE ATT&CK is a registered trademark of The MITRE Corporation. SIFT Workstation is a product of the SANS Institute.
 
 ## Acknowledgments
 
