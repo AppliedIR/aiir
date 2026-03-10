@@ -114,11 +114,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_case_init = case_sub.add_parser("init", help="Initialize a new case")
     p_case_init.add_argument("name", help="Case name")
     p_case_init.add_argument("--description", default="", help="Case description")
+    p_case_init.add_argument(
+        "--cases-dir",
+        default=None,
+        help="Cases root directory (default: $AIIR_CASES_DIR or ~/cases)",
+    )
 
     p_case_activate = case_sub.add_parser(
         "activate", help="Set active case for session"
     )
     p_case_activate.add_argument("case_id", help="Case ID to activate")
+    p_case_activate.add_argument(
+        "--cases-dir",
+        default=None,
+        help="Cases root directory (default: $AIIR_CASES_DIR or ~/cases)",
+    )
 
     p_case_close = case_sub.add_parser("close", help="Close a case")
     p_case_close.add_argument("case_id", help="Case ID to close")
@@ -818,13 +828,75 @@ def _case_init_data(
     return result
 
 
+def _set_case_wintools_permissions(case_dir) -> None:
+    """Set group-based permissions for wintools access on a case directory."""
+    import grp
+    import os
+
+    try:
+        sift_gid = grp.getgrnam("sift").gr_gid
+    except KeyError:
+        raise RuntimeError(
+            "Group 'sift' not found. Run 'aiir setup join-code' to set up wintools integration."
+        ) from None
+
+    # Create extractions/wintools/ with setgid + group-writable
+    wintools_dir = case_dir / "extractions" / "wintools"
+    wintools_dir.mkdir(parents=True, exist_ok=True)
+    os.chown(str(wintools_dir), -1, sift_gid)
+    os.chmod(str(wintools_dir), 0o2775)
+
+    # Create audit/wintools-mcp.jsonl with group-writable
+    audit_file = case_dir / "audit" / "wintools-mcp.jsonl"
+    if not audit_file.exists():
+        audit_file.parent.mkdir(parents=True, exist_ok=True)
+        audit_file.touch()
+    os.chown(str(audit_file), -1, sift_gid)
+    os.chmod(str(audit_file), 0o664)
+
+
+def _wintools_configured() -> bool:
+    """Check if Samba sharing is set up (samba.yaml exists with share_name)."""
+    from pathlib import Path
+
+    import yaml
+
+    p = Path.home() / ".aiir" / "samba.yaml"
+    if not p.is_file():
+        return False
+    try:
+        doc = yaml.safe_load(p.read_text())
+        return bool(doc and doc.get("share_name"))
+    except Exception:
+        return False
+
+
+def _gateway_has_wintools() -> bool:
+    """Check if gateway.yaml has a wintools-mcp backend."""
+    from pathlib import Path
+
+    import yaml
+
+    p = Path.home() / ".aiir" / "gateway.yaml"
+    if not p.is_file():
+        return False
+    try:
+        doc = yaml.safe_load(p.read_text())
+        return bool(doc and doc.get("backends", {}).get("wintools-mcp"))
+    except Exception:
+        return False
+
+
 def _case_init(args, identity: dict) -> None:
     """CLI wrapper — creates case and prints summary."""
+    from pathlib import Path
+
     try:
         data = _case_init_data(
             name=args.name,
             examiner=identity["examiner"],
             description=getattr(args, "description", ""),
+            cases_dir=getattr(args, "cases_dir", None),
         )
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -839,6 +911,25 @@ def _case_init(args, identity: dict) -> None:
     print(f"  Path: {data['case_dir']}")
     if data.get("fs_warning"):
         print(f"  WARNING: {data['fs_warning']}")
+
+    # Wintools sharing (after case creation succeeds)
+    if _wintools_configured():
+        share = input("Share this case with wintools? [y/N] ").strip().lower()
+        if share in ("y", "yes"):
+            try:
+                from aiir_cli.commands.join import notify_wintools_case_activated
+
+                _set_case_wintools_permissions(Path(data["case_dir"]))
+                notify_wintools_case_activated(data["case_id"])
+                print("Case permissions set for wintools")
+            except Exception as e:
+                print(
+                    f"Warning: Failed to set up wintools sharing: {e}",
+                    file=sys.stderr,
+                )
+    elif _gateway_has_wintools():
+        print("Tip: Run 'aiir setup join-code' to set up file sharing with wintools")
+
     print()
     print("Next steps:")
     print(f"  1. Copy evidence into: {data['case_dir']}/evidence/")
@@ -890,8 +981,13 @@ def _case_activate_data(case_id: str, cases_dir=None) -> dict:
 
 def _case_activate(args, identity: dict) -> None:
     """CLI wrapper — activates case and prints confirmation."""
+    from pathlib import Path
+
     try:
-        data = _case_activate_data(args.case_id)
+        data = _case_activate_data(
+            args.case_id,
+            cases_dir=getattr(args, "cases_dir", None),
+        )
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -900,6 +996,19 @@ def _case_activate(args, identity: dict) -> None:
         sys.exit(1)
 
     print(f"Active case: {data['case_id']}")
+
+    # Notify wintools if this case is shared
+    case_path = Path(data["case_dir"])
+    if _wintools_configured() and (case_path / "extractions" / "wintools").is_dir():
+        try:
+            from aiir_cli.commands.join import notify_wintools_case_activated
+
+            notify_wintools_case_activated(args.case_id)
+        except Exception as e:
+            print(
+                f"Warning: Failed to notify wintools of case change: {e}",
+                file=sys.stderr,
+            )
 
 
 def _case_close(args, identity: dict) -> None:
