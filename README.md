@@ -126,63 +126,93 @@ Full AIIR is **LLM client agnostic** — connect any MCP-compatible client throu
 
 ## Platform Architecture
 
-The LLM client, the case dashboard, and the aiir CLI are the three human-facing interfaces. The **case dashboard** is a browser-based review interface served by the gateway — examiners review, edit, approve, reject, and commit findings entirely in the browser with challenge-response authentication. The **aiir CLI** runs on the SIFT workstation for case management, evidence handling, and verification. When the LLM client runs on a separate machine (Path 2), the examiner accesses the dashboard through the gateway (HTTPS) and only needs SSH for CLI-exclusive operations (case init, evidence register, unlock, exec, verify).
+The examiner interacts with AIIR through three interfaces: the **LLM client** (AI-assisted investigation), the **case dashboard** (browser-based review and approval), and the **aiir CLI** (case management, evidence handling, and verification).
 
-### Core Component Map
+### Deployment Overview
+
+The typical deployment runs three VMs on a single host: SIFT (primary workstation), REMnux (malware analysis), and Windows (forensic tool execution). The examiner works on the SIFT VM — running the LLM client, the case dashboard in a browser, and the aiir CLI. REMnux and Windows are headless worker VMs. All three communicate over a VM-local network. Internet access is through NAT for external MCP services.
 
 ```mermaid
 graph TB
-    subgraph analyst ["Analyst Machine (Path 2)"]
-        CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(human interface)"]
+    subgraph host ["Host Machine"]
+        subgraph sift ["SIFT VM"]
+            CC["LLM Client<br/>(human interface)"]
+            BR["Browser<br/>(dashboard)"]
+            CLI["aiir CLI"]
+            GW["sift-gateway :4508"]
+            CASE["Case Directory"]
+
+            CC -->|"streamable-http"| GW
+            BR -->|"HTTP"| GW
+            CLI --> CASE
+        end
+
+        subgraph remnux ["REMnux VM (optional)"]
+            RAPI["remnux-mcp :3000"]
+        end
+
+        subgraph winbox ["Windows VM (optional)"]
+            WAPI["wintools-mcp :4624"]
+        end
+
+        CC -->|"streamable-http"| RAPI
+        CC -->|"streamable-http"| WAPI
+        WAPI -->|"SMB"| CASE
     end
 
-    subgraph sift ["SIFT Workstation"]
-        CLI["aiir CLI"]
-        GW["sift-gateway<br/>:4508"]
-        FM["forensic-mcp<br/>Findings + discipline"]
-        CM["case-mcp<br/>Case management"]
-        RM["report-mcp<br/>Report generation"]
-        SM["sift-mcp<br/>Linux tool execution"]
-        FR["forensic-rag-mcp<br/>Knowledge search"]
-        WTR["windows-triage-mcp<br/>Baseline validation"]
-        OC["opencti-mcp<br/>Threat intelligence"]
-        CD["case-dashboard<br/>Review + approval"]
-        FK["forensic-knowledge<br/>(shared YAML data package)"]
-        CASE["Case Directory"]
-
-        GW -->|stdio| FM
-        GW -->|stdio| CM
-        GW -->|stdio| RM
-        GW -->|stdio| SM
-        GW -->|stdio| FR
-        GW -->|stdio| WTR
-        GW -->|stdio| OC
-        GW --> CD
-        FM --> FK
-        SM --> FK
-        FM --> CASE
-        CM --> CASE
-        RM --> CASE
-        CD --> CASE
-        CLI --> CASE
+    subgraph internet ["Internet"]
+        ML["MS Learn MCP"]
+        ZE["Zeltser IR Writing MCP"]
+        OCTI["OpenCTI (if external)"]
     end
 
-    subgraph winbox ["Windows Forensic Workstation (optional)"]
-        WAPI["wintools-mcp API<br/>:4624"]
-        WM["wintools-mcp<br/>Windows tool execution"]
-        FK2["forensic-knowledge"]
-        WAPI --> WM
-        WM --> FK2
-    end
-
-    CC -->|"streamable-http"| GW
-    CC -->|"streamable-http"| WAPI
-    BR -->|"HTTPS"| GW
-    WM -->|"SMB"| CASE
+    CC -->|"HTTPS"| ML
+    CC -->|"HTTPS"| ZE
+    GW -.->|"HTTP(S)"| OCTI
 ```
 
-In Path 1 (co-located), everything runs on SIFT — no remote access needed. In Path 2, the LLM client and browser run on the analyst machine; the browser connects to the dashboard via HTTPS on the gateway.
+REMnux and Windows VMs are optional. SIFT alone provides 64 MCP tools across 7 backends, the case dashboard, and full case management.
+
+Other deployment options:
+
+- **Single machine** — everything on one OS, no VMs. Simplest setup.
+- **Remote orchestrator** — LLM client on a laptop, SIFT on a server. Use `setup-sift.sh --remote` for TLS and bearer token auth. The dashboard is accessible from any browser on the network.
+- **Multi-examiner** — each examiner runs their own SIFT instance. Cases are shared via `aiir case export` / `aiir case merge`.
+
+### SIFT Platform Components
+
+The sift-gateway aggregates 7 MCP backends as stdio subprocesses behind a single HTTP endpoint. Each backend is also available individually. The case dashboard is served by the gateway for browser-based review and approval.
+
+```mermaid
+graph LR
+    GW["sift-gateway :4508"]
+
+    FM["forensic-mcp<br/>12 tools · findings, timeline,<br/>evidence, discipline"]
+    CM["case-mcp<br/>14 tools · case management,<br/>audit queries"]
+    RM["report-mcp<br/>6 tools · report generation,<br/>IOC aggregation"]
+    SM["sift-mcp<br/>6 tools · Linux forensic<br/>tool execution"]
+    RAG["forensic-rag<br/>3 tools · semantic search<br/>23K records"]
+    WT["windows-triage<br/>13 tools · offline baseline<br/>validation"]
+    OC["opencti<br/>10 tools · threat<br/>intelligence"]
+    CD["case-dashboard<br/>browser review + commit"]
+    FK["forensic-knowledge<br/>shared YAML data"]
+    CASE["Case Directory"]
+
+    GW -->|stdio| FM
+    GW -->|stdio| CM
+    GW -->|stdio| RM
+    GW -->|stdio| SM
+    GW -->|stdio| RAG
+    GW -->|stdio| WT
+    GW -->|stdio| OC
+    GW --> CD
+    FM --> FK
+    SM --> FK
+    FM --> CASE
+    CM --> CASE
+    RM --> CASE
+    CD --> CASE
+```
 
 ### Human-in-the-Loop Workflow
 
@@ -239,159 +269,6 @@ http://localhost:4508/mcp/sift-mcp
 http://localhost:4508/mcp/windows-triage-mcp
 http://localhost:4508/mcp/forensic-rag-mcp
 http://localhost:4508/mcp/opencti-mcp
-```
-
-### Deployment Topologies
-
-Two primary deployment paths:
-
-- **Path 1 — Co-located.** LLM client runs directly on the SIFT workstation. No TLS or token auth needed. All forensic controls apply (sandbox, audit hooks, password gate). Simplest setup — single machine, one installer.
-- **Path 2 — Remote orchestrator.** LLM client runs on a separate machine (laptop, desktop). Connects to the gateway over the network with TLS and bearer token authentication. The examiner reviews and commits findings through the case dashboard in their browser (also served by the gateway). SSH is only needed for CLI-exclusive operations: case init, evidence register, evidence unlock, and exec. Run `setup-sift.sh --remote` to generate TLS certificates and bind the gateway to all interfaces. MCP-only clients (Claude Desktop, LibreChat) are well suited for this path — they can only reach SIFT through audited MCP tools, and the dashboard handles all review needs.
-
-#### Solo Analyst on SIFT (Path 1)
-
-```mermaid
-graph LR
-    subgraph sift ["SIFT Workstation"]
-        CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(human interface)"]
-        CLI["aiir CLI"]
-        GW["sift-gateway<br/>:4508"]
-        FM[forensic-mcp]
-        CM[case-mcp]
-        RM[report-mcp]
-        SM[sift-mcp]
-        FR[forensic-rag-mcp]
-        WTR[windows-triage-mcp]
-        OC[opencti-mcp]
-        CASE[Case Directory]
-
-        CC -->|"streamable-http"| GW
-        BR -->|"HTTPS"| GW
-        GW -->|stdio| FM
-        GW -->|stdio| CM
-        GW -->|stdio| RM
-        GW -->|stdio| SM
-        GW -->|stdio| FR
-        GW -->|stdio| WTR
-        GW -->|stdio| OC
-        FM --> CASE
-        CM --> CASE
-        RM --> CASE
-        CLI --> CASE
-    end
-```
-
-#### SIFT + Windows Forensic Workstation
-
-```mermaid
-graph LR
-    subgraph sift ["SIFT Workstation"]
-        CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(human interface)"]
-        CLI["aiir CLI"]
-        GW["sift-gateway<br/>:4508"]
-        FM[forensic-mcp]
-        CM[case-mcp]
-        RM[report-mcp]
-        SM[sift-mcp]
-        FR[forensic-rag-mcp]
-        WTR[windows-triage-mcp]
-        OC[opencti-mcp]
-        CASE[Case Directory]
-
-        CC -->|"streamable-http"| GW
-        BR -->|"HTTPS"| GW
-        GW -->|stdio| FM
-        GW -->|stdio| CM
-        GW -->|stdio| RM
-        GW -->|stdio| SM
-        GW -->|stdio| FR
-        GW -->|stdio| WTR
-        GW -->|stdio| OC
-        FM --> CASE
-        CM --> CASE
-        RM --> CASE
-        CLI --> CASE
-    end
-
-    subgraph winbox ["Windows Forensic Workstation"]
-        WAPI["wintools-mcp API<br/>:4624"]
-        WM["wintools-mcp<br/>Windows tool execution"]
-
-        WAPI --> WM
-    end
-
-    CC -->|"streamable-http"| WAPI
-    WM -->|"SMB"| CASE
-```
-
-#### Remote Orchestrator with Optional External MCPs (Path 2)
-
-```mermaid
-graph LR
-    subgraph analyst ["Analyst Machine"]
-        CC["LLM Client<br/>(human interface)"]
-        BR["Browser<br/>(human interface)"]
-    end
-
-    subgraph sift ["SIFT Workstation"]
-        CLI["aiir CLI"]
-        GW["sift-gateway<br/>:4508"]
-        FM[forensic-mcp]
-        CM[case-mcp]
-        RM[report-mcp]
-        SM[sift-mcp]
-        FR[forensic-rag-mcp]
-        WTR[windows-triage-mcp]
-        OC[opencti-mcp]
-        FK[forensic-knowledge]
-        CASE[Case Directory]
-
-        GW -->|stdio| FM
-        GW -->|stdio| CM
-        GW -->|stdio| RM
-        GW -->|stdio| SM
-        GW -->|stdio| FR
-        GW -->|stdio| WTR
-        GW -->|stdio| OC
-        FM --> FK
-        SM --> FK
-        FM --> CASE
-        CM --> CASE
-        RM --> CASE
-        CLI --> CASE
-    end
-
-    subgraph winbox ["Windows Forensic Workstation"]
-        WAPI["wintools-mcp API<br/>:4624"]
-        WM["wintools-mcp<br/>Windows tool execution"]
-        WAPI --> WM
-    end
-
-    subgraph octi ["OpenCTI Instance"]
-        OCTI[OpenCTI]
-    end
-
-    subgraph remnux ["REMnux Workstation"]
-        RAPI["remnux-mcp API<br/>:3000"]
-        RMX["remnux-mcp<br/>Malware analysis"]
-        RAPI --> RMX
-    end
-
-    subgraph internet ["Internet"]
-        ML["MS Learn MCP<br/>(HTTPS)"]
-        ZE["Zeltser IR Writing MCP<br/>(HTTPS)"]
-    end
-
-    CC -->|"streamable-http"| GW
-    CC -->|"streamable-http"| WAPI
-    CC -->|"streamable-http"| RAPI
-    CC -->|"HTTPS"| ML
-    CC -->|"HTTPS"| ZE
-    OC -->|"HTTP(S)"| OCTI
-    BR -->|"HTTPS"| GW
-    WM -->|"SMB"| CASE
 ```
 
 #### Multi-Examiner Team
