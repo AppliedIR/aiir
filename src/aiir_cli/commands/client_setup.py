@@ -697,7 +697,11 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
             _fixup_global_hook_path(settings_target)
 
         # Deploy hook scripts to ~/.aiir/hooks/
-        for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
+        for hook_name in (
+            "forensic-audit.sh",
+            "pre-bash-guard.sh",
+            "case-dir-check.sh",
+        ):
             hook_src = _find_hook(hook_name)
             if hook_src:
                 hook_target = Path.home() / ".aiir" / "hooks" / hook_name
@@ -746,7 +750,11 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
             print(f"  Merged:    settings.json -> {settings_target}")
 
         # Deploy hook scripts to project
-        for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
+        for hook_name in (
+            "forensic-audit.sh",
+            "pre-bash-guard.sh",
+            "case-dir-check.sh",
+        ):
             hook_src = _find_hook(hook_name)
             if hook_src:
                 hook_target = project_dir / ".claude" / "hooks" / hook_name
@@ -794,7 +802,12 @@ def _fixup_global_hook_path(settings_path: Path) -> None:
     hooks_dir = Path.home() / ".aiir" / "hooks"
     changed = False
 
-    for hook_type in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
+    for hook_type in (
+        "SessionStart",
+        "PreToolUse",
+        "PostToolUse",
+        "UserPromptSubmit",
+    ):
         entries = data.get("hooks", {}).get(hook_type, [])
         for entry in entries:
             for h in entry.get("hooks", []):
@@ -1084,7 +1097,7 @@ def _uninstall_sift() -> None:
 
     # [3] Hook scripts
     hooks_dir = Path.home() / ".aiir" / "hooks"
-    hook_scripts = ["forensic-audit.sh", "pre-bash-guard.sh"]
+    hook_scripts = ["forensic-audit.sh", "pre-bash-guard.sh", "case-dir-check.sh"]
     existing_hooks = [h for h in hook_scripts if (hooks_dir / h).is_file()]
     if existing_hooks:
         print(f"  [3] Hook scripts (~/.aiir/hooks/: {', '.join(existing_hooks)})")
@@ -1205,7 +1218,11 @@ def _uninstall_project() -> None:
     if claude_dir.is_dir():
         settings_file = claude_dir / "settings.json"
         hooks_dir = claude_dir / "hooks"
-        for hook_name in ("forensic-audit.sh", "pre-bash-guard.sh"):
+        for hook_name in (
+            "forensic-audit.sh",
+            "pre-bash-guard.sh",
+            "case-dir-check.sh",
+        ):
             hook_file = hooks_dir / hook_name
             if hook_file.is_file():
                 claude_files_to_remove.append(hook_file)
@@ -1288,7 +1305,12 @@ def _remove_forensic_settings(path: Path) -> None:
 
     # Remove forensic hooks
     hooks = data.get("hooks", {})
-    for hook_type in ("PreToolUse", "PostToolUse", "UserPromptSubmit"):
+    for hook_type in (
+        "SessionStart",
+        "PreToolUse",
+        "PostToolUse",
+        "UserPromptSubmit",
+    ):
         entries = hooks.get(hook_type, [])
         hooks[hook_type] = [
             e
@@ -1298,6 +1320,9 @@ def _remove_forensic_settings(path: Path) -> None:
             )
             and not any(
                 "pre-bash-guard" in h.get("command", "") for h in e.get("hooks", [])
+            )
+            and not any(
+                "case-dir-check" in h.get("command", "") for h in e.get("hooks", [])
             )
             and not any(
                 "forensic-rules" in h.get("command", "") for h in e.get("hooks", [])
