@@ -825,6 +825,24 @@ def _post_join_code_setup(data: dict, static_ip: str | None) -> None:
     )
 
 
+def _wintools_ssl_context():
+    """Build SSL context for wintools connections using pinned cert."""
+    import ssl
+
+    cert_path = Path.home() / ".aiir" / "tls" / "wintools-cert.pem"
+    ctx = ssl.create_default_context()
+    if cert_path.exists():
+        ctx.load_verify_locations(str(cert_path))
+    else:
+        print(
+            "Warning: wintools TLS cert not found, skipping verification",
+            file=sys.stderr,
+        )
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+    return ctx
+
+
 def notify_wintools_case_activated(case_id: str) -> None:
     """Notify wintools-mcp of case activation. Non-fatal on failure."""
     import urllib.request
@@ -856,7 +874,10 @@ def notify_wintools_case_activated(case_id: str) -> None:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=10):
+        kwargs = {"timeout": 10}
+        if activate_url.startswith("https"):
+            kwargs["context"] = _wintools_ssl_context()
+        with urllib.request.urlopen(req, **kwargs):
             pass
     except Exception as e:
         print(f"Warning: failed to notify wintools of activation: {e}", file=sys.stderr)
@@ -893,7 +914,10 @@ def notify_wintools_case_deactivated() -> None:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=10):
+        kwargs = {"timeout": 10}
+        if deactivate_url.startswith("https"):
+            kwargs["context"] = _wintools_ssl_context()
+        with urllib.request.urlopen(req, **kwargs):
             pass
     except Exception as e:
         print(
