@@ -16,9 +16,11 @@ def cmd_join(args, identity: dict) -> None:
     sift_url = args.sift
     code = args.code
 
-    # Normalize URL
+    # Normalize URL — default to HTTPS for security (join codes are credentials)
+    auto_https = False
     if not sift_url.startswith("http"):
         sift_url = f"https://{sift_url}"
+        auto_https = True
     # Add default port if not present
     parts = sift_url.split("//", 1)
     if len(parts) == 2 and ":" not in parts[1]:
@@ -42,6 +44,14 @@ def cmd_join(args, identity: dict) -> None:
             file=sys.stderr,
         )
 
+    join_body = {
+        "code": code,
+        "machine_type": "wintools" if wintools_url else "examiner",
+        "hostname": socket.gethostname(),
+        "wintools_url": wintools_url,
+        "wintools_token": wintools_token,
+    }
+
     # POST to /api/v1/setup/join
     try:
         import requests
@@ -53,26 +63,39 @@ def cmd_join(args, identity: dict) -> None:
     try:
         resp = requests.post(
             f"{sift_url}/api/v1/setup/join",
-            json={
-                "code": code,
-                "machine_type": "wintools" if wintools_url else "examiner",
-                "hostname": socket.gethostname(),
-                "wintools_url": wintools_url,
-                "wintools_token": wintools_token,
-            },
+            json=join_body,
             verify=verify,
             timeout=30,
         )
-    except requests.exceptions.ConnectionError as e:
-        print(f"Connection failed: {e}", file=sys.stderr)
-        print(f"Verify that the gateway is running at {sift_url}", file=sys.stderr)
-        sys.exit(1)
     except requests.exceptions.SSLError as e:
         print(f"TLS error: {e}", file=sys.stderr)
-        print(
-            "Try --ca-cert to specify the CA certificate, or check the gateway's TLS config",
-            file=sys.stderr,
-        )
+        if auto_https:
+            print(
+                "If the gateway uses plain HTTP, specify the URL explicitly: "
+                f"http://{sift_url.split('://', 1)[1]}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                "Try --ca-cert to specify the CA certificate, "
+                "or check the gateway's TLS config.",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+    except requests.exceptions.ConnectionError as e:
+        print(f"Connection failed: {e}", file=sys.stderr)
+        if auto_https:
+            print(
+                f"Verify that the gateway is running at {sift_url}. "
+                "If the gateway uses plain HTTP, specify the URL explicitly: "
+                f"http://{sift_url.split('://', 1)[1]}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Verify that the gateway is running at {sift_url}",
+                file=sys.stderr,
+            )
         sys.exit(1)
 
     if resp.status_code != 200:
@@ -255,7 +278,22 @@ def _join_code_urllib(gateway_url, token, args) -> dict:
 
 
 def _write_config(gateway_url: str, gateway_token: str) -> None:
-    """Write gateway credentials to ~/.aiir/config.yaml."""
+    """Write gateway credentials to ~/.aiir/config.yaml.
+
+    config.yaml's gateway_url is for remote clients only (written by 'aiir join'
+    on a remote machine). Local SIFT commands read gateway.yaml instead.
+    """
+    from urllib.parse import urlparse
+
+    # Validate URL to prevent malformed values (e.g. doubled scheme)
+    parsed = urlparse(gateway_url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        print(
+            f"Warning: invalid gateway URL '{gateway_url}', not saving to config",
+            file=sys.stderr,
+        )
+        return
+
     config_dir = Path.home() / ".aiir"
     config_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     config_path = config_dir / "config.yaml"
@@ -278,18 +316,10 @@ def _write_config(gateway_url: str, gateway_token: str) -> None:
 
 
 def _get_local_gateway_url() -> str:
-    """Get the local gateway URL from config or default."""
-    config_path = Path.home() / ".aiir" / "config.yaml"
-    if config_path.exists():
-        try:
-            with open(config_path) as f:
-                config = yaml.safe_load(f) or {}
-            url = config.get("gateway_url")
-            if url:
-                return url
-        except (yaml.YAMLError, OSError):
-            pass
-    return "http://127.0.0.1:4508"
+    """Build the local gateway URL from gateway.yaml config."""
+    from aiir_cli.gateway import get_local_gateway_url
+
+    return get_local_gateway_url()
 
 
 def _get_local_gateway_token() -> str | None:
@@ -411,14 +441,20 @@ def _ensure_remote_binding() -> None:
         return
 
     # Wait for gateway to become healthy
+    from aiir_cli.gateway import get_local_gateway_url, get_local_ssl_context
+
     port = gw.get("port", 4508)
-    health_url = f"http://127.0.0.1:{port}/health"
+    health_url = f"{get_local_gateway_url()}/health"
+    ssl_ctx = get_local_ssl_context()
     for _attempt in range(10):
         time.sleep(1)
         try:
             import urllib.request
 
-            with urllib.request.urlopen(health_url, timeout=3) as resp:
+            kwargs = {"timeout": 3}
+            if ssl_ctx is not None:
+                kwargs["context"] = ssl_ctx
+            with urllib.request.urlopen(health_url, **kwargs) as resp:
                 if resp.status == 200:
                     print(" done.")
                     print(f"Gateway now listening on 0.0.0.0:{port} (all interfaces).")
@@ -432,10 +468,9 @@ def _ensure_remote_binding() -> None:
 
 def _find_ca_cert() -> str | None:
     """Find CA certificate for TLS verification."""
-    ca_path = Path.home() / ".aiir" / "tls" / "ca-cert.pem"
-    if ca_path.exists():
-        return str(ca_path)
-    return None
+    from aiir_cli.gateway import find_ca_cert
+
+    return find_ca_cert()
 
 
 def derive_smb_password(join_code: str) -> str:
@@ -777,14 +812,10 @@ def _post_join_code_setup(data: dict, static_ip: str | None) -> None:
         print(f"\nWarning: Samba/firewall setup failed: {e}", file=sys.stderr)
         print("Complete later with 'aiir setup join-code'", file=sys.stderr)
 
-    gw_port = 4508
-    try:
-        gw_config = Path.home() / ".aiir" / "gateway.yaml"
-        if gw_config.is_file():
-            gw_doc = yaml.safe_load(gw_config.read_text())
-            gw_port = gw_doc.get("gateway", {}).get("port", 4508)
-    except (yaml.YAMLError, OSError):
-        pass
+    from urllib.parse import urlparse
+
+    gw_url = _get_local_gateway_url()
+    gw_port = urlparse(gw_url).port or 4508
 
     print(f"\nJoin code: {join_code} (expires in {data['expires_hours']} hours)")
     print("\nOn Windows, run:")
@@ -1156,20 +1187,17 @@ def _ensure_static_ip() -> str | None:
     network_yaml.write_text(yaml.dump(network_data, default_flow_style=False))
 
     # Verify gateway health
-    port = 4508
-    try:
-        gw_config = Path.home() / ".aiir" / "gateway.yaml"
-        if gw_config.is_file():
-            gw_doc = yaml.safe_load(gw_config.read_text())
-            port = gw_doc.get("gateway", {}).get("port", 4508)
-    except (yaml.YAMLError, OSError):
-        pass
+    from aiir_cli.gateway import get_local_gateway_url, get_local_ssl_context
 
-    health_url = f"http://127.0.0.1:{port}/health"
+    health_url = f"{get_local_gateway_url()}/health"
+    ssl_ctx = get_local_ssl_context()
     try:
         import urllib.request
 
-        with urllib.request.urlopen(health_url, timeout=5) as resp:
+        kwargs = {"timeout": 5}
+        if ssl_ctx is not None:
+            kwargs["context"] = ssl_ctx
+        with urllib.request.urlopen(health_url, **kwargs) as resp:
             if resp.status == 200:
                 print(f"Static IP set to {ip}, gateway healthy.")
                 return ip

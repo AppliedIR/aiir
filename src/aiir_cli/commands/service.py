@@ -12,6 +12,7 @@ backend services. Reads gateway URL and token from:
 from __future__ import annotations
 
 import json
+import ssl
 import sys
 import urllib.error
 import urllib.request
@@ -30,13 +31,17 @@ def cmd_service(args, identity: dict) -> None:
         sys.exit(1)
 
 
-def _resolve_gateway(args) -> tuple[str, str | None]:
-    """Resolve gateway URL and token from args > env > config > fallback.
+def _resolve_gateway(args) -> tuple[str, str | None, ssl.SSLContext | None]:
+    """Resolve gateway URL, token, and SSL context.
+
+    Resolution order: CLI flags > env vars > gateway.yaml > fallback.
 
     Returns:
-        (url, token) tuple. Token may be None.
+        (url, token, ssl_context) tuple. Token and ssl_context may be None.
     """
     import os
+
+    from aiir_cli.gateway import get_local_gateway_url, get_local_ssl_context
 
     url = getattr(args, "gateway", None)
     token = getattr(args, "token", None)
@@ -46,42 +51,31 @@ def _resolve_gateway(args) -> tuple[str, str | None]:
     if not token:
         token = os.environ.get("AIIR_GATEWAY_TOKEN")
 
-    # Try config.yaml first, then gateway.yaml (matches join.py pattern)
-    if not url or not token:
-        for config_name in ("config.yaml", "gateway.yaml"):
+    # Read token from config files if not already set
+    if not token:
+        for config_name in ("gateway.yaml", "config.yaml"):
             config = _load_config(config_name)
             if not config:
                 continue
-            if not url:
-                url = config.get("gateway_url")
-                # gateway.yaml stores port under gateway.port
-                if not url and config_name == "gateway.yaml":
-                    gw = config.get("gateway", {})
-                    if isinstance(gw, dict) and gw.get("port"):
-                        host = gw.get("host", "127.0.0.1")
-                        if host == "0.0.0.0":
-                            host = "127.0.0.1"
-                        url = f"http://{host}:{gw['port']}"
+            api_keys = config.get("api_keys", {})
+            if isinstance(api_keys, dict) and api_keys:
+                token = next(iter(api_keys))
             if not token:
-                # gateway.yaml uses api_keys dict; config.yaml uses gateway_token
-                api_keys = config.get("api_keys", {})
-                if isinstance(api_keys, dict) and api_keys:
-                    token = next(iter(api_keys))
-                if not token:
-                    token = config.get("gateway_token")
-            if url and token:
+                token = config.get("gateway_token")
+            if token:
                 break
 
     if not url:
-        url = "http://127.0.0.1:4508"
+        url = get_local_gateway_url()
+
+    ssl_ctx = get_local_ssl_context() if url.startswith("https") else None
 
     if not token:
         print(
-            "Warning: No gateway token found."
-            " Check ~/.aiir/config.yaml or ~/.aiir/gateway.yaml",
+            "Warning: No gateway token found. Check ~/.aiir/gateway.yaml",
             file=sys.stderr,
         )
-    return url.rstrip("/"), token if token else None
+    return url.rstrip("/"), token if token else None, ssl_ctx
 
 
 def _load_config(filename: str = "config.yaml") -> dict:
@@ -97,7 +91,12 @@ def _load_config(filename: str = "config.yaml") -> dict:
         return {}
 
 
-def _api_request(url: str, token: str | None, method: str = "GET") -> dict | None:
+def _api_request(
+    url: str,
+    token: str | None,
+    method: str = "GET",
+    ssl_context: ssl.SSLContext | None = None,
+) -> dict | None:
     """Make an HTTP request to the gateway API with optional auth.
 
     Returns:
@@ -110,7 +109,10 @@ def _api_request(url: str, token: str | None, method: str = "GET") -> dict | Non
         # POST requests need Content-Length
         if method == "POST":
             req.add_header("Content-Length", "0")
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        kwargs = {"timeout": 10}
+        if ssl_context is not None:
+            kwargs["context"] = ssl_context
+        with urllib.request.urlopen(req, **kwargs) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         try:
@@ -127,8 +129,8 @@ def _api_request(url: str, token: str | None, method: str = "GET") -> dict | Non
 
 def _service_status(args) -> None:
     """GET /api/v1/services and display as a table."""
-    url, token = _resolve_gateway(args)
-    data = _api_request(f"{url}/api/v1/services", token)
+    url, token, ssl_ctx = _resolve_gateway(args)
+    data = _api_request(f"{url}/api/v1/services", token, ssl_context=ssl_ctx)
     if data is None:
         sys.exit(1)
 
@@ -152,13 +154,16 @@ def _service_status(args) -> None:
 
 def _service_action(args, action: str) -> None:
     """POST /api/v1/services/{name}/{action}."""
-    url, token = _resolve_gateway(args)
+    url, token, ssl_ctx = _resolve_gateway(args)
     name = getattr(args, "backend_name", None)
 
     if name:
         # Single backend
         data = _api_request(
-            f"{url}/api/v1/services/{name}/{action}", token, method="POST"
+            f"{url}/api/v1/services/{name}/{action}",
+            token,
+            method="POST",
+            ssl_context=ssl_ctx,
         )
         if data is None:
             sys.exit(1)
@@ -168,7 +173,7 @@ def _service_action(args, action: str) -> None:
         print(f"{name}: {data.get('status', 'unknown')}")
     else:
         # All backends: fetch list, then operate on each
-        svc_data = _api_request(f"{url}/api/v1/services", token)
+        svc_data = _api_request(f"{url}/api/v1/services", token, ssl_context=ssl_ctx)
         if svc_data is None:
             sys.exit(1)
         services = svc_data.get("services", [])
@@ -179,7 +184,10 @@ def _service_action(args, action: str) -> None:
         for s in services:
             sname = s["name"]
             data = _api_request(
-                f"{url}/api/v1/services/{sname}/{action}", token, method="POST"
+                f"{url}/api/v1/services/{sname}/{action}",
+                token,
+                method="POST",
+                ssl_context=ssl_ctx,
             )
             if data and "error" not in data:
                 print(f"{sname}: {data.get('status', 'unknown')}")

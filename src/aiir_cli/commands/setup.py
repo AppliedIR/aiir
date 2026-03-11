@@ -190,30 +190,24 @@ def _run_connectivity_test() -> None:
         print("    socat: OK")
 
     # Resolve gateway URL
-    gateway_url = "http://127.0.0.1:4508"
-    config_path = Path.home() / ".aiir" / "gateway.yaml"
-    if config_path.is_file():
-        try:
-            import yaml
+    from aiir_cli.gateway import get_local_gateway_url, get_local_ssl_context
 
-            config = yaml.safe_load(config_path.read_text()) or {}
-            host = config.get("host", "127.0.0.1")
-            port = config.get("port", 4508)
-            scheme = "https" if config.get("tls", {}).get("enabled") else "http"
-            gateway_url = f"{scheme}://{host}:{port}"
-        except Exception:
-            pass
+    gateway_url = get_local_gateway_url()
+    ssl_ctx = get_local_ssl_context()
 
     health_url = f"{gateway_url}/health"
     print(f"\n  Gateway: {gateway_url}")
 
     # Fetch health with one retry for startup delay
     data = None
+    urlopen_kwargs = {"timeout": 15}
+    if ssl_ctx is not None:
+        urlopen_kwargs["context"] = ssl_ctx
     for attempt in range(2):
         try:
             req = urllib.request.Request(health_url)
             start = time.time()
-            with urllib.request.urlopen(req, timeout=15) as resp:
+            with urllib.request.urlopen(req, **urlopen_kwargs) as resp:
                 elapsed = (time.time() - start) * 1000
                 data = json.loads(resp.read())
             break

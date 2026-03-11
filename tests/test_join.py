@@ -113,18 +113,16 @@ class TestUrlNormalization:
 
         mock_requests = _make_mock_requests(200, json_data)
 
-        with (
-            patch.dict(sys.modules, {"requests": mock_requests}),
-            patch("aiir_cli.commands.join._detect_wintools", return_value=False),
-            patch("aiir_cli.commands.join._find_ca_cert", return_value=None),
-            patch("aiir_cli.commands.join._write_config"),
-        ):
+        with patch.dict(sys.modules, {"requests": mock_requests}):
             # Need to reimport to pick up the patched requests
             import importlib
 
             import aiir_cli.commands.join as join_mod
 
             importlib.reload(join_mod)
+            join_mod._detect_wintools = lambda: False
+            join_mod._find_ca_cert = lambda: None
+            join_mod._write_config = lambda *a, **kw: None
             join_mod.cmd_join(args, {"examiner": "tester"})
 
         return mock_requests.post.call_args[0][0]
@@ -205,14 +203,31 @@ class TestGetLocalConfig:
         monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
         assert _get_local_gateway_url() == "http://127.0.0.1:4508"
 
-    def test_get_gateway_url_from_config(self, tmp_path, monkeypatch):
+    def test_get_gateway_url_from_gateway_yaml(self, tmp_path, monkeypatch):
         monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir(parents=True)
-        (config_dir / "config.yaml").write_text(
-            yaml.dump({"gateway_url": "https://sift.lab:4508"})
+        (config_dir / "gateway.yaml").write_text(
+            yaml.dump({"gateway": {"host": "0.0.0.0", "port": 9999}})
         )
-        assert _get_local_gateway_url() == "https://sift.lab:4508"
+        assert _get_local_gateway_url() == "http://127.0.0.1:9999"
+
+    def test_get_gateway_url_tls(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)
+        config_dir = tmp_path / ".aiir"
+        config_dir.mkdir(parents=True)
+        (config_dir / "gateway.yaml").write_text(
+            yaml.dump(
+                {
+                    "gateway": {
+                        "host": "0.0.0.0",
+                        "port": 4508,
+                        "tls": {"certfile": "/path/to/cert.pem"},
+                    }
+                }
+            )
+        )
+        assert _get_local_gateway_url() == "https://127.0.0.1:4508"
 
     def test_get_gateway_token_from_gateway_yaml(self, tmp_path, monkeypatch):
         monkeypatch.setattr("aiir_cli.commands.join.Path.home", lambda: tmp_path)

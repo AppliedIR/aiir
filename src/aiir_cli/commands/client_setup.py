@@ -267,7 +267,9 @@ def _resolve_sift(args, auto: bool) -> str:
         return val  # explicit switch (even "" means "no sift")
 
     # Auto-detect local gateway
-    default = "http://127.0.0.1:4508"
+    from aiir_cli.gateway import get_local_gateway_url
+
+    default = get_local_gateway_url()
     if auto:
         return default
 
@@ -1412,9 +1414,16 @@ def _probe_health(base_url: str) -> bool:
     try:
         import urllib.request
 
+        from aiir_cli.gateway import get_local_ssl_context
+
         url = f"{base_url.rstrip('/')}/health"
         req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        kwargs = {"timeout": 5}
+        if base_url.startswith("https"):
+            ssl_ctx = get_local_ssl_context()
+            if ssl_ctx is not None:
+                kwargs["context"] = ssl_ctx
+        with urllib.request.urlopen(req, **kwargs) as resp:
             return resp.status == 200
     except OSError as e:
         # Network/connection errors (includes URLError, socket.error)

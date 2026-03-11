@@ -22,7 +22,7 @@ class TestResolveGateway:
 
     def test_args_take_priority(self):
         args = self._make_args(gateway="https://custom:4508", token="tok")
-        url, token = _resolve_gateway(args)
+        url, token, _ssl = _resolve_gateway(args)
         assert url == "https://custom:4508"
         assert token == "tok"
 
@@ -30,31 +30,28 @@ class TestResolveGateway:
         monkeypatch.setenv("AIIR_GATEWAY_URL", "https://env-host:4508")
         monkeypatch.setenv("AIIR_GATEWAY_TOKEN", "env_tok")
         args = self._make_args()
-        url, token = _resolve_gateway(args)
+        url, token, _ssl = _resolve_gateway(args)
         assert url == "https://env-host:4508"
         assert token == "env_tok"
 
-    def test_config_file(self, tmp_path, monkeypatch):
+    def test_config_file_token(self, tmp_path, monkeypatch):
+        """Token resolved from config.yaml, URL from gateway.yaml."""
         import yaml
 
         config_dir = tmp_path / ".aiir"
         config_dir.mkdir()
-        config_file = config_dir / "config.yaml"
-        config_file.write_text(
-            yaml.dump(
-                {
-                    "gateway_url": "https://config-host:4508",
-                    "gateway_token": "cfg_tok",
-                }
-            )
+        # config.yaml provides token only (URL comes from gateway.yaml)
+        (config_dir / "config.yaml").write_text(yaml.dump({"gateway_token": "cfg_tok"}))
+        # gateway.yaml provides URL
+        (config_dir / "gateway.yaml").write_text(
+            yaml.dump({"gateway": {"host": "0.0.0.0", "port": 9999}})
         )
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
-        # Clear env vars
         monkeypatch.delenv("AIIR_GATEWAY_URL", raising=False)
         monkeypatch.delenv("AIIR_GATEWAY_TOKEN", raising=False)
         args = self._make_args()
-        url, token = _resolve_gateway(args)
-        assert url == "https://config-host:4508"
+        url, token, _ssl = _resolve_gateway(args)
+        assert url == "http://127.0.0.1:9999"
         assert token == "cfg_tok"
 
     def test_fallback_localhost(self, tmp_path, monkeypatch):
@@ -62,13 +59,13 @@ class TestResolveGateway:
         monkeypatch.delenv("AIIR_GATEWAY_URL", raising=False)
         monkeypatch.delenv("AIIR_GATEWAY_TOKEN", raising=False)
         args = self._make_args()
-        url, token = _resolve_gateway(args)
+        url, token, _ssl = _resolve_gateway(args)
         assert url == "http://127.0.0.1:4508"
         assert token is None
 
     def test_trailing_slash_stripped(self):
         args = self._make_args(gateway="https://host:4508/")
-        url, _ = _resolve_gateway(args)
+        url, _, _ssl = _resolve_gateway(args)
         assert not url.endswith("/")
 
 
@@ -76,7 +73,7 @@ class TestServiceStatus:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_status_prints_table(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = {
             "services": [
                 {
@@ -104,7 +101,7 @@ class TestServiceStatus:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_status_unreachable_exits(self, mock_resolve, mock_api):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = None
         args = argparse.Namespace(gateway=None, token=None, service_action="status")
         with pytest.raises(SystemExit):
@@ -115,7 +112,7 @@ class TestServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_start_service(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", "tok")
+        mock_resolve.return_value = ("http://localhost:4508", "tok", None)
         mock_api.return_value = {"status": "started", "name": "forensic-mcp"}
         args = argparse.Namespace(gateway=None, token=None, backend_name="forensic-mcp")
         _service_action(args, "start")
@@ -126,12 +123,13 @@ class TestServiceAction:
             "http://localhost:4508/api/v1/services/forensic-mcp/start",
             "tok",
             method="POST",
+            ssl_context=None,
         )
 
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_stop_service(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = {"status": "stopped", "name": "sift-mcp"}
         args = argparse.Namespace(gateway=None, token=None, backend_name="sift-mcp")
         _service_action(args, "stop")
@@ -142,7 +140,7 @@ class TestServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_restart_service(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = {"status": "restarted", "name": "forensic-mcp"}
         args = argparse.Namespace(gateway=None, token=None, backend_name="forensic-mcp")
         _service_action(args, "restart")
@@ -152,7 +150,7 @@ class TestServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_unknown_backend_error(self, mock_resolve, mock_api):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = {"error": "Unknown backend: nope"}
         args = argparse.Namespace(gateway=None, token=None, backend_name="nope")
         with pytest.raises(SystemExit):
@@ -161,7 +159,7 @@ class TestServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_unreachable_gateway_exits(self, mock_resolve, mock_api):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = None
         args = argparse.Namespace(gateway=None, token=None, backend_name="forensic-mcp")
         with pytest.raises(SystemExit):
@@ -193,7 +191,7 @@ class TestBulkServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_stop_all_backends(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", "tok")
+        mock_resolve.return_value = ("http://localhost:4508", "tok", None)
         mock_api.side_effect = [
             # First call: GET /api/v1/services
             {
@@ -215,7 +213,7 @@ class TestBulkServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_start_all_backends(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.side_effect = [
             {"services": [{"name": "forensic-mcp"}, {"name": "sift-mcp"}]},
             {"status": "started"},
@@ -230,7 +228,7 @@ class TestBulkServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_bulk_no_services_found(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.return_value = {"services": []}
         args = argparse.Namespace(gateway=None, token=None, backend_name=None)
         _service_action(args, "stop")
@@ -240,7 +238,7 @@ class TestBulkServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_bulk_partial_failure_exits(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", None)
+        mock_resolve.return_value = ("http://localhost:4508", None, None)
         mock_api.side_effect = [
             {"services": [{"name": "forensic-mcp"}, {"name": "sift-mcp"}]},
             {"status": "stopped"},
@@ -253,7 +251,7 @@ class TestBulkServiceAction:
     @patch("aiir_cli.commands.service._api_request")
     @patch("aiir_cli.commands.service._resolve_gateway")
     def test_single_backend_still_works(self, mock_resolve, mock_api, capsys):
-        mock_resolve.return_value = ("http://localhost:4508", "tok")
+        mock_resolve.return_value = ("http://localhost:4508", "tok", None)
         mock_api.return_value = {"status": "restarted", "name": "forensic-mcp"}
         args = argparse.Namespace(gateway=None, token=None, backend_name="forensic-mcp")
         _service_action(args, "restart")
