@@ -136,7 +136,7 @@ def cmd_setup_client(args, identity: dict) -> None:
     # 1. Resolve parameters from switches (or interactive wizard)
     client = _resolve_client(args, auto)
     sift_url = _resolve_sift(args, auto)
-    windows_url = _resolve_windows(args, auto)
+    windows_url, windows_token = _resolve_windows(args, auto)
     remnux_url, remnux_token = _resolve_remnux(args, auto)
     examiner = _resolve_examiner(args, identity)
     include_zeltser, include_mslearn = _resolve_internet_mcps(args, auto)
@@ -186,10 +186,13 @@ def cmd_setup_client(args, identity: dict) -> None:
             servers["aiir"] = entry
 
     if windows_url:
-        servers["wintools-mcp"] = {
+        win_entry: dict = {
             "type": "streamable-http",
             "url": _ensure_mcp_path(windows_url),
         }
+        if windows_token:
+            win_entry["headers"] = {"Authorization": f"Bearer {windows_token}"}
+        servers["wintools-mcp"] = win_entry
 
     if remnux_url:
         remnux_entry: dict = {
@@ -302,12 +305,22 @@ def _resolve_sift(args, auto: bool) -> str:
     return answer
 
 
-def _resolve_windows(args, auto: bool) -> str:
+def _resolve_windows(args, auto: bool) -> tuple[str, str]:
+    """Resolve Windows wintools-mcp URL and bearer token.
+
+    Returns:
+        (url, token) tuple.  Either or both may be empty.
+    """
     val = getattr(args, "windows", None)
+    token = getattr(args, "windows_token", None) or ""
+
     if val is not None:
-        return _normalise_url(val, 4624) if val else ""
+        url = _normalise_url(val, 4624, scheme="https") if val else ""
+        if url and not token:
+            token = _prompt_windows_token()
+        return url, token
     if auto:
-        return ""
+        return "", ""
 
     print("\n--- Windows Forensic Workstation ---")
     print("If you have a Windows workstation running wintools-mcp, enter its")
@@ -318,8 +331,21 @@ def _resolve_windows(args, auto: bool) -> str:
 
     answer = _prompt("\nWindows endpoint", "skip")
     if answer.lower() == "skip":
-        return ""
-    return _normalise_url(answer, 4624)
+        return "", ""
+    url = _normalise_url(answer, 4624, scheme="https")
+    if not url:
+        return "", ""
+    token = token or _prompt_windows_token()
+    return url, token
+
+
+def _prompt_windows_token() -> str:
+    """Prompt for the Windows wintools-mcp bearer token."""
+    print()
+    print("  Wintools requires a bearer token for HTTPS connections.")
+    print("  Find it:  On the Windows box, check the installer output or")
+    print("            C:\\ProgramData\\aiir\\config.yaml (bearer_token field)")
+    return _prompt("\nWindows bearer token", "")
 
 
 def _resolve_remnux(args, auto: bool) -> tuple[str, str]:
@@ -1417,8 +1443,8 @@ def _read_local_token() -> str | None:
         return None
 
 
-def _normalise_url(raw: str, default_port: int) -> str:
-    """Turn ``IP:port`` or bare ``IP`` into ``http://IP:port``."""
+def _normalise_url(raw: str, default_port: int, *, scheme: str = "http") -> str:
+    """Turn ``IP:port`` or bare ``IP`` into ``{scheme}://IP:port``."""
     raw = raw.strip()
     if not raw:
         return ""
@@ -1430,7 +1456,7 @@ def _normalise_url(raw: str, default_port: int) -> str:
         return raw
     if ":" not in raw:
         raw = f"{raw}:{default_port}"
-    return f"http://{raw}"
+    return f"{scheme}://{raw}"
 
 
 def _ensure_mcp_path(url: str) -> str:
@@ -1635,12 +1661,15 @@ def _cmd_setup_client_remote(args, identity: dict) -> None:
         )
 
     # 6. Windows / internet MCPs (same as local)
-    windows_url = _resolve_windows(args, auto)
+    windows_url, windows_token = _resolve_windows(args, auto)
     if windows_url:
-        servers["wintools-mcp"] = {
+        win_entry: dict = {
             "type": "streamable-http",
             "url": _ensure_mcp_path(windows_url),
         }
+        if windows_token:
+            win_entry["headers"] = {"Authorization": f"Bearer {windows_token}"}
+        servers["wintools-mcp"] = win_entry
 
     remnux_url, remnux_token = _resolve_remnux(args, auto)
     if remnux_url:

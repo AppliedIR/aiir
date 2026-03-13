@@ -288,6 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_client.add_argument(
         "--windows", help="Windows wintools-mcp endpoint (e.g., 192.168.1.20:4624)"
     )
+    p_client.add_argument("--windows-token", help="Windows wintools-mcp bearer token")
     p_client.add_argument(
         "--remnux",
         nargs="?",

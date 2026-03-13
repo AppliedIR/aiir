@@ -188,6 +188,7 @@ class TestCmdSetupClient:
             "client": "claude-code",
             "sift": "http://127.0.0.1:4508",
             "windows": None,
+            "windows_token": None,
             "remnux": None,
             "remnux_token": None,
             "examiner": "testuser",
@@ -242,7 +243,10 @@ class TestCmdSetupClient:
         # Zeltser still present
         assert "zeltser-ir-writing" in data["mcpServers"]
 
-    def test_windows_endpoint(self, tmp_path, monkeypatch):
+    @patch(
+        "aiir_cli.commands.client_setup._prompt_windows_token", return_value="wt_tok"
+    )
+    def test_windows_endpoint(self, mock_prompt, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(windows="192.168.1.20:4624")
@@ -251,9 +255,9 @@ class TestCmdSetupClient:
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "wintools-mcp" in data["mcpServers"]
-        assert (
-            data["mcpServers"]["wintools-mcp"]["url"] == "http://192.168.1.20:4624/mcp"
-        )
+        win = data["mcpServers"]["wintools-mcp"]
+        assert win["url"] == "https://192.168.1.20:4624/mcp"
+        assert win["headers"] == {"Authorization": "Bearer wt_tok"}
 
     @patch("aiir_cli.commands.client_setup._test_remnux_connection")
     def test_remnux_endpoint(self, mock_test, tmp_path, monkeypatch):
@@ -322,7 +326,10 @@ class TestCmdSetupClient:
         assert "aiir" in data["mcpServers"]
         assert data["mcpServers"]["aiir"]["type"] == "http"
 
-    def test_librechat_config(self, tmp_path, monkeypatch):
+    @patch(
+        "aiir_cli.commands.client_setup._prompt_windows_token", return_value="wt_tok"
+    )
+    def test_librechat_config(self, mock_prompt, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._isolate_home(monkeypatch, tmp_path)
         args = self._make_args(client="librechat", windows="192.168.1.20:4624")
@@ -335,7 +342,7 @@ class TestCmdSetupClient:
         assert "mcpServers:" in content
         assert 'type: "streamable-http"' in content
         assert 'url: "http://127.0.0.1:4508/mcp"' in content
-        assert 'url: "http://192.168.1.20:4624/mcp"' in content
+        assert 'url: "https://192.168.1.20:4624/mcp"' in content
         assert "timeout: 60000" in content
         assert "zeltser-ir-writing" in content
         assert "microsoft-learn" in content
@@ -423,6 +430,7 @@ class TestRemoteSetup:
             "client": "claude-code",
             "sift": "https://sift.example.com:4508",
             "windows": None,
+            "windows_token": None,
             "remnux": None,
             "remnux_token": None,
             "examiner": "testuser",
@@ -611,6 +619,7 @@ class TestLocalModeTokenThreading:
             "client": "claude-code",
             "sift": "http://127.0.0.1:4508",
             "windows": None,
+            "windows_token": None,
             "remnux": None,
             "examiner": "testuser",
             "no_mslearn": True,
