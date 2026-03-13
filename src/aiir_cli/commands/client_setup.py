@@ -123,6 +123,10 @@ def cmd_setup_client(args, identity: dict) -> None:
         _cmd_uninstall(args)
         return
 
+    if getattr(args, "add_remnux", None) is not None:
+        _cmd_add_remnux(args)
+        return
+
     if getattr(args, "remote", False):
         _cmd_setup_client_remote(args, identity)
         return
@@ -327,12 +331,13 @@ def _resolve_remnux(args, auto: bool) -> tuple[str, str]:
     val = getattr(args, "remnux", None)
     token = getattr(args, "remnux_token", None) or ""
 
-    if val is not None:
-        url = _normalise_url(val, 3000) if val else ""
+    if val:
+        # Explicit value provided (e.g., --remnux=IP:PORT)
+        url = _normalise_url(val, 3000)
         if url and not token:
             token = _prompt_remnux_token()
         return url, token
-    if auto:
+    if val is None and auto:
         return "", ""
 
     print("\n--- REMnux Malware Analysis Workstation ---")
@@ -1491,6 +1496,73 @@ def _probe_health(base_url: str) -> bool:
 
         logging.debug("Health probe unexpected error for %s: %s", base_url, e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Add-remnux mode (incremental config update)
+# ---------------------------------------------------------------------------
+
+
+def _cmd_add_remnux(args) -> None:
+    """Add or update only the remnux-mcp entry in existing client config."""
+    # Detect client type from manifest
+    manifest_path = Path.home() / ".aiir" / "manifest.json"
+    client = None
+    if manifest_path.is_file():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            client = manifest.get("client")
+        except (json.JSONDecodeError, OSError):
+            pass
+    if not client:
+        print(
+            "Cannot detect client type — run 'aiir setup client' first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Map --add-remnux value to --remnux so _resolve_remnux() picks it up
+    if getattr(args, "remnux", None) is None:
+        args.remnux = args.add_remnux
+
+    # Resolve remnux URL and token
+    auto = getattr(args, "yes", False)
+    remnux_url, remnux_token = _resolve_remnux(args, auto)
+    if not remnux_url:
+        # --add-remnux with no value and user skipped the prompt
+        print("No REMnux endpoint configured.")
+        return
+
+    # Build the entry
+    remnux_entry: dict = {
+        "type": "streamable-http",
+        "url": _ensure_mcp_path(remnux_url),
+    }
+    if remnux_token:
+        remnux_entry["headers"] = {"Authorization": f"Bearer {remnux_token}"}
+        _test_remnux_connection(remnux_url, remnux_token)
+
+    # Find config file for the detected client type
+    sift = _is_sift()
+    if client == "claude-code":
+        if sift:
+            config_path = Path.home() / ".claude.json"
+            remnux_entry["type"] = "http"
+        else:
+            config_path = Path.cwd() / ".mcp.json"
+    elif client == "claude-desktop":
+        config_path = Path.home() / ".config" / "claude" / "claude_desktop_config.json"
+    elif client == "librechat":
+        config_path = Path.cwd() / ".mcp.json"
+    else:
+        config_path = Path.cwd() / ".mcp.json"
+
+    _merge_and_write(config_path, {"mcpServers": {"remnux-mcp": remnux_entry}})
+    print(f"  Added remnux-mcp to {config_path}")
+    print(f"  Endpoint: {remnux_entry['url']}")
+    if remnux_token:
+        print("  Auth: bearer token configured")
+    print("\n  Restart your LLM client to pick up the new endpoint.")
 
 
 # ---------------------------------------------------------------------------

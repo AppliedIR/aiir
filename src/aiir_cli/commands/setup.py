@@ -198,12 +198,13 @@ def _run_connectivity_test() -> None:
     health_url = f"{gateway_url}/health"
     print(f"\n  Gateway: {gateway_url}")
 
-    # Fetch health with one retry for startup delay
+    # Fetch health with retries for startup delay (~6s typical)
     data = None
     urlopen_kwargs = {"timeout": 15}
     if ssl_ctx is not None:
         urlopen_kwargs["context"] = ssl_ctx
-    for attempt in range(2):
+    retry_delays = [3, 5]  # two retries: 3s then 5s (covers ~8s startup)
+    for attempt in range(len(retry_delays) + 1):
         try:
             req = urllib.request.Request(health_url)
             start = time.time()
@@ -212,9 +213,10 @@ def _run_connectivity_test() -> None:
                 data = json.loads(resp.read())
             break
         except urllib.error.URLError:
-            if attempt == 0:
-                print("  Gateway not responding, retrying in 3s...")
-                time.sleep(3)
+            if attempt < len(retry_delays):
+                delay = retry_delays[attempt]
+                print(f"  Gateway not responding, retrying in {delay}s...")
+                time.sleep(delay)
             else:
                 print("  Gateway: OFFLINE — is the gateway running?")
                 print("    Start with: aiir service start")
