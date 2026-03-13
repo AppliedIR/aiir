@@ -1081,12 +1081,17 @@ def _ensure_static_ip() -> str | None:
         "SIFT workstation by IP. A static IP ensures they can reconnect after reboot."
     )
     print()
-    ip = input(f"Enter static IP for this machine [{detected_ip}]: ").strip()
-    if not ip:
-        ip = detected_ip
-    if not ip:
-        print("No IP provided, skipping static IP configuration.", file=sys.stderr)
-        return None
+    while True:
+        ip = input(f"Enter static IP for this machine [{detected_ip}]: ").strip()
+        if not ip:
+            ip = detected_ip
+        if not ip:
+            print("No IP provided, skipping static IP configuration.", file=sys.stderr)
+            return None
+        print(f"\n  Static IP: {ip}")
+        confirm = input("  Correct? [Y/n] ").strip().lower()
+        if confirm in ("", "y", "yes"):
+            break
 
     return _apply_static_ip(ip, network_yaml)
 
