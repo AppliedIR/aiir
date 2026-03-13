@@ -686,13 +686,17 @@ def _setup_samba_share(join_code: str) -> str:
     placeholder = str(Path.home() / ".aiir" / "share-inactive")
     Path(placeholder).mkdir(parents=True, exist_ok=True)
 
-    # Write Samba config
+    # Write Samba config — force user ensures SMB file operations run as the
+    # local installer user, eliminating the need to re-login for sift group
+    # membership.  Authentication still uses aiir-smb (valid users).
+    username = os.environ.get("USER") or os.getlogin()
     smb_conf = f"""[cases]
     path = {placeholder}
     valid users = aiir-smb
     read only = no
     create mask = 0644
     directory mask = 0755
+    force user = {username}
     force group = sift
     browsable = no
     hosts allow = {wintools_ip}
@@ -790,6 +794,7 @@ def _setup_samba_share(join_code: str) -> str:
     samba_data = {
         "share_name": "cases",
         "smb_user": "aiir-smb",
+        "force_user": username,
         "wintools_ip": wintools_ip,
         "active_share_target": placeholder,
         "configured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -799,7 +804,6 @@ def _setup_samba_share(join_code: str) -> str:
     )
 
     print(f"Samba share configured: //{_get_sift_ip() or 'SIFT_IP'}/cases (per-case)")
-    print("Note: Log out and back in for sift group membership to take effect.")
     return wintools_ip
 
 
@@ -975,12 +979,14 @@ def _repoint_samba_share(case_dir: Path | None) -> None:
     placeholder.mkdir(parents=True, exist_ok=True)
 
     conf_path = "/etc/samba/smb.conf.d/aiir-cases.conf"
+    username = doc.get("force_user") or os.environ.get("USER") or os.getlogin()
     smb_conf = f"""[cases]
     path = {target}
     valid users = aiir-smb
     read only = no
     create mask = 0644
     directory mask = 0755
+    force user = {username}
     force group = sift
     browsable = no
     hosts allow = {wintools_ip}
