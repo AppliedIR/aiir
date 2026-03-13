@@ -133,7 +133,7 @@ def cmd_setup_client(args, identity: dict) -> None:
     client = _resolve_client(args, auto)
     sift_url = _resolve_sift(args, auto)
     windows_url = _resolve_windows(args, auto)
-    remnux_url = _resolve_remnux(args, auto)
+    remnux_url, remnux_token = _resolve_remnux(args, auto)
     examiner = _resolve_examiner(args, identity)
     include_zeltser, include_mslearn = _resolve_internet_mcps(args, auto)
 
@@ -188,10 +188,14 @@ def cmd_setup_client(args, identity: dict) -> None:
         }
 
     if remnux_url:
-        servers["remnux-mcp"] = {
+        remnux_entry: dict = {
             "type": "streamable-http",
             "url": _ensure_mcp_path(remnux_url),
         }
+        if remnux_token:
+            remnux_entry["headers"] = {"Authorization": f"Bearer {remnux_token}"}
+            _test_remnux_connection(remnux_url, remnux_token)
+        servers["remnux-mcp"] = remnux_entry
 
     if include_zeltser:
         servers[_ZELTSER_MCP["name"]] = {
@@ -314,12 +318,22 @@ def _resolve_windows(args, auto: bool) -> str:
     return _normalise_url(answer, 4624)
 
 
-def _resolve_remnux(args, auto: bool) -> str:
+def _resolve_remnux(args, auto: bool) -> tuple[str, str]:
+    """Resolve REMnux URL and bearer token.
+
+    Returns:
+        (url, token) tuple.  Either or both may be empty.
+    """
     val = getattr(args, "remnux", None)
+    token = getattr(args, "remnux_token", None) or ""
+
     if val is not None:
-        return _normalise_url(val, 3000) if val else ""
+        url = _normalise_url(val, 3000) if val else ""
+        if url and not token:
+            token = _prompt_remnux_token()
+        return url, token
     if auto:
-        return ""
+        return "", ""
 
     print("\n--- REMnux Malware Analysis Workstation ---")
     print("If you have a REMnux VM running remnux-mcp, enter its IP address")
@@ -330,8 +344,20 @@ def _resolve_remnux(args, auto: bool) -> str:
 
     answer = _prompt("\nREMnux endpoint", "skip")
     if answer.lower() == "skip":
-        return ""
-    return _normalise_url(answer, 3000)
+        return "", ""
+    url = _normalise_url(answer, 3000)
+    if not url:
+        return "", ""
+    token = token or _prompt_remnux_token()
+    return url, token
+
+
+def _prompt_remnux_token() -> str:
+    """Prompt for the REMnux bearer token."""
+    print()
+    print("  REMnux requires a bearer token for HTTP connections.")
+    print("  Find it:  On the REMnux box, run: echo $MCP_TOKEN")
+    return _prompt("\nREMnux bearer token", "")
 
 
 def _resolve_internet_mcps(args, auto: bool) -> tuple[bool, bool]:
@@ -1408,6 +1434,34 @@ def _ensure_mcp_path(url: str) -> str:
     if not url.endswith("/mcp"):
         url += "/mcp"
     return url
+
+
+def _test_remnux_connection(base_url: str, token: str) -> None:
+    """Test REMnux connectivity and token validity.
+
+    A 401/403 means bad token.  Any other response (200, 400, 405)
+    means the server is reachable and the token is accepted.
+    """
+    import urllib.request
+
+    url = f"{base_url.rstrip('/')}/mcp"
+    req = urllib.request.Request(url, method="POST", data=b"{}")
+    req.add_header("Authorization", f"Bearer {token}")
+    req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=5):
+            pass
+        print(f"  REMnux: connected to {base_url}")
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            print(
+                f"  WARNING: REMnux returned {e.code} — token may be incorrect",
+                file=sys.stderr,
+            )
+        else:
+            print(f"  REMnux: reachable ({e.code})")
+    except OSError as e:
+        print(f"  WARNING: Cannot reach REMnux at {base_url}: {e}", file=sys.stderr)
 
 
 def _probe_health(base_url: str) -> bool:

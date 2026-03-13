@@ -289,6 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--windows", help="Windows wintools-mcp endpoint (e.g., 192.168.1.20:4624)"
     )
     p_client.add_argument("--remnux", help="REMnux endpoint (e.g., 192.168.1.30:3000)")
+    p_client.add_argument("--remnux-token", help="REMnux bearer token")
     p_client.add_argument("--examiner", help="Examiner identity")
     p_client.add_argument(
         "--no-mslearn", action="store_true", help="Exclude Microsoft Learn MCP"

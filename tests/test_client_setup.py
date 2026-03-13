@@ -189,6 +189,7 @@ class TestCmdSetupClient:
             "sift": "http://127.0.0.1:4508",
             "windows": None,
             "remnux": None,
+            "remnux_token": None,
             "examiner": "testuser",
             "no_mslearn": False,
             "yes": True,
@@ -254,16 +255,21 @@ class TestCmdSetupClient:
             data["mcpServers"]["wintools-mcp"]["url"] == "http://192.168.1.20:4624/mcp"
         )
 
-    def test_remnux_endpoint(self, tmp_path, monkeypatch):
+    @patch("aiir_cli.commands.client_setup._test_remnux_connection")
+    def test_remnux_endpoint(self, mock_test, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         self._isolate_home(monkeypatch, tmp_path)
-        args = self._make_args(remnux="10.0.0.5")
+        args = self._make_args(remnux="10.0.0.5", remnux_token="test_token_123")
         identity = {"examiner": "testuser"}
         cmd_setup_client(args, identity)
 
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "remnux-mcp" in data["mcpServers"]
         assert data["mcpServers"]["remnux-mcp"]["url"] == "http://10.0.0.5:3000/mcp"
+        assert data["mcpServers"]["remnux-mcp"]["headers"] == {
+            "Authorization": "Bearer test_token_123"
+        }
+        mock_test.assert_called_once_with("http://10.0.0.5:3000", "test_token_123")
 
     def test_claude_desktop_config(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -418,6 +424,7 @@ class TestRemoteSetup:
             "sift": "https://sift.example.com:4508",
             "windows": None,
             "remnux": None,
+            "remnux_token": None,
             "examiner": "testuser",
             "no_mslearn": True,
             "yes": True,
