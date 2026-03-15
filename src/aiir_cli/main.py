@@ -19,6 +19,7 @@ from aiir_cli import __version__
 from aiir_cli.case_io import DEFAULT_CASES_DIR, CaseError
 from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.audit_cmd import cmd_audit
+from aiir_cli.commands.backup import cmd_backup
 from aiir_cli.commands.config import cmd_config
 from aiir_cli.commands.dashboard import cmd_dashboard
 from aiir_cli.commands.evidence import (
@@ -52,6 +53,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--case", help="Case ID (overrides active case)")
 
     sub = parser.add_subparsers(dest="command", help="Available commands")
+
+    # backup
+    p_backup = sub.add_parser("backup", help="Back up case data")
+    p_backup.add_argument("destination", nargs="?", help="Backup destination directory")
+    p_backup.add_argument("--case", help="Case ID (default: active case)")
+    p_backup.add_argument("--include-evidence", action="store_true")
+    p_backup.add_argument("--include-extractions", action="store_true")
+    p_backup.add_argument(
+        "--all", action="store_true", help="Include evidence + extractions"
+    )
+    p_backup.add_argument(
+        "--verify", metavar="BACKUP_PATH", help="Verify backup integrity"
+    )
 
     # approve
     p_approve = sub.add_parser(
@@ -495,6 +509,7 @@ def main() -> None:
     warn_if_unconfigured(identity)
 
     dispatch = {
+        "backup": cmd_backup,
         "approve": cmd_approve,
         "reject": cmd_reject,
         "review": cmd_review,
