@@ -1,7 +1,7 @@
 """Execute forensic commands with case context and audit trail.
 
 Writes to cli-exec.jsonl using the canonical audit schema with
-source="cli_exec" and evidence IDs (cliexec-{examiner}-{YYYYMMDD}-{NNN}).
+source="cli_exec" and audit IDs (cliexec-{examiner}-{YYYYMMDD}-{NNN}).
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def cmd_exec(args, identity: dict) -> None:
         return
 
     # Pre-allocate evidence ID
-    evidence_id = _next_evidence_id(case_dir, examiner)
+    audit_id = _next_audit_id(case_dir, examiner)
 
     # Execute
     start = time.monotonic()
@@ -98,14 +98,14 @@ def cmd_exec(args, identity: dict) -> None:
         stdout,
         stderr,
         examiner,
-        evidence_id,
+        audit_id,
         elapsed_ms,
     )
-    print(f"Evidence ID: {evidence_id}")
+    print(f"Audit ID: {audit_id}")
 
 
-def _next_evidence_id(case_dir: Path, examiner: str) -> str:
-    """Generate next evidence ID: cliexec-{examiner}-{date}-{seq}."""
+def _next_audit_id(case_dir: Path, examiner: str) -> str:
+    """Generate next audit ID: cliexec-{examiner}-{date}-{seq}."""
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
     audit_dir = case_dir / "audit"
     log_file = audit_dir / f"{_MCP_NAME}.jsonl"
@@ -120,7 +120,7 @@ def _next_evidence_id(case_dir: Path, examiner: str) -> str:
                         continue
                     try:
                         entry = json.loads(line)
-                        eid = entry.get("evidence_id", "")
+                        eid = entry.get("audit_id", "")
                         if eid.startswith(pattern):
                             try:
                                 seq = int(eid[len(pattern) :])
@@ -144,7 +144,7 @@ def _log_exec(
     stdout: str,
     stderr: str,
     examiner: str,
-    evidence_id: str,
+    audit_id: str,
     elapsed_ms: float,
 ) -> None:
     """Write execution record to audit trail using canonical schema."""
@@ -161,7 +161,7 @@ def _log_exec(
         "ts": datetime.now(timezone.utc).isoformat(),
         "mcp": _MCP_NAME,
         "tool": "exec",
-        "evidence_id": evidence_id,
+        "audit_id": audit_id,
         "examiner": examiner,
         "case_id": os.environ.get("AIIR_ACTIVE_CASE", ""),
         "source": "cli_exec",

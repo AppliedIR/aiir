@@ -74,7 +74,7 @@ The LLM records findings through forensic-mcp's `record_finding()` tool. The int
 | `confidence_justification` | Reasoning for the confidence level |
 | `mitre_ids` | MITRE ATT&CK technique IDs |
 | `iocs` | Indicators of compromise |
-| `evidence_ids` | References to tool execution evidence IDs |
+| `audit_ids` | References to tool execution evidence IDs |
 | `artifacts` | Evidence artifacts — source file, extraction command, raw content, content type, purpose |
 | `supporting_commands` | Shell commands used (for SHELL provenance) — command, output excerpt, purpose |
 

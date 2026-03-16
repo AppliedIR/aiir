@@ -221,8 +221,8 @@ def _display_item(item: dict) -> None:
     print(f"  [{item['id']}]  {item.get('title', item.get('description', 'Untitled'))}")
     if item.get("confidence"):
         print(f"  Confidence: {item['confidence']}", end="")
-    if item.get("evidence_ids"):
-        print(f"  | Evidence: {', '.join(item['evidence_ids'])}", end="")
+    if item.get("audit_ids"):
+        print(f"  | Evidence: {', '.join(item['audit_ids'])}", end="")
     print()
     print(f"{'─' * 60}")
 

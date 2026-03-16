@@ -426,7 +426,7 @@ def verify_approval_integrity(case_dir: Path) -> list[dict]:
 
 
 def load_audit_index(case_dir: Path) -> dict[str, dict]:
-    """Scan audit/*.jsonl and build {evidence_id: {**entry, "_source_file": filename}}.
+    """Scan audit/*.jsonl and build {audit_id: {**entry, "_source_file": filename}}.
 
     Used by review --detail to resolve evidence chains.
     """
@@ -443,7 +443,7 @@ def load_audit_index(case_dir: Path) -> dict[str, dict]:
                         continue
                     try:
                         entry = json.loads(line)
-                        eid = entry.get("evidence_id", "")
+                        eid = entry.get("audit_id", "")
                         if eid:
                             entry["_source_file"] = jsonl_file.name
                             index[eid] = entry

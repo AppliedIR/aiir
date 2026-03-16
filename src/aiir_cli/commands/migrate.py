@@ -318,7 +318,7 @@ def _re_id_refs(entry: dict, id_map: dict) -> None:
     Scans common reference fields and replaces old IDs with new IDs
     using the id_map built during migration.
     """
-    for key in ("finding_id", "item_id", "evidence_id"):
+    for key in ("finding_id", "item_id", "audit_id"):
         val = entry.get(key, "")
         if val and val in id_map:
             entry[key] = id_map[val]

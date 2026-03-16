@@ -213,7 +213,7 @@ Every forensic tool response is wrapped in a structured envelope with forensic-k
   "tool": "run_command",
   "data": {"output": {"rows": ["..."], "total_rows": 42}},
   "data_provenance": "tool_output_may_contain_untrusted_evidence",
-  "evidence_id": "sift-alice-20260225-001",
+  "audit_id": "sift-alice-20260225-001",
   "examiner": "alice",
   "caveats": ["Amcache entries indicate file presence, not execution"],
   "advisories": ["Cross-reference with Prefetch for execution confirmation"],
@@ -227,7 +227,7 @@ Every forensic tool response is wrapped in a structured envelope with forensic-k
 
 | Field | Source | Description |
 |-------|--------|-------------|
-| `evidence_id` | Audit system | Unique ID for referencing in findings |
+| `audit_id` | Audit system | Unique ID for referencing in findings |
 | `caveats` | forensic-knowledge | Artifact-specific limitations |
 | `advisories` | forensic-knowledge | What the artifact does NOT prove |
 | `corroboration` | forensic-knowledge | Suggested cross-reference artifacts and tools |

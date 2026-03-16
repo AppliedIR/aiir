@@ -117,7 +117,7 @@ class TestDetailEvidenceChain:
         (audit_dir / "sift-mcp.jsonl").write_text(
             json.dumps(
                 {
-                    "evidence_id": "sift-tester-20260225-001",
+                    "audit_id": "sift-tester-20260225-001",
                     "tool": "run_command",
                     "params": {"command": "fls -r /dev/sda1"},
                     "ts": "2026-02-25T10:00:00Z",
@@ -133,7 +133,7 @@ class TestDetailEvidenceChain:
                     "status": "DRAFT",
                     "title": "Test",
                     "confidence": "HIGH",
-                    "evidence_ids": ["sift-tester-20260225-001"],
+                    "audit_ids": ["sift-tester-20260225-001"],
                     "observation": "obs",
                     "provenance": "MCP",
                 }
@@ -150,7 +150,7 @@ class TestDetailEvidenceChain:
         (audit_dir / "claude-code.jsonl").write_text(
             json.dumps(
                 {
-                    "evidence_id": "hook-tester-20260225-001",
+                    "audit_id": "hook-tester-20260225-001",
                     "command": "grep -r malware /var/log",
                     "ts": "2026-02-25T10:00:00Z",
                 }
@@ -165,7 +165,7 @@ class TestDetailEvidenceChain:
                     "status": "DRAFT",
                     "title": "Test",
                     "confidence": "HIGH",
-                    "evidence_ids": ["hook-tester-20260225-001"],
+                    "audit_ids": ["hook-tester-20260225-001"],
                     "observation": "obs",
                     "provenance": "HOOK",
                 }
@@ -182,7 +182,7 @@ class TestDetailEvidenceChain:
         (audit_dir / "forensic-mcp.jsonl").write_text(
             json.dumps(
                 {
-                    "evidence_id": "shell-tester-20260225-001",
+                    "audit_id": "shell-tester-20260225-001",
                     "tool": "supporting_command",
                     "params": {"command": "strings evil.exe"},
                     "ts": "2026-02-25T10:00:00Z",
@@ -198,7 +198,7 @@ class TestDetailEvidenceChain:
                     "status": "DRAFT",
                     "title": "Test",
                     "confidence": "HIGH",
-                    "evidence_ids": ["shell-tester-20260225-001"],
+                    "audit_ids": ["shell-tester-20260225-001"],
                     "observation": "obs",
                     "provenance": "SHELL",
                 }
@@ -217,7 +217,7 @@ class TestDetailEvidenceChain:
                     "status": "DRAFT",
                     "title": "Test",
                     "confidence": "HIGH",
-                    "evidence_ids": ["unknown-001"],
+                    "audit_ids": ["unknown-001"],
                     "observation": "obs",
                     "provenance": "NONE",
                 }
@@ -237,7 +237,7 @@ class TestDetailEvidenceChain:
                     "status": "DRAFT",
                     "title": "Test",
                     "confidence": "HIGH",
-                    "evidence_ids": ["shell-tester-20260225-001"],
+                    "audit_ids": ["shell-tester-20260225-001"],
                     "observation": "obs",
                     "provenance": "SHELL",
                     "supporting_commands": [
@@ -378,13 +378,13 @@ class TestLoadAuditIndex:
         audit_dir = case_dir / "audit"
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "sift-mcp.jsonl").write_text(
-            json.dumps({"evidence_id": "sift-001", "tool": "run_command"})
+            json.dumps({"audit_id": "sift-001", "tool": "run_command"})
             + "\n"
-            + json.dumps({"evidence_id": "sift-002", "tool": "list_tools"})
+            + json.dumps({"audit_id": "sift-002", "tool": "list_tools"})
             + "\n"
         )
         (audit_dir / "forensic-mcp.jsonl").write_text(
-            json.dumps({"evidence_id": "fmcp-001", "tool": "record_finding"}) + "\n"
+            json.dumps({"audit_id": "fmcp-001", "tool": "record_finding"}) + "\n"
         )
         index = load_audit_index(case_dir)
         assert "sift-001" in index
@@ -397,7 +397,7 @@ class TestLoadAuditIndex:
         audit_dir.mkdir(exist_ok=True)
         (audit_dir / "test.jsonl").write_text(
             "NOT JSON\n"
-            + json.dumps({"evidence_id": "ok-001", "tool": "test"})
+            + json.dumps({"audit_id": "ok-001", "tool": "test"})
             + "\n"
             + "ALSO BAD\n"
         )

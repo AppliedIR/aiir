@@ -167,7 +167,7 @@ def _show_findings_detail(case_dir: Path) -> None:
         if f.get("confidence_justification"):
             print(f"  Justification: {f['confidence_justification']}")
         print(f"  Provenance:   {f.get('provenance', _EM_DASH)}")
-        print(f"  Evidence:     {', '.join(f.get('evidence_ids', []))}")
+        print(f"  Evidence:     {', '.join(f.get('audit_ids', []))}")
         print(f"  Observation:  {f.get('observation', '')}")
         print(f"  Interpretation: {f.get('interpretation', '')}")
         if f.get("iocs"):
@@ -181,10 +181,10 @@ def _show_findings_detail(case_dir: Path) -> None:
             print(f"  Reason:       {f.get('rejection_reason', '?')}")
 
         # Evidence chain
-        evidence_ids = f.get("evidence_ids", [])
-        if evidence_ids:
+        audit_ids = f.get("audit_ids", [])
+        if audit_ids:
             print("\n  Evidence Chain:")
-            for eid in evidence_ids:
+            for eid in audit_ids:
                 entry = audit_index.get(eid)
                 if entry:
                     source_file = entry.get("_source_file", "")
@@ -526,8 +526,8 @@ def _show_timeline(
             print(f"{'=' * 60}")
             print(f"  Status:      {t.get('status', '?')}")
             print(f"  Description: {t.get('description', '')}")
-            if t.get("evidence_ids"):
-                print(f"  Evidence:    {', '.join(t['evidence_ids'])}")
+            if t.get("audit_ids"):
+                print(f"  Evidence:    {', '.join(t['audit_ids'])}")
             if t.get("source"):
                 print(f"  Source:      {t['source']}")
             if t.get("approved_at"):
@@ -652,7 +652,7 @@ def _show_audit(case_dir: Path, limit: int) -> None:
         ts = e.get("ts", "?")[:19]
         mcp = e.get("mcp", "?")
         tool = e.get("tool", "?")
-        eid = e.get("evidence_id", "")
+        eid = e.get("audit_id", "")
         examiner = e.get("examiner", "?")
         print(f"  {ts} | {examiner:10s} | {mcp:20s} | {tool:25s} | {eid}")
 

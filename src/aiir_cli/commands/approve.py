@@ -656,8 +656,8 @@ def _display_item(item: dict) -> None:
         print(f"  | By: {created_by}", end="")
     if item.get("confidence"):
         print(f"  | Confidence: {item['confidence']}", end="")
-    if item.get("evidence_ids"):
-        print(f"  | Evidence: {', '.join(item['evidence_ids'])}", end="")
+    if item.get("audit_ids"):
+        print(f"  | Evidence: {', '.join(item['audit_ids'])}", end="")
     print()
     print(f"{'─' * 60}")
 
@@ -671,8 +671,8 @@ def _display_item(item: dict) -> None:
         # It's a timeline event
         print(f"  Timestamp: {item.get('timestamp', '?')}")
         print(f"  Description: {item.get('description', '')}")
-        if item.get("evidence_ids"):
-            print(f"  Evidence: {', '.join(item['evidence_ids'])}")
+        if item.get("audit_ids"):
+            print(f"  Evidence: {', '.join(item['audit_ids'])}")
     print()
 
 
@@ -733,8 +733,8 @@ def _render_terminal_diff(item: dict, delta_entry: dict) -> None:
         _render_field("Confidence", item, modifications, "confidence")
         _render_field("Observation", item, modifications, "observation")
         _render_field("Interpretation", item, modifications, "interpretation")
-        if item.get("evidence_ids"):
-            print(f"  Evidence:       {', '.join(item['evidence_ids'])}")
+        if item.get("audit_ids"):
+            print(f"  Evidence:       {', '.join(item['audit_ids'])}")
         if item.get("mitre_ids"):
             _render_field("MITRE", item, modifications, "mitre_ids")
         if item.get("iocs"):

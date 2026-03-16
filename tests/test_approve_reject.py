@@ -97,7 +97,7 @@ def staged_finding(case_dir):
             "status": "DRAFT",
             "title": "Suspicious process",
             "confidence": "MEDIUM",
-            "evidence_ids": ["ev-001"],
+            "audit_ids": ["ev-001"],
             "observation": "svchost from cmd",
             "interpretation": "unusual",
             "confidence_justification": "single source",

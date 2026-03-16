@@ -53,21 +53,21 @@ def sample_audit(case_dir):
             "mcp": "sift-mcp",
             "tool": "run_tool",
             "examiner": "tester",
-            "evidence_id": "sift-tester-20260219-001",
+            "audit_id": "sift-tester-20260219-001",
         },
         {
             "ts": "2026-02-19T10:05:00Z",
             "mcp": "sift-mcp",
             "tool": "get_tool_help",
             "examiner": "tester",
-            "evidence_id": "sift-tester-20260219-002",
+            "audit_id": "sift-tester-20260219-002",
         },
         {
             "ts": "2026-02-19T10:10:00Z",
             "mcp": "sift-mcp",
             "tool": "run_tool",
             "examiner": "tester",
-            "evidence_id": "sift-tester-20260219-003",
+            "audit_id": "sift-tester-20260219-003",
         },
     ]
     with open(case_dir / "audit" / "sift-mcp.jsonl", "w") as f:
@@ -80,14 +80,14 @@ def sample_audit(case_dir):
             "mcp": "forensic-mcp",
             "tool": "record_finding",
             "examiner": "tester",
-            "evidence_id": "forensic-tester-20260219-001",
+            "audit_id": "forensic-tester-20260219-001",
         },
         {
             "ts": "2026-02-19T10:06:00Z",
             "mcp": "forensic-mcp",
             "tool": "record_timeline_event",
             "examiner": "tester",
-            "evidence_id": "forensic-tester-20260219-002",
+            "audit_id": "forensic-tester-20260219-002",
         },
     ]
     with open(case_dir / "audit" / "forensic-mcp.jsonl", "w") as f:
@@ -208,9 +208,7 @@ class TestAuditSummary:
         assert "sift-mcp" in output
         assert "forensic-mcp" in output
 
-    def test_summary_includes_evidence_ids(
-        self, case_dir, sample_audit, identity, capsys
-    ):
+    def test_summary_includes_audit_ids(self, case_dir, sample_audit, identity, capsys):
         cmd_audit(_make_args("summary"), identity)
         output = capsys.readouterr().out
         assert "Evidence IDs:  5" in output

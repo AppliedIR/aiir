@@ -79,7 +79,7 @@ class TestExec:
         assert entry["params"]["purpose"] == "test command"
         assert entry["examiner"] == "analyst1"
         assert entry["source"] == "cli_exec"
-        assert "evidence_id" in entry
+        assert "audit_id" in entry
         assert "elapsed_ms" in entry
 
     def test_cancelled_exec_writes_nothing(self, case_dir, identity, monkeypatch):
@@ -90,7 +90,7 @@ class TestExec:
         log_file = case_dir / "audit" / "cli-exec.jsonl"
         assert not log_file.exists()
 
-    def test_evidence_id_sequence_increments(self, case_dir, identity, monkeypatch):
+    def test_audit_id_sequence_increments(self, case_dir, identity, monkeypatch):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))
         args = FakeArgs(cmd=["echo", "one"], purpose="first")
         with patch("aiir_cli.approval_auth.open", return_value=_mock_tty()):
@@ -101,8 +101,8 @@ class TestExec:
         log_file = case_dir / "audit" / "cli-exec.jsonl"
         lines = [json.loads(line) for line in log_file.read_text().strip().split("\n")]
         assert len(lines) == 2
-        assert lines[0]["evidence_id"].endswith("-001")
-        assert lines[1]["evidence_id"].endswith("-002")
+        assert lines[0]["audit_id"].endswith("-001")
+        assert lines[1]["audit_id"].endswith("-002")
 
     def test_result_summary_captures_exit_code(self, case_dir, identity, monkeypatch):
         monkeypatch.setenv("AIIR_CASE_DIR", str(case_dir))

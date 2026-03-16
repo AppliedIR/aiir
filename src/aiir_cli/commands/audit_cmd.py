@@ -103,14 +103,14 @@ def _audit_log(args) -> None:
         print("No audit entries found.")
         return
 
-    print(f"{'Timestamp':<22} {'Examiner':<12} {'MCP':<20} {'Tool':<25} Evidence ID")
+    print(f"{'Timestamp':<22} {'Examiner':<12} {'MCP':<20} {'Tool':<25} Audit ID")
     print("-" * 100)
     for e in entries:
         ts = e.get("ts", "?")[:19]
         examiner = e.get("examiner", "?")
         mcp = e.get("mcp", "?")
         tool = e.get("tool", "?")
-        eid = e.get("evidence_id", "")
+        eid = e.get("audit_id", "")
         print(f"{ts:<22} {examiner:<12} {mcp:<20} {tool:<25} {eid}")
 
     print(f"\nShowing {len(entries)} entries")
@@ -123,7 +123,7 @@ def audit_summary_data(case_dir) -> dict:
         case_dir: Path to the active case directory.
 
     Returns:
-        Dict with total_entries, evidence_ids count, by_mcp, by_tool.
+        Dict with total_entries, audit_ids count, by_mcp, by_tool.
     """
     from pathlib import Path
 
@@ -132,12 +132,12 @@ def audit_summary_data(case_dir) -> dict:
 
     mcp_counts: dict[str, int] = {}
     tool_counts: dict[str, dict[str, int]] = {}
-    evidence_ids: set[str] = set()
+    audit_ids: set[str] = set()
 
     for e in entries:
         mcp = e.get("mcp", "unknown")
         tool = e.get("tool", "unknown")
-        eid = e.get("evidence_id", "")
+        eid = e.get("audit_id", "")
 
         mcp_counts[mcp] = mcp_counts.get(mcp, 0) + 1
 
@@ -146,11 +146,11 @@ def audit_summary_data(case_dir) -> dict:
         tool_counts[mcp][tool] = tool_counts[mcp].get(tool, 0) + 1
 
         if eid:
-            evidence_ids.add(eid)
+            audit_ids.add(eid)
 
     return {
         "total_entries": len(entries),
-        "evidence_ids": len(evidence_ids),
+        "audit_ids": len(audit_ids),
         "by_mcp": mcp_counts,
         "by_tool": tool_counts,
     }
@@ -168,7 +168,7 @@ def _audit_summary(args) -> None:
     print("AUDIT SUMMARY")
     print("=" * 50)
     print(f"Total entries: {data['total_entries']}")
-    print(f"Evidence IDs:  {data['evidence_ids']}")
+    print(f"Audit IDs:     {data['audit_ids']}")
     print()
 
     print("By MCP:")

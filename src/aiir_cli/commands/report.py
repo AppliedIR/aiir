@@ -341,7 +341,7 @@ def _report_findings(case_dir: Path, args) -> None:
         lines.append(f"  Confidence:   {f.get('confidence', '?')}")
         if f.get("confidence_justification"):
             lines.append(f"  Justification: {f['confidence_justification']}")
-        lines.append(f"  Evidence:     {', '.join(f.get('evidence_ids', []))}")
+        lines.append(f"  Evidence:     {', '.join(f.get('audit_ids', []))}")
         lines.append(f"  Observation:  {f.get('observation', '')}")
         lines.append(f"  Interpretation: {f.get('interpretation', '')}")
         if f.get("iocs"):
