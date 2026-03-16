@@ -141,11 +141,22 @@ def rehmac_entries(
         updated.append(entry)
         count += 1
 
-    # Rewrite the file
-    with open(path, "w") as f:
-        for entry in updated:
-            f.write(json.dumps(entry) + "\n")
-        f.flush()
-        os.fsync(f.fileno())
+    # Rewrite the file atomically (temp + rename to prevent truncation on crash)
+    import tempfile
+
+    fd, tmp_path = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for entry in updated:
+                f.write(json.dumps(entry) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, str(path))
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
     os.chmod(path, 0o600)
     return count

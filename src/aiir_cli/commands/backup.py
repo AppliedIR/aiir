@@ -149,16 +149,18 @@ def create_backup_data(
     case_id = meta.get("case_id", case_dir.name)
     dest = Path(destination)
 
-    # Create backup dir with collision avoidance
+    # Create backup dir with collision avoidance (atomic mkdir to avoid TOCTOU)
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     backup_name = f"{case_id}-{date_str}"
     backup_dir = dest / backup_name
     suffix = 0
-    while backup_dir.exists():
-        suffix += 1
-        backup_dir = dest / f"{backup_name}-{suffix}"
-
-    backup_dir.mkdir(parents=True)
+    while True:
+        try:
+            backup_dir.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            suffix += 1
+            backup_dir = dest / f"{backup_name}-{suffix}"
 
     # Write in-progress marker
     marker = backup_dir / ".backup-in-progress"
