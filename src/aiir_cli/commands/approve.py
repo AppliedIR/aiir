@@ -175,10 +175,31 @@ def _approve_specific(
         tl_event["content_hash"] = new_hash
         coupled_events.append(tl_event)
 
+    # IOC approval coupling
+    from aiir_cli.case_io import load_iocs, save_iocs
+
+    iocs = load_iocs(case_dir)
+    iocs_modified = False
+    for ioc in iocs:
+        if ioc.get("manually_reviewed"):
+            continue
+        source_ids = ioc.get("source_findings", [])
+        if not any(sid in approved_ids for sid in source_ids):
+            continue
+        if ioc.get("status") != "APPROVED":
+            ioc["status"] = "APPROVED"
+            ioc["approved_at"] = now
+            ioc["approved_by"] = identity["examiner"]
+            ioc["modified_at"] = now
+            iocs_modified = True
+            coupled_events.append(ioc)
+
     # Step 1: Persist primary data FIRST
     try:
         save_findings(case_dir, findings)
         save_timeline(case_dir, timeline)
+        if iocs_modified:
+            save_iocs(case_dir, iocs)
     except OSError as e:
         print(f"CRITICAL: Failed to save case data: {e}", file=sys.stderr)
         print(
@@ -1116,10 +1137,41 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
             tl_event["modified_at"] = now
             rejected_ids.append(tl_event["id"])
 
+    # IOC approval coupling (review mode)
+    from aiir_cli.case_io import load_iocs, save_iocs
+
+    iocs = load_iocs(case_dir)
+    iocs_modified = False
+    for ioc in iocs:
+        if ioc.get("manually_reviewed"):
+            continue
+        source_ids = ioc.get("source_findings", [])
+        relevant = [item_by_id.get(sid) for sid in source_ids if item_by_id.get(sid)]
+        if not relevant:
+            continue
+        statuses = {r.get("status", "DRAFT") for r in relevant}
+        if statuses == {"APPROVED"} and ioc.get("status") != "APPROVED":
+            ioc["status"] = "APPROVED"
+            ioc["approved_at"] = now
+            ioc["approved_by"] = identity["examiner"]
+            ioc["modified_at"] = now
+            iocs_modified = True
+            approved_ids.append(ioc["id"])
+        elif statuses == {"REJECTED"} and ioc.get("status") != "REJECTED":
+            ioc["status"] = "REJECTED"
+            ioc["rejected_at"] = now
+            ioc["rejected_by"] = identity["examiner"]
+            ioc["rejection_reason"] = "All source findings rejected"
+            ioc["modified_at"] = now
+            iocs_modified = True
+            rejected_ids.append(ioc["id"])
+
     # Step 1: Persist primary data FIRST
     try:
         save_findings(case_dir, findings)
         save_timeline(case_dir, timeline)
+        if iocs_modified:
+            save_iocs(case_dir, iocs)
     except OSError as e:
         print(f"CRITICAL: Failed to save case data: {e}", file=sys.stderr)
         print("The .processing file has been preserved for retry.", file=sys.stderr)

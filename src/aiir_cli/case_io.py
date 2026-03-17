@@ -235,6 +235,26 @@ def save_todos(case_dir: Path, todos: list[dict]) -> None:
     )
 
 
+def load_iocs(case_dir: Path) -> list[dict]:
+    """Load IOC records from case root iocs.json."""
+    iocs_file = case_dir / "iocs.json"
+    if not iocs_file.exists():
+        return []
+    try:
+        return json.loads(iocs_file.read_text())
+    except json.JSONDecodeError as e:
+        print(f"WARNING: Corrupt iocs.json ({iocs_file}): {e}", file=sys.stderr)
+        return []
+
+
+def save_iocs(case_dir: Path, iocs: list[dict]) -> None:
+    """Save IOC records to case root (protected write)."""
+    _protected_write(
+        case_dir / "iocs.json",
+        json.dumps(iocs, indent=2, default=str),
+    )
+
+
 # --- Approval I/O ---
 
 
