@@ -240,8 +240,12 @@ def _approve_specific(
     result_ids = [item["id"] for item in to_approve]
     print(f"Approved: {', '.join(result_ids)}")
     if coupled_events:
-        coupled_ids = [e["id"] for e in coupled_events]
-        print(f"  Auto-approved timeline events: {', '.join(coupled_ids)}")
+        coupled_tl = [e["id"] for e in coupled_events if e["id"].startswith("T-")]
+        coupled_ioc = [e["id"] for e in coupled_events if e["id"].startswith("IOC-")]
+        if coupled_tl:
+            print(f"  Auto-approved timeline events: {', '.join(coupled_tl)}")
+        if coupled_ioc:
+            print(f"  Auto-approved IOCs: {', '.join(coupled_ioc)}")
     if log_failures:
         print(f"  WARNING: Approval log failed for: {', '.join(log_failures)}")
     if hmac_failures:
@@ -499,7 +503,13 @@ def _write_verification_entries(
     failures: list[str] = []
     for item in items:
         item_id = item.get("id", "")
-        item_type = "timeline" if item_id.startswith("T-") else "finding"
+        item_type = (
+            "timeline"
+            if item_id.startswith("T-")
+            else "ioc"
+            if item_id.startswith("IOC-")
+            else "finding"
+        )
         desc = hmac_text(item)
         entry = {
             "finding_id": item_id,

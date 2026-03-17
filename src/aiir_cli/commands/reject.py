@@ -318,6 +318,21 @@ def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> No
             )
         ):
             log_failures.append(tl_event["id"])
+    # Cascaded IOC rejections also need audit log entries
+    for ioc in iocs:
+        if (
+            ioc["id"] in rejected
+            and ioc.get("rejection_reason") == "All source findings rejected"
+            and not write_approval_log(
+                case_dir,
+                ioc["id"],
+                "REJECTED",
+                identity,
+                reason="All source findings rejected",
+                mode=mode,
+            )
+        ):
+            log_failures.append(ioc["id"])
 
     print(f"\nRejected {len(rejected)} item(s): {', '.join(rejected)}")
     if log_failures:
