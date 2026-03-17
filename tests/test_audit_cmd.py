@@ -211,7 +211,7 @@ class TestAuditSummary:
     def test_summary_includes_audit_ids(self, case_dir, sample_audit, identity, capsys):
         cmd_audit(_make_args("summary"), identity)
         output = capsys.readouterr().out
-        assert "Evidence IDs:  5" in output
+        assert "Audit IDs:     5" in output
 
     def test_summary_with_approvals(
         self, case_dir, sample_audit, sample_approvals, identity, capsys
