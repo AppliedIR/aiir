@@ -158,6 +158,7 @@ def _approve_specific(
     approved_ids = {
         item["id"] for item in to_approve if item.get("status") == "APPROVED"
     }
+    coupled_events = []
     for tl_event in timeline:
         auto_from = tl_event.get("auto_created_from", "")
         if not auto_from or auto_from not in approved_ids:
@@ -170,6 +171,9 @@ def _approve_specific(
         tl_event["approved_at"] = now
         tl_event["approved_by"] = identity["examiner"]
         tl_event["modified_at"] = now
+        new_hash = compute_content_hash(tl_event)
+        tl_event["content_hash"] = new_hash
+        coupled_events.append(tl_event)
 
     # Step 1: Persist primary data FIRST
     try:
@@ -184,7 +188,8 @@ def _approve_specific(
 
     # Step 2: Audit log (best-effort, warn on failure)
     log_failures = []
-    for item in to_approve:
+    all_approved = list(to_approve) + coupled_events
+    for item in all_approved:
         if not write_approval_log(
             case_dir,
             item["id"],
@@ -197,11 +202,14 @@ def _approve_specific(
 
     # Step 3: HMAC ledger (warn on failure)
     hmac_failures = _write_verification_entries(
-        case_dir, to_approve, identity, config_path, password, now
+        case_dir, all_approved, identity, config_path, password, now
     )
 
-    approved_ids = [item["id"] for item in to_approve]
-    print(f"Approved: {', '.join(approved_ids)}")
+    result_ids = [item["id"] for item in to_approve]
+    print(f"Approved: {', '.join(result_ids)}")
+    if coupled_events:
+        coupled_ids = [e["id"] for e in coupled_events]
+        print(f"  Auto-approved timeline events: {', '.join(coupled_ids)}")
     if log_failures:
         print(f"  WARNING: Approval log failed for: {', '.join(log_failures)}")
     if hmac_failures:
@@ -1097,12 +1105,16 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
             tl_event["approved_at"] = now
             tl_event["approved_by"] = identity["examiner"]
             tl_event["modified_at"] = now
+            new_hash = compute_content_hash(tl_event)
+            tl_event["content_hash"] = new_hash
+            approved_ids.append(tl_event["id"])
         elif source.get("status") == "REJECTED":
             tl_event["status"] = "REJECTED"
             tl_event["rejected_at"] = now
             tl_event["rejected_by"] = identity["examiner"]
             tl_event["rejection_reason"] = "Source finding rejected"
             tl_event["modified_at"] = now
+            rejected_ids.append(tl_event["id"])
 
     # Step 1: Persist primary data FIRST
     try:

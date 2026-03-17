@@ -105,6 +105,7 @@ def cmd_reject(args, identity: dict) -> None:
         tl_event["rejected_by"] = identity["examiner"]
         tl_event["rejection_reason"] = "Source finding rejected"
         tl_event["modified_at"] = now
+        rejected.append(tl_event["id"])
 
     # Step 1: Persist primary data FIRST
     try:
@@ -220,6 +221,7 @@ def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> No
         tl_event["rejected_by"] = identity["examiner"]
         tl_event["rejection_reason"] = "Source finding rejected"
         tl_event["modified_at"] = now
+        rejected.append(tl_event["id"])
 
     # Step 1: Persist primary data FIRST
     try:
@@ -239,6 +241,21 @@ def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> No
             case_dir, item_id, "REJECTED", identity, reason=reason, mode=mode
         ):
             log_failures.append(item_id)
+    # Coupled timeline events also need audit log entries
+    for tl_event in timeline:
+        if (
+            tl_event.get("auto_created_from")
+            and tl_event["id"] in rejected
+            and not write_approval_log(
+                case_dir,
+                tl_event["id"],
+                "REJECTED",
+                identity,
+                reason="Source finding rejected",
+                mode=mode,
+            )
+        ):
+            log_failures.append(tl_event["id"])
 
     print(f"\nRejected {len(rejected)} item(s): {', '.join(rejected)}")
     if log_failures:
