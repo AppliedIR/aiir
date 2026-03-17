@@ -404,10 +404,72 @@ def _interactive_review(
         if item["id"] in approvals or item["id"] in rejections:
             item["modified_at"] = now
 
+    # Timeline approval coupling: auto-created events follow their finding
+    coupled_tl = []
+    coupled_ioc = []
+    finding_by_id = {f["id"]: f for f in findings}
+    for tl_event in timeline:
+        auto_from = tl_event.get("auto_created_from", "")
+        if not auto_from:
+            continue
+        if tl_event.get("status") != "DRAFT":
+            continue
+        if tl_event.get("examiner_modifications"):
+            continue
+        source = finding_by_id.get(auto_from)
+        if not source:
+            continue
+        if source["id"] in approvals:
+            tl_event["status"] = "APPROVED"
+            tl_event["approved_at"] = now
+            tl_event["approved_by"] = identity["examiner"]
+            tl_event["modified_at"] = now
+            new_hash = compute_content_hash(tl_event)
+            tl_event["content_hash"] = new_hash
+            coupled_tl.append(tl_event)
+        elif source["id"] in rejections:
+            tl_event["status"] = "REJECTED"
+            tl_event["rejected_at"] = now
+            tl_event["rejected_by"] = identity["examiner"]
+            tl_event["rejection_reason"] = "Source finding rejected"
+            tl_event["modified_at"] = now
+            coupled_tl.append(tl_event)
+
+    # IOC approval/rejection coupling
+    from aiir_cli.case_io import load_iocs, save_iocs
+
+    all_finding_status = {f["id"]: f.get("status", "DRAFT") for f in findings}
+    iocs = load_iocs(case_dir)
+    iocs_modified = False
+    for ioc in iocs:
+        if ioc.get("manually_reviewed"):
+            continue
+        source_ids = ioc.get("source_findings", [])
+        if not source_ids:
+            continue
+        statuses = {all_finding_status.get(sid, "DRAFT") for sid in source_ids}
+        if statuses == {"APPROVED"} and ioc.get("status") != "APPROVED":
+            ioc["status"] = "APPROVED"
+            ioc["approved_at"] = now
+            ioc["approved_by"] = identity["examiner"]
+            ioc["modified_at"] = now
+            iocs_modified = True
+            coupled_ioc.append(ioc)
+        elif statuses == {"REJECTED"} and ioc.get("status") != "REJECTED":
+            ioc["status"] = "REJECTED"
+            ioc["rejected_at"] = now
+            ioc["rejected_by"] = identity["examiner"]
+            ioc["rejection_reason"] = "All source findings rejected"
+            ioc["modified_at"] = now
+            iocs_modified = True
+            coupled_ioc.append(ioc)
+
     # Step 1: Persist primary data FIRST
     try:
         save_findings(case_dir, findings)
         save_timeline(case_dir, timeline)
+        if iocs_modified:
+            save_iocs(case_dir, iocs)
     except OSError as e:
         print(f"CRITICAL: Failed to save case data: {e}", file=sys.stderr)
         print(
@@ -435,9 +497,37 @@ def _interactive_review(
                 case_dir, item["id"], "REJECTED", identity, reason=reason, mode=mode
             ):
                 log_failures.append(item["id"])
+    # Coupled items also need audit log entries
+    for item in coupled_tl:
+        status = item.get("status", "")
+        reason = (
+            item.get("rejection_reason", "Source finding rejected")
+            if status == "REJECTED"
+            else ""
+        )
+        if not write_approval_log(
+            case_dir,
+            item["id"],
+            status,
+            identity,
+            mode=mode,
+            coupled_from=item.get("auto_created_from", ""),
+            content_hash=item.get("content_hash", ""),
+            reason=reason,
+        ):
+            log_failures.append(item["id"])
+    for item in coupled_ioc:
+        status = item.get("status", "")
+        reason = item.get("rejection_reason", "") if status == "REJECTED" else ""
+        if not write_approval_log(
+            case_dir, item["id"], status, identity, mode=mode, reason=reason
+        ):
+            log_failures.append(item["id"])
 
     # Step 3: HMAC ledger (warn on failure)
     approved_items = [item for item in all_items if item["id"] in approvals]
+    approved_items += [item for item in coupled_tl if item.get("status") == "APPROVED"]
+    approved_items += [item for item in coupled_ioc if item.get("status") == "APPROVED"]
     hmac_failures = _write_verification_entries(
         case_dir, approved_items, identity, config_path, password, now
     )
@@ -450,6 +540,12 @@ def _interactive_review(
             print(f"  WARNING: Failed to create TODOs: {e}", file=sys.stderr)
 
     print(f"Committed {len(approvals) + len(rejections)} disposition(s).")
+    if coupled_tl:
+        print(
+            f"  Auto-coupled timeline events: {', '.join(e['id'] for e in coupled_tl)}"
+        )
+    if coupled_ioc:
+        print(f"  Auto-coupled IOCs: {', '.join(e['id'] for e in coupled_ioc)}")
     if log_failures:
         print(f"  WARNING: Approval log failed for: {', '.join(log_failures)}")
     if hmac_failures:
@@ -759,6 +855,8 @@ _DELTA_EDITABLE_FIELDS = {
     "timestamp",
     "description",
     "source",
+    # IOC fields
+    "tags",
 }
 
 _RED = "\033[31m"
@@ -958,12 +1056,18 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
     findings = load_findings(case_dir)
     timeline = load_timeline(case_dir)
 
-    # Build lookup by ID
+    from aiir_cli.case_io import load_iocs, save_iocs
+
+    iocs = load_iocs(case_dir)
+
+    # Build lookup by ID — includes findings, timeline, AND IOCs
     item_by_id: dict[str, dict] = {}
     for f in findings:
         item_by_id[f["id"]] = f
     for t in timeline:
         item_by_id[t["id"]] = t
+    for ioc in iocs:
+        item_by_id[ioc["id"]] = ioc
 
     # Categorize delta items
     approvals = []
@@ -1067,6 +1171,9 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
         item["approved_at"] = now
         item["approved_by"] = identity["examiner"]
         item["modified_at"] = now
+        # Direct IOC actions decouple from cascade
+        if item_id.startswith("IOC-"):
+            item["manually_reviewed"] = True
         approved_ids.append(item_id)
 
     # Process edits (modifications only, no status change)
@@ -1128,6 +1235,9 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
         if reason:
             item["rejection_reason"] = reason
         item["modified_at"] = now
+        # Direct IOC actions decouple from cascade
+        if item_id.startswith("IOC-"):
+            item["manually_reviewed"] = True
         rejected_ids.append(item_id)
 
     # Timeline approval coupling: auto-created events follow their finding
@@ -1159,10 +1269,11 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
             rejected_ids.append(tl_event["id"])
 
     # IOC approval coupling (review mode)
-    from aiir_cli.case_io import load_iocs, save_iocs
-
-    iocs = load_iocs(case_dir)
-    iocs_modified = False
+    # iocs already loaded above (H2 fix) — reuse same objects
+    any_ioc_acted = any(
+        aid.startswith("IOC-") for aid in approved_ids + rejected_ids + edited_ids
+    )
+    iocs_modified = any_ioc_acted
     for ioc in iocs:
         if ioc.get("manually_reviewed"):
             continue
