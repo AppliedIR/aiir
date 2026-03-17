@@ -130,14 +130,14 @@ The examiner interacts with AIIR through three interfaces: the **LLM client** (A
 
 ### Deployment Overview
 
-The typical deployment runs three VMs on a single host: SIFT (primary workstation), REMnux (malware analysis), and Windows (forensic tool execution). The examiner works on the SIFT VM — running the LLM client, the case dashboard in a browser, and the aiir CLI. REMnux and Windows are headless worker VMs. All three communicate over a VM-local network. Internet access is through NAT for external MCP services.
+The typical deployment runs three VMs on a single host: SIFT (primary workstation), REMnux (malware analysis), and Windows (forensic tool execution). The examiner works on the SIFT VM — running the LLM client, the Examiner Portal in a browser, and the aiir CLI. REMnux and Windows are headless worker VMs. All three communicate over a VM-local network. Internet access is through NAT for external MCP services.
 
 ```mermaid
 graph TB
     subgraph host ["Host Machine"]
         subgraph sift ["SIFT VM"]
             CC["LLM Client<br/>(human interface)"]
-            BR["Browser<br/>(dashboard)"]
+            BR["Browser<br/>(Examiner Portal)"]
             CLI["aiir CLI"]
             GW["sift-gateway :4508"]
             CASE["Case Directory"]
@@ -210,13 +210,13 @@ graph LR
 
 ### Human-in-the-Loop Workflow
 
-All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them — via the case dashboard (browser) or the aiir CLI. Both paths produce identical HMAC-signed approval records. The AI cannot approve its own findings.
+All findings and timeline events are staged as DRAFT by the AI. Only a human examiner can approve or reject them — via the Examiner Portal (browser) or the aiir CLI. Both paths produce identical HMAC-signed approval records. The AI cannot approve its own findings.
 
 ```mermaid
 sequenceDiagram
     participant AI as LLM + MCP Tools
     participant Case as Case Directory
-    participant Human as Examiner<br/>(Dashboard or CLI)
+    participant Human as Examiner<br/>(Portal or CLI)
 
     AI->>Case: record_finding() → DRAFT
     AI->>Case: record_timeline_event() → DRAFT
@@ -233,11 +233,11 @@ The **Examiner Portal** is the primary review interface with 8 tabs: Overview (i
 
 Examiners review findings and timeline events, edit fields (confidence, justification, observation, interpretation, MITRE IDs, IOCs, tags), approve or reject items, and commit decisions — all in the browser. Each finding displays its evidence artifacts with a provenance chain showing which registered evidence files were input, which tools processed them, and what output was extracted. Keyboard shortcuts (`1`-`8` tabs, `j`/`k` navigate, `a` approve, `r` reject, `e` edit, `Shift+C` commit) enable fast review. The sidebar is resizable, and search matches across title, observation, host, and account fields. Light and dark themes are supported.
 
-The Commit button (`Shift+C`) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. Timeline events auto-created from findings follow the finding's approval status unless manually edited. IOCs auto-extracted from findings cascade when all source findings reach the same status. The CLI's `aiir approve` provides the same functionality from the terminal. Open the portal with `aiir portal` or `aiir dashboard`.
+The Commit button (`Shift+C`) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. Timeline events auto-created from findings follow the finding's approval status unless manually edited. IOCs auto-extracted from findings cascade when all source findings reach the same status. The CLI's `aiir approve` provides the same functionality from the terminal. Open the portal with `aiir portal`.
 
-![Dashboard — Findings](docs/images/dashboard.png)
+![Examiner Portal — Findings](docs/images/dashboard.png)
 
-![Dashboard — Timeline](docs/images/timeline.png)
+![Examiner Portal — Timeline](docs/images/timeline.png)
 
 ### Where Things Run
 
@@ -253,7 +253,7 @@ The Commit button (`Shift+C`) uses challenge-response authentication: the browse
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI (10 tools) |
 | Examiner Portal | SIFT | (via gateway) | 8-tab browser UI: overview, findings with provenance chains, timeline with ruler, hosts, accounts, evidence verification, IOCs, TODOs. Primary review UI. |
 | wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows (7 tools) |
-| aiir CLI | SIFT | -- | Human-only: case init, evidence management, verification, exec. Approval also available via dashboard. Remote examiners need SSH only for CLI-exclusive operations. |
+| aiir CLI | SIFT | -- | Human-only: case init, evidence management, verification, exec. Approval also available via Examiner Portal. Remote examiners need SSH only for CLI-exclusive operations. |
 | forensic-knowledge | anywhere | -- | Shared YAML data package (tools, artifacts, discipline) |
 
 The gateway exposes each backend as a separate MCP endpoint. Clients can connect to the aggregate endpoint or to individual backends:
@@ -322,7 +322,7 @@ cases/INC-2026-0219/
 ├── actions.jsonl                # Investigative actions (append-only)
 ├── evidence_access.jsonl        # Chain-of-custody log
 ├── approvals.jsonl              # Approval audit trail
-├── pending-reviews.json         # Dashboard edits awaiting approval
+├── pending-reviews.json         # Portal edits awaiting approval
 └── audit/
     ├── forensic-mcp.jsonl
     ├── sift-mcp.jsonl
@@ -411,10 +411,10 @@ aiir approve F-alice-001 --note "Malware family unconfirmed"  # Approve with exa
 aiir approve --by jane                                   # Filter to IDs with jane's examiner prefix
 aiir approve --findings-only                             # Skip timeline events
 aiir approve --timeline-only                             # Skip findings
-aiir approve --review                                    # Apply pending dashboard edits
+aiir approve --review                                    # Apply pending portal edits
 ```
 
-Requires password entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the dashboard (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file. Alternatively, use the dashboard's Commit button (Shift+C) which performs the same operation via challenge-response authentication — the password never leaves the browser.
+Requires password entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the Examiner Portal (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file. Alternatively, use the portal's Commit button (Shift+C) which performs the same operation via challenge-response authentication — the password never leaves the browser.
 
 #### reject
 
@@ -480,7 +480,6 @@ The remaining commands can also be performed through MCP tools (case-mcp, forens
 
 ```
 aiir portal                                              # Open the Examiner Portal in your browser
-aiir dashboard                                           # Alias (same command)
 ```
 
 Opens the Examiner Portal for the active case. The portal is the primary review interface — examiners can review, edit, approve, reject, and commit findings entirely in the browser. Use the Commit button (Shift+C) to apply decisions with challenge-response authentication. Alternatively, `aiir approve --review` applies pending edits from the CLI.

@@ -21,7 +21,7 @@ from aiir_cli.commands.approve import cmd_approve
 from aiir_cli.commands.audit_cmd import cmd_audit
 from aiir_cli.commands.backup import cmd_backup
 from aiir_cli.commands.config import cmd_config
-from aiir_cli.commands.dashboard import cmd_dashboard
+from aiir_cli.commands.dashboard import cmd_dashboard, cmd_portal
 from aiir_cli.commands.evidence import (
     cmd_evidence,
     cmd_lock_evidence,
@@ -490,7 +490,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # portal / dashboard
     sub.add_parser("portal", help="Open the Examiner Portal in your browser")
-    sub.add_parser("dashboard", help="Open the Examiner Portal in your browser")
+    sub.add_parser("dashboard", help="Open the legacy dashboard (v1)")
 
     return parser
 
@@ -530,7 +530,7 @@ def main() -> None:
         "service": cmd_service,
         "join": cmd_join,
         "update": cmd_update,
-        "portal": cmd_dashboard,
+        "portal": cmd_portal,
         "dashboard": cmd_dashboard,
     }
 

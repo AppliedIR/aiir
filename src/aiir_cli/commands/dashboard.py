@@ -1,4 +1,4 @@
-"""Open the Examiner Portal in a browser."""
+"""Open the Examiner Portal or legacy dashboard in a browser."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from pathlib import Path
 import yaml
 
 
-def cmd_dashboard(args, identity: dict) -> None:
-    """Open the Examiner Portal."""
+def _open_url(args, identity: dict, path: str, label: str) -> None:
+    """Open a gateway URL in the browser."""
     config_path = Path.home() / ".aiir" / "gateway.yaml"
     if not config_path.is_file():
         print(
@@ -35,7 +35,7 @@ def cmd_dashboard(args, identity: dict) -> None:
     if host == "0.0.0.0":
         host = "127.0.0.1"
 
-    url = f"{scheme}://{host}:{port}/dashboard/"
+    url = f"{scheme}://{host}:{port}{path}"
 
     # Append bearer token matching current examiner
     api_keys = config.get("api_keys", {})
@@ -50,8 +50,18 @@ def cmd_dashboard(args, identity: dict) -> None:
             token = next(iter(api_keys))
         url += f"#token={token}"
 
-    print(f"Examiner Portal: {url}")
+    print(f"{label}: {url}")
     try:
         webbrowser.open(url)
     except Exception:
         print("Could not open browser. Use the URL above.", file=sys.stderr)
+
+
+def cmd_portal(args, identity: dict) -> None:
+    """Open the Examiner Portal."""
+    _open_url(args, identity, "/portal/", "Examiner Portal")
+
+
+def cmd_dashboard(args, identity: dict) -> None:
+    """Open the legacy dashboard (v1)."""
+    _open_url(args, identity, "/dashboard/", "Dashboard")
