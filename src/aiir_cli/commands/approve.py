@@ -154,6 +154,23 @@ def _approve_specific(
         item["approved_by"] = identity["examiner"]
         item["modified_at"] = now
 
+    # Timeline approval coupling: auto-created events follow their finding
+    approved_ids = {
+        item["id"] for item in to_approve if item.get("status") == "APPROVED"
+    }
+    for tl_event in timeline:
+        auto_from = tl_event.get("auto_created_from", "")
+        if not auto_from or auto_from not in approved_ids:
+            continue
+        if tl_event.get("status") != "DRAFT":
+            continue
+        if tl_event.get("examiner_modifications"):
+            continue
+        tl_event["status"] = "APPROVED"
+        tl_event["approved_at"] = now
+        tl_event["approved_by"] = identity["examiner"]
+        tl_event["modified_at"] = now
+
     # Step 1: Persist primary data FIRST
     try:
         save_findings(case_dir, findings)
@@ -1062,6 +1079,30 @@ def _review_mode(case_dir: Path, identity: dict, config_path: Path) -> None:
             item["rejection_reason"] = reason
         item["modified_at"] = now
         rejected_ids.append(item_id)
+
+    # Timeline approval coupling: auto-created events follow their finding
+    for tl_event in timeline:
+        auto_from = tl_event.get("auto_created_from", "")
+        if not auto_from:
+            continue
+        if tl_event.get("status") != "DRAFT":
+            continue
+        if tl_event.get("examiner_modifications"):
+            continue
+        source = item_by_id.get(auto_from)
+        if not source:
+            continue
+        if source.get("status") == "APPROVED":
+            tl_event["status"] = "APPROVED"
+            tl_event["approved_at"] = now
+            tl_event["approved_by"] = identity["examiner"]
+            tl_event["modified_at"] = now
+        elif source.get("status") == "REJECTED":
+            tl_event["status"] = "REJECTED"
+            tl_event["rejected_at"] = now
+            tl_event["rejected_by"] = identity["examiner"]
+            tl_event["rejection_reason"] = "Source finding rejected"
+            tl_event["modified_at"] = now
 
     # Step 1: Persist primary data FIRST
     try:

@@ -91,6 +91,21 @@ def cmd_reject(args, identity: dict) -> None:
         print("No items rejected.")
         return
 
+    # Timeline rejection coupling: auto-created events follow their finding
+    for tl_event in timeline:
+        auto_from = tl_event.get("auto_created_from", "")
+        if not auto_from or auto_from not in rejected:
+            continue
+        if tl_event.get("status") != "DRAFT":
+            continue
+        if tl_event.get("examiner_modifications"):
+            continue
+        tl_event["status"] = "REJECTED"
+        tl_event["rejected_at"] = now
+        tl_event["rejected_by"] = identity["examiner"]
+        tl_event["rejection_reason"] = "Source finding rejected"
+        tl_event["modified_at"] = now
+
     # Step 1: Persist primary data FIRST
     try:
         save_findings(case_dir, findings)
@@ -190,6 +205,21 @@ def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> No
     if not rejected:
         print("\nNo items rejected (all stale).")
         return
+
+    # Timeline rejection coupling
+    for tl_event in timeline:
+        auto_from = tl_event.get("auto_created_from", "")
+        if not auto_from or auto_from not in rejected:
+            continue
+        if tl_event.get("status") != "DRAFT":
+            continue
+        if tl_event.get("examiner_modifications"):
+            continue
+        tl_event["status"] = "REJECTED"
+        tl_event["rejected_at"] = now
+        tl_event["rejected_by"] = identity["examiner"]
+        tl_event["rejection_reason"] = "Source finding rejected"
+        tl_event["modified_at"] = now
 
     # Step 1: Persist primary data FIRST
     try:
