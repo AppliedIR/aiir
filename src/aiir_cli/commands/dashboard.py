@@ -1,4 +1,4 @@
-"""Open the case review dashboard in a browser."""
+"""Open the Examiner Portal in a browser."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import yaml
 
 
 def cmd_dashboard(args, identity: dict) -> None:
-    """Open the case review dashboard."""
+    """Open the Examiner Portal."""
     config_path = Path.home() / ".aiir" / "gateway.yaml"
     if not config_path.is_file():
         print(
@@ -50,7 +50,7 @@ def cmd_dashboard(args, identity: dict) -> None:
             token = next(iter(api_keys))
         url += f"#token={token}"
 
-    print(f"Dashboard: {url}")
+    print(f"Examiner Portal: {url}")
     try:
         webbrowser.open(url)
     except Exception:

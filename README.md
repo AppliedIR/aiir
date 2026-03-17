@@ -126,7 +126,7 @@ Full AIIR is **LLM client agnostic** — connect any MCP-compatible client throu
 
 ## Platform Architecture
 
-The examiner interacts with AIIR through three interfaces: the **LLM client** (AI-assisted investigation), the **case dashboard** (browser-based review and approval), and the **aiir CLI** (case management, evidence handling, and verification).
+The examiner interacts with AIIR through three interfaces: the **LLM client** (AI-assisted investigation), the **Examiner Portal** (browser-based review and approval), and the **aiir CLI** (case management, evidence handling, and verification).
 
 ### Deployment Overview
 
@@ -171,24 +171,24 @@ graph TB
     GW -.->|"HTTP(S)"| OCTI
 ```
 
-REMnux and Windows VMs are optional. SIFT alone provides 64 MCP tools across 7 backends, the case dashboard, and full case management.
+REMnux and Windows VMs are optional. SIFT alone provides 79 MCP tools across 7 backends, the Examiner Portal, and full case management.
 
 ### SIFT Platform Components
 
-The sift-gateway aggregates 7 MCP backends as stdio subprocesses behind a single HTTP endpoint. Each backend is also available individually. The case dashboard is served by the gateway for browser-based review and approval.
+The sift-gateway aggregates 7 MCP backends as stdio subprocesses behind a single HTTP endpoint. Each backend is also available individually. The Examiner Portal is served by the gateway for browser-based review and approval.
 
 ```mermaid
 graph LR
     GW["sift-gateway :4508"]
 
-    FM["forensic-mcp<br/>12 tools · findings, timeline,<br/>evidence, discipline"]
-    CM["case-mcp<br/>14 tools · case management,<br/>audit queries"]
+    FM["forensic-mcp<br/>26 tools · findings, timeline,<br/>evidence, discipline"]
+    CM["case-mcp<br/>15 tools · case management,<br/>audit queries, backup"]
     RM["report-mcp<br/>6 tools · report generation,<br/>IOC aggregation"]
     SM["sift-mcp<br/>6 tools · Linux forensic<br/>tool execution"]
     RAG["forensic-rag<br/>3 tools · semantic search<br/>23K records"]
     WT["windows-triage<br/>13 tools · offline baseline<br/>validation"]
     OC["opencti<br/>10 tools · threat<br/>intelligence"]
-    CD["case-dashboard<br/>browser review + commit"]
+    CD["Examiner Portal<br/>browser review + commit"]
     FK["forensic-knowledge<br/>shared YAML data"]
     CASE["Case Directory"]
 
@@ -229,7 +229,11 @@ sequenceDiagram
     Human->>Case: aiir report --full
 ```
 
-The **case dashboard** is the primary review interface. Examiners review findings and timeline events, edit fields (confidence, justification, observation, interpretation, MITRE IDs, IOCs), approve or reject items, and commit decisions — all in the browser. The Commit button (Shift+C) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. The CLI's `aiir approve` provides the same functionality from the terminal.
+The **Examiner Portal** is the primary review interface with 8 tabs: Overview (investigation progress and getting started guide), Findings (the core review workflow with provenance chain display), Timeline (chronological events with a color-coded ruler), Hosts (systems involved, aggregated from findings), Accounts (user/service accounts involved), Evidence (registered files with SHA-256 integrity verification), IOCs (indicators extracted from findings with category/status filters), and TODOs (outstanding tasks).
+
+Examiners review findings and timeline events, edit fields (confidence, justification, observation, interpretation, MITRE IDs, IOCs, tags), approve or reject items, and commit decisions — all in the browser. Each finding displays its evidence artifacts with a provenance chain showing which registered evidence files were input, which tools processed them, and what output was extracted. Keyboard shortcuts (`1`-`8` tabs, `j`/`k` navigate, `a` approve, `r` reject, `e` edit, `Shift+C` commit) enable fast review. The sidebar is resizable, and search matches across title, observation, host, and account fields. Light and dark themes are supported.
+
+The Commit button (`Shift+C`) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. Timeline events auto-created from findings follow the finding's approval status unless manually edited. IOCs auto-extracted from findings cascade when all source findings reach the same status. The CLI's `aiir approve` provides the same functionality from the terminal. Open the portal with `aiir portal` or `aiir dashboard`.
 
 ![Dashboard — Findings](docs/images/dashboard.png)
 
@@ -240,14 +244,14 @@ The **case dashboard** is the primary review interface. Examiners review finding
 | Component | Runs on | Port | Purpose |
 |-----------|---------|------|---------|
 | sift-gateway | SIFT | 4508 | Aggregates SIFT-local MCPs behind one HTTP endpoint |
-| forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, discipline (12 tools + 14 resources) |
-| case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration (14 tools) |
+| forensic-mcp | SIFT | (via gateway) | Findings, timeline, evidence, TODOs, IOCs, discipline (26 tools) |
+| case-mcp | SIFT | (via gateway) | Case management, audit queries, evidence registration, backup (15 tools) |
 | report-mcp | SIFT | (via gateway) | Report generation with profiles, IOC aggregation, MITRE mapping (6 tools) |
 | sift-mcp | SIFT | (via gateway) | Denylist-protected forensic tool execution on Linux/SIFT (6 tools) |
 | forensic-rag-mcp | SIFT | (via gateway) | Semantic search across Sigma, MITRE ATT&CK, Atomic Red Team, and more |
 | windows-triage-mcp | SIFT | (via gateway) | Offline Windows baseline validation |
 | opencti-mcp | SIFT | (via gateway) | Threat intelligence from OpenCTI (10 tools) |
-| case-dashboard | SIFT | (via gateway) | Browser-based review, approval, and commit interface. Primary review UI — no SSH needed. |
+| Examiner Portal | SIFT | (via gateway) | 8-tab browser UI: overview, findings with provenance chains, timeline with ruler, hosts, accounts, evidence verification, IOCs, TODOs. Primary review UI. |
 | wintools-mcp | Windows | 4624 | Catalog-gated forensic tool execution on Windows (7 tools) |
 | aiir CLI | SIFT | -- | Human-only: case init, evidence management, verification, exec. Approval also available via dashboard. Remote examiners need SSH only for CLI-exclusive operations. |
 | forensic-knowledge | anywhere | -- | Shared YAML data package (tools, artifacts, discipline) |
@@ -313,6 +317,7 @@ cases/INC-2026-0219/
 ├── findings.json                # F-alice-001, F-alice-002, ...
 ├── timeline.json                # T-alice-001, ...
 ├── todos.json                   # TODO-alice-001, ...
+├── iocs.json                    # IOC-alice-001, ... (auto-extracted from findings)
 ├── evidence.json                # Evidence registry
 ├── actions.jsonl                # Investigative actions (append-only)
 ├── evidence_access.jsonl        # Chain-of-custody log
@@ -428,6 +433,18 @@ aiir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
 
 Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`. Use this for manual tool execution with audit trail when not operating through MCP.
 
+#### backup
+
+```
+aiir backup /path/to/destination                         # Back up case data (interactive)
+aiir backup /path/to/destination --all                   # Include evidence + extractions
+aiir backup /path/to/destination --include-evidence      # Include evidence files
+aiir backup /path/to/destination --include-extractions   # Include extraction files
+aiir backup --verify /path/to/backup/                    # Verify backup integrity
+```
+
+Creates a timestamped backup with SHA-256 manifest. Verification checks every file hash against the manifest. The `--all` flag includes evidence and extraction files (which can be large). Without flags, interactive mode prompts per category with size estimates.
+
 #### evidence unlock
 
 ```
@@ -459,13 +476,14 @@ Verification requires the examiner's password to derive the HMAC key and confirm
 
 The remaining commands can also be performed through MCP tools (case-mcp, forensic-mcp, report-mcp) when working with an MCP-connected client. The CLI equivalents are listed here for reference and for use outside MCP sessions.
 
-#### dashboard
+#### portal
 
 ```
-aiir dashboard                                           # Open case review dashboard in browser
+aiir portal                                              # Open the Examiner Portal in your browser
+aiir dashboard                                           # Alias (same command)
 ```
 
-Opens the case-dashboard web UI for the active case. The dashboard is the primary review interface — examiners can review, edit, approve, reject, and commit findings entirely in the browser. Use the Commit button (Shift+C) to apply decisions with challenge-response authentication. Alternatively, `aiir approve --review` applies pending edits from the CLI.
+Opens the Examiner Portal for the active case. The portal is the primary review interface — examiners can review, edit, approve, reject, and commit findings entirely in the browser. Use the Commit button (Shift+C) to apply decisions with challenge-response authentication. Alternatively, `aiir approve --review` applies pending edits from the CLI.
 
 #### case
 
@@ -669,8 +687,8 @@ and runs a connectivity smoke test.
 Both modes share the same Python venv, triage databases, and RAG index. Full
 AIIR adds the gateway (7 MCP backends behind one HTTP endpoint), 4 additional
 MCP servers (forensic-mcp, case-mcp, report-mcp, sift-mcp), a web-based review
-dashboard, structured case management, sandbox enforcement, and HMAC-signed
-approvals.
+portal (Examiner Portal), structured case management, sandbox enforcement,
+and HMAC-signed approvals.
 
 To upgrade, run `setup-sift.sh` from your existing sift-mcp clone. The
 installer reuses the existing venv and databases. Lite case data (markdown

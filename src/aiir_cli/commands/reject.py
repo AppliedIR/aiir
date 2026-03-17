@@ -96,8 +96,6 @@ def cmd_reject(args, identity: dict) -> None:
         auto_from = tl_event.get("auto_created_from", "")
         if not auto_from or auto_from not in rejected:
             continue
-        if tl_event.get("status") != "DRAFT":
-            continue
         if tl_event.get("examiner_modifications"):
             continue
         tl_event["status"] = "REJECTED"
@@ -242,8 +240,6 @@ def _interactive_reject(case_dir: Path, identity: dict, config_path: Path) -> No
     for tl_event in timeline:
         auto_from = tl_event.get("auto_created_from", "")
         if not auto_from or auto_from not in rejected:
-            continue
-        if tl_event.get("status") != "DRAFT":
             continue
         if tl_event.get("examiner_modifications"):
             continue

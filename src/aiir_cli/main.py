@@ -101,7 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve.add_argument(
         "--review",
         action="store_true",
-        help="Apply pending dashboard reviews from pending-reviews.json",
+        help="Apply pending Examiner Portal reviews from pending-reviews.json",
     )
 
     # reject
@@ -488,8 +488,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip gateway restart",
     )
 
-    # dashboard
-    sub.add_parser("dashboard", help="Open the case review dashboard in a browser")
+    # portal / dashboard
+    sub.add_parser("portal", help="Open the Examiner Portal in your browser")
+    sub.add_parser("dashboard", help="Open the Examiner Portal in your browser")
 
     return parser
 
@@ -529,6 +530,7 @@ def main() -> None:
         "service": cmd_service,
         "join": cmd_join,
         "update": cmd_update,
+        "portal": cmd_dashboard,
         "dashboard": cmd_dashboard,
     }
 
