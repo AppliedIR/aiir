@@ -1,6 +1,6 @@
 # MCP Reference
 
-71 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine. The case-dashboard is a web UI served by the gateway (not an MCP backend).
+86 MCP tools across 8 backends. Seven backends run as stdio subprocesses of the sift-gateway. wintools-mcp runs independently on a Windows machine. The Examiner Portal (case-dashboard package) is a web UI served by the gateway at `/portal/` (not an MCP backend).
 
 ## forensic-mcp (12 core tools + 14 discipline resources)
 
@@ -63,7 +63,7 @@ These are available as MCP resources by default. Clients without resource suppor
 | `forensic-mcp://playbook/{name}` | Specific playbook |
 | `forensic-mcp://collection-checklist/{artifact_type}` | Collection checklist |
 
-## case-mcp (14 tools)
+## case-mcp (15 tools)
 
 Case lifecycle management, evidence operations, export/import, and audit.
 
@@ -82,7 +82,7 @@ Case lifecycle management, evidence operations, export/import, and audit.
 | `record_action` | AUTO | Record an investigative action |
 | `log_reasoning` | AUTO | Log analytical reasoning (audit only, no approval needed) |
 | `log_external_action` | AUTO | Log a non-MCP tool execution |
-| `open_case_dashboard` | SAFE | Open the web-based case dashboard |
+| `open_case_dashboard` | SAFE | Open the Examiner Portal |
 
 **Safety tiers:**
 - **SAFE**: Read-only, no side effects

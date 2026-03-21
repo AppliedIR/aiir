@@ -168,15 +168,15 @@ aiir approve F-alice-003 --interpretation "Confirmed malicious based on YARA mat
 aiir reject F-alice-004 --reason "Insufficient evidence, timestamp inconsistency"
 ```
 
-### Dashboard Review
+### Examiner Portal
 
-The case dashboard is the primary review interface. Open it with:
+The Examiner Portal is the primary review interface. Open it with:
 
 ```bash
-aiir dashboard
+aiir portal
 ```
 
-The dashboard displays all findings and timeline events with inline editing for:
+The portal displays all findings and timeline events with inline editing for:
 
 - **Confidence** — select HIGH / MEDIUM / LOW / SPECULATIVE
 - **Justification** — explain the confidence level
@@ -187,7 +187,7 @@ The dashboard displays all findings and timeline events with inline editing for:
 
 Findings that include `artifacts` (source files, extraction commands, raw content) display them in the Evidence section. Findings without artifacts fall back to showing `supporting_commands`.
 
-Review, approve, reject, and commit findings directly in the browser using the Commit button (Shift+C). The dashboard uses challenge-response authentication — the password never leaves the browser. Both the dashboard and the CLI produce identical HMAC-signed approval records.
+Review, approve, reject, and commit findings directly in the browser using the Commit button (Shift+C). The portal uses challenge-response authentication — the password never leaves the browser. Both the portal and the CLI produce identical HMAC-signed approval records.
 
 Alternatively, edits can be applied from the CLI:
 

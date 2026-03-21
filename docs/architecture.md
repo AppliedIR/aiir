@@ -26,7 +26,7 @@ sift-mcp ──► SIFT forensic tools
 forensic-rag-mcp
 windows-triage-mcp
 opencti-mcp
-case-dashboard ──► Review UI
+case-dashboard ──► Examiner Portal
 ```
 
 ## Invariants
@@ -72,7 +72,7 @@ The investigation state machine. Manages findings, timeline events, evidence lis
 
 ### case-mcp
 
-Case lifecycle management. Init, activate, close, migrate, list, status. Evidence registration and verification. Export/import for multi-examiner collaboration. Audit summary. Action and reasoning logging. Dashboard access. 14 tools with SAFE/CONFIRM safety tiers.
+Case lifecycle management. Init, activate, close, migrate, list, status. Evidence registration and verification. Export/import for multi-examiner collaboration. Audit summary. Action and reasoning logging. Portal access. 15 tools with SAFE/CONFIRM safety tiers.
 
 ### report-mcp
 
@@ -96,7 +96,7 @@ Offline Windows baseline validation. Checks files, processes, services, schedule
 
 ### case-dashboard
 
-Web-based finding review interface served by the gateway at `/dashboard/`. Provides inline editing of findings (confidence, justification, observation, interpretation, MITRE IDs, IOCs), evidence artifact display, and an integrity section showing verification status, provenance, and content hashes. Edits are saved to `pending-reviews.json` and applied via `aiir approve --review`.
+The Examiner Portal. Web-based finding review interface served by the gateway at `/portal/`. Provides inline editing of findings (confidence, justification, observation, interpretation, MITRE IDs, IOCs), evidence artifact display, and an integrity section showing verification status, provenance, and content hashes. Edits are saved to `pending-reviews.json` and applied via `aiir approve --review`.
 
 ### opencti-mcp
 
@@ -195,7 +195,7 @@ cases/INC-2026-0225/
 ├── actions.jsonl                # Investigative actions (append-only)
 ├── evidence_access.jsonl        # Chain-of-custody log
 ├── approvals.jsonl              # Approval audit trail
-├── pending-reviews.json         # Dashboard edits awaiting approval
+├── pending-reviews.json         # Portal edits awaiting approval
 └── audit/
     ├── forensic-mcp.jsonl
     ├── sift-mcp.jsonl

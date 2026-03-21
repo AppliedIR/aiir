@@ -664,7 +664,7 @@ Every approval, rejection, and command execution is logged with examiner identit
 | Repo | Purpose |
 |------|---------|
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 11 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, case-dashboard, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
-| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 22 catalog entries) |
+| [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 31 catalog entries) |
 | [aiir](https://github.com/AppliedIR/aiir) | CLI, architecture reference |
 
 ## Updating

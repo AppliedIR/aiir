@@ -63,7 +63,7 @@ Nine layers of defense-in-depth protect the integrity of forensic findings. The 
 
 ### L1 — Structural Approval Gate
 
-All findings and timeline events stage as DRAFT. Only a human examiner can move them to APPROVED or REJECTED — via the aiir CLI (password entry at `/dev/tty`) or the case dashboard (challenge-response authentication in the browser). There is no MCP tool for approval. The AI cannot bypass either mechanism: the CLI reads the password from `/dev/tty` (not stdin), and the dashboard requires computing HMAC(PBKDF2(password), nonce) which the AI cannot do without the password.
+All findings and timeline events stage as DRAFT. Only a human examiner can move them to APPROVED or REJECTED — via the aiir CLI (password entry at `/dev/tty`) or the Examiner Portal (challenge-response authentication in the browser). There is no MCP tool for approval. The AI cannot bypass either mechanism: the CLI reads the password from `/dev/tty` (not stdin), and the portal requires computing HMAC(PBKDF2(password), nonce) which the AI cannot do without the password.
 
 ### L2 — HMAC Verification Ledger
 
@@ -111,7 +111,7 @@ Alerts are included in the generated report as `verification_alerts`.
 
 ### L7-L8 — Integrity Controls
 
-- **Password authentication**: Both the `aiir approve` CLI command and the dashboard Commit button require password-based authentication. The CLI uses direct password entry via `/dev/tty`. The dashboard uses challenge-response: the browser derives a PBKDF2 key and computes HMAC-SHA256(key, server_nonce) — the password never leaves the browser. Passwords are set per examiner via `aiir config --setup-password` (minimum 8 characters).
+- **Password authentication**: Both the `aiir approve` CLI command and the Examiner Portal Commit button require password-based authentication. The CLI uses direct password entry via `/dev/tty`. The portal uses challenge-response: the browser derives a PBKDF2 key and computes HMAC-SHA256(key, server_nonce) — the password never leaves the browser. Passwords are set per examiner via `aiir config --setup-password` (minimum 8 characters).
 - **Provenance enforcement**: Findings must be traceable to evidence (MCP > HOOK > SHELL > NONE). NONE provenance with no supporting commands is rejected by a hard gate in `record_finding()`.
 - **Content hash integrity**: SHA-256 hashes computed at staging, verified at approval. `aiir review --verify` detects post-approval tampering via cross-file hash comparison.
 
@@ -173,9 +173,9 @@ When Claude Code is the LLM client, `aiir setup client --client=claude-code` dep
 
 ## SSH Security Consideration
 
-Remote deployments (Path 2) require SSH access to SIFT only for CLI-exclusive operations: case initialization, evidence registration, evidence unlocking, and command execution. Finding approval and rejection are available through the case dashboard in the browser — SSH is not required for the review workflow.
+Remote deployments (Path 2) require SSH access to SIFT only for CLI-exclusive operations: case initialization, evidence registration, evidence unlocking, and command execution. Finding approval and rejection are available through the Examiner Portal in the browser — SSH is not required for the review workflow.
 
-If the remote LLM client has terminal access (e.g., Claude Code), it can potentially use the examiner's SSH credentials to run commands on SIFT outside of MCP controls. The password gate prevents the LLM from approving findings — whether through the CLI (`/dev/tty` password entry) or the dashboard (challenge-response authentication). Other operations (file modification, evidence access) are not password-gated.
+If the remote LLM client has terminal access (e.g., Claude Code), it can potentially use the examiner's SSH credentials to run commands on SIFT outside of MCP controls. The password gate prevents the LLM from approving findings — whether through the CLI (`/dev/tty` password entry) or the portal (challenge-response authentication). Other operations (file modification, evidence access) are not password-gated.
 
 For production forensic work with remote Claude Code, examiners should use SSH authentication that requires human interaction per use:
 

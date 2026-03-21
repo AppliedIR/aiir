@@ -74,17 +74,17 @@ aiir case migrate --examiner alice
 aiir case migrate --import-all    # Merge all examiners' data
 ```
 
-## Dashboard
+## Examiner Portal
 
-### `aiir dashboard`
+### `aiir portal`
 
-Open the case review dashboard in the default browser.
+Open the Examiner Portal in the default browser.
 
 ```bash
-aiir dashboard
+aiir portal
 ```
 
-The dashboard is the primary review interface — examiners can review, edit, approve, reject, and commit findings entirely in the browser. Use the Commit button (Shift+C) to apply decisions with challenge-response authentication. Alternatively, `aiir approve --review` applies pending edits from the CLI.
+The portal is the primary review interface — examiners can review, edit, approve, reject, and commit findings entirely in the browser. Use the Commit button (Shift+C) to apply decisions with challenge-response authentication. Alternatively, `aiir approve --review` applies pending edits from the CLI.
 
 ## Review
 
@@ -141,7 +141,7 @@ aiir approve F-alice-004 --edit                 # Edit in $EDITOR first
 aiir approve --findings-only                    # Review only findings
 aiir approve --timeline-only                    # Review only timeline
 aiir approve --by bob                           # Review items by examiner
-aiir approve --review                           # Apply pending dashboard edits
+aiir approve --review                           # Apply pending portal edits
 ```
 
 | Option | Description |
@@ -153,7 +153,7 @@ aiir approve --review                           # Apply pending dashboard edits
 | `--by` | Filter items by creator examiner |
 | `--findings-only` | Review only findings |
 | `--timeline-only` | Review only timeline events |
-| `--review` | Apply pending dashboard edits from `pending-reviews.json`, recompute hashes and HMAC signatures |
+| `--review` | Apply pending portal edits from `pending-reviews.json`, recompute hashes and HMAC signatures |
 
 ### `aiir reject`
 
