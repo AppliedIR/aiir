@@ -791,6 +791,7 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
         for hook_name in (
             "forensic-audit.sh",
             "case-dir-check.sh",
+            "case-data-guard.sh",
         ):
             hook_src = _find_hook(hook_name)
             if hook_src:
@@ -851,6 +852,7 @@ def _deploy_claude_code_assets(project_dir: Path | None = None) -> None:
         for hook_name in (
             "forensic-audit.sh",
             "case-dir-check.sh",
+            "case-data-guard.sh",
         ):
             hook_src = _find_hook(hook_name)
             if hook_src:
@@ -1202,7 +1204,7 @@ def _uninstall_sift() -> None:
 
     # [3] Hook scripts
     hooks_dir = Path.home() / ".aiir" / "hooks"
-    hook_scripts = ["forensic-audit.sh", "case-dir-check.sh"]
+    hook_scripts = ["forensic-audit.sh", "case-dir-check.sh", "case-data-guard.sh"]
     existing_hooks = [h for h in hook_scripts if (hooks_dir / h).is_file()]
     if existing_hooks:
         print(f"  [3] Hook scripts (~/.aiir/hooks/: {', '.join(existing_hooks)})")
@@ -1326,6 +1328,7 @@ def _uninstall_project() -> None:
         for hook_name in (
             "forensic-audit.sh",
             "case-dir-check.sh",
+            "case-data-guard.sh",
         ):
             hook_file = hooks_dir / hook_name
             if hook_file.is_file():
