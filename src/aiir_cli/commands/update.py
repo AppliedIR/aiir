@@ -49,6 +49,86 @@ _PACKAGE_PATHS = {
 }
 
 
+_BWRAP_PROFILE_PATH = Path("/etc/apparmor.d/bwrap")
+
+_BWRAP_PROFILE_CONTENT = """\
+# AppArmor profile for bubblewrap — grants user namespace access.
+# Installed by AIIR for Claude Code kernel sandbox.
+# Safe to remove: sudo rm /etc/apparmor.d/bwrap && sudo systemctl reload apparmor
+abi <abi/4.0>,
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+  include if exists <local/bwrap>
+}
+"""
+
+
+def _ensure_bwrap_profile() -> None:
+    """Check if bwrap works; if not and AppArmor restricts userns, offer to fix."""
+    import shutil
+
+    if not shutil.which("bwrap"):
+        return  # No bwrap installed, sandbox not applicable
+
+    # Quick test: can bwrap create namespaces?
+    try:
+        result = subprocess.run(
+            ["bwrap", "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/true"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0:
+            return  # Sandbox works
+    except (subprocess.TimeoutExpired, OSError):
+        pass  # Broken — continue to fix
+
+    # Check if this is the Ubuntu 23.10+ AppArmor restriction
+    try:
+        sysctl = subprocess.run(
+            ["sysctl", "-n", "kernel.apparmor_restrict_unprivileged_userns"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if sysctl.stdout.strip() != "1":
+            return  # Different issue, can't auto-fix
+    except (subprocess.TimeoutExpired, OSError):
+        return
+
+    if _BWRAP_PROFILE_PATH.is_file():
+        # Profile exists but not loaded — reload it
+        print("  Sandbox: bwrap profile exists but not loaded. Reloading...")
+        subprocess.run(
+            ["sudo", "apparmor_parser", "-rT", str(_BWRAP_PROFILE_PATH)],
+            timeout=10,
+        )
+    else:
+        # Profile missing — install it
+        print("  Sandbox: bwrap blocked by AppArmor (Ubuntu 23.10+).")
+        print("  Installing AppArmor profile for bwrap (requires sudo)...")
+        try:
+            result = subprocess.run(
+                ["sudo", "tee", str(_BWRAP_PROFILE_PATH)],
+                input=_BWRAP_PROFILE_CONTENT,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                print(f"  WARNING: Could not write profile: {result.stderr.strip()}")
+                return
+            subprocess.run(
+                ["sudo", "apparmor_parser", "-rT", str(_BWRAP_PROFILE_PATH)],
+                timeout=10,
+            )
+            print("  Sandbox: bwrap AppArmor profile installed")
+        except (subprocess.TimeoutExpired, OSError) as e:
+            print(f"  WARNING: Could not install bwrap profile: {e}")
+
+
 def _ensure_password_dir() -> None:
     """Ensure /var/lib/aiir/passwords/ exists, migrating from pins/ if needed."""
     passwords_dir = Path("/var/lib/aiir/passwords")
@@ -293,6 +373,10 @@ def cmd_update(args, identity: dict) -> None:
         print(f"  Client: {client} (no local controls to redeploy)")
     else:
         print("  No client type in manifest. Run 'aiir setup client' to configure.")
+
+    # Step 5.5: Fix sandbox if bwrap profile missing (Ubuntu 23.10+)
+    if client == "claude-code":
+        _ensure_bwrap_profile()
 
     # Step 6: Update manifest
     manifest["updated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
