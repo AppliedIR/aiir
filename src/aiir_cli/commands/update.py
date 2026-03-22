@@ -99,14 +99,10 @@ def _ensure_bwrap_profile() -> None:
         return
 
     if _BWRAP_PROFILE_PATH.is_file():
-        # Profile exists but not loaded — reload it
-        print("  Sandbox: bwrap profile exists but not loaded. Reloading...")
-        subprocess.run(
-            ["sudo", "apparmor_parser", "-rT", str(_BWRAP_PROFILE_PATH)],
-            timeout=10,
-        )
+        # Profile exists but not loaded or stale — reload it
+        print("  Sandbox: bwrap profile exists but sandbox failing. Reloading...")
     else:
-        # Profile missing — install it
+        # Profile missing — create it
         print("  Sandbox: bwrap blocked by AppArmor (Ubuntu 23.10+).")
         print("  Installing AppArmor profile for bwrap (requires sudo)...")
         try:
@@ -120,13 +116,38 @@ def _ensure_bwrap_profile() -> None:
             if result.returncode != 0:
                 print(f"  WARNING: Could not write profile: {result.stderr.strip()}")
                 return
-            subprocess.run(
-                ["sudo", "apparmor_parser", "-rT", str(_BWRAP_PROFILE_PATH)],
-                timeout=10,
-            )
-            print("  Sandbox: bwrap AppArmor profile installed")
         except (subprocess.TimeoutExpired, OSError) as e:
             print(f"  WARNING: Could not install bwrap profile: {e}")
+            return
+
+    # Load/reload the profile
+    try:
+        r = subprocess.run(
+            ["sudo", "apparmor_parser", "-rT", str(_BWRAP_PROFILE_PATH)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if r.returncode == 0:
+            # Verify it actually works now
+            v = subprocess.run(
+                ["bwrap", "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/true"],
+                capture_output=True,
+                timeout=5,
+            )
+            if v.returncode == 0:
+                print("  Sandbox: bwrap AppArmor profile loaded — sandbox working")
+            else:
+                print("  Sandbox: profile loaded but bwrap still fails.")
+                print(f"  stderr: {v.stderr.decode(errors='replace').strip()}")
+                print("  A reboot may be required.")
+        else:
+            print(f"  WARNING: apparmor_parser failed: {r.stderr.strip()}")
+            print("  Try manually: sudo apparmor_parser -rT /etc/apparmor.d/bwrap")
+    except subprocess.TimeoutExpired:
+        print("  WARNING: apparmor_parser timed out")
+    except OSError as e:
+        print(f"  WARNING: Could not run apparmor_parser: {e}")
 
 
 def _ensure_password_dir() -> None:
