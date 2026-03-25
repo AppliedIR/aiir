@@ -612,25 +612,26 @@ def _merge_settings(target: Path, source: Path) -> None:
                 existing_hooks[hook_type] = entries
             else:
                 # Deduplicate by (matcher, script basename) pair
-                existing_pairs = set()
+                # When a match is found, REPLACE the old command (handles path renames)
+                existing_by_key: dict[tuple, dict] = {}
                 for entry in existing_hooks[hook_type]:
                     matcher = entry.get("matcher", "")
                     for h in entry.get("hooks", []):
                         cmd = h.get("command", "")
                         basename = cmd.rsplit("/", 1)[-1] if "/" in cmd else cmd
-                        existing_pairs.add((matcher, basename))
+                        existing_by_key[(matcher, basename)] = h
                 for entry in entries:
                     matcher = entry.get("matcher", "")
-                    new_pairs = [
-                        (
-                            matcher,
-                            h.get("command", "").rsplit("/", 1)[-1]
-                            if "/" in h.get("command", "")
-                            else h.get("command", ""),
-                        )
-                        for h in entry.get("hooks", [])
-                    ]
-                    if not any(p in existing_pairs for p in new_pairs):
+                    matched = False
+                    for h in entry.get("hooks", []):
+                        cmd = h.get("command", "")
+                        basename = cmd.rsplit("/", 1)[-1] if "/" in cmd else cmd
+                        key = (matcher, basename)
+                        if key in existing_by_key:
+                            # Replace old command with new (handles .aiir → .vhir)
+                            existing_by_key[key]["command"] = cmd
+                            matched = True
+                    if not matched:
                         existing_hooks[hook_type].append(entry)
 
     # Remove deprecated hooks from existing settings
