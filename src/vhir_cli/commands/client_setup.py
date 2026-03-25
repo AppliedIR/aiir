@@ -322,9 +322,32 @@ def _resolve_windows(args, auto: bool) -> tuple[str, str]:
     if auto:
         return "", ""
 
+    # If the gateway already has wintools registered, skip — the gateway proxies it
+    from vhir_cli.paths import config_dir
+
+    gw_yaml = config_dir() / "gateway.yaml"
+    if gw_yaml.is_file():
+        try:
+            import yaml
+
+            gw_config = yaml.safe_load(gw_yaml.read_text()) or {}
+            backends = gw_config.get("backends", {})
+            if "wintools-mcp" in backends:
+                wt = backends["wintools-mcp"]
+                wt_url = wt.get("url", "")
+                print("\n--- Windows Forensic Workstation ---")
+                print(f"  Already registered via gateway: {wt_url}")
+                print("  The gateway proxies wintools — no direct connection needed.")
+                print("  Skipping.")
+                return "", ""
+        except Exception:
+            pass
+
     print("\n--- Windows Forensic Workstation ---")
     print("If you have a Windows workstation running wintools-mcp, enter its")
     print("IP address or hostname. The default port is 4624.")
+    print("This adds a DIRECT connection from your LLM client to wintools.")
+    print("If wintools is already joined to the gateway, you can skip this.")
     print()
     print("  Format:   IP or IP:PORT     Examples: 192.168.1.20, 10.0.0.5:4624")
     print("  Find it:  On the Windows box, run: ipconfig | findstr IPv4")
