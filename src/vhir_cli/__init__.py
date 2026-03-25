@@ -1,4 +1,4 @@
-"""ValiHuntIR CLI: human-in-the-loop forensic investigation management."""
+"""Valhuntir CLI: human-in-the-loop forensic investigation management."""
 
 from importlib.metadata import version
 

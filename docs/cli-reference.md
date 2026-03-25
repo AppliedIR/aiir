@@ -329,7 +329,7 @@ Routes to setup subcommands. Run `vhir setup client` to configure your LLM clien
 
 ### `vhir setup client`
 
-Configure LLM client for ValiHuntIR endpoints.
+Configure LLM client for Valhuntir endpoints.
 
 ```bash
 vhir setup client                                    # Interactive wizard
@@ -390,7 +390,7 @@ vhir service restart                   # All backends
 
 ### `vhir config`
 
-Manage ValiHuntIR settings.
+Manage Valhuntir settings.
 
 ```bash
 vhir config --show                     # Show current config

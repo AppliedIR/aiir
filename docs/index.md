@@ -1,8 +1,8 @@
-# ValiHuntIR Platform Documentation
+# Valhuntir Platform Documentation
 
-ValiHuntIR is a forensic investigation platform that connects LLM clients to forensic tools through MCP (Model Context Protocol) servers. It enforces human-in-the-loop controls, maintains chain-of-custody audit trails, and enriches tool output with forensic knowledge.
+Valhuntir is a forensic investigation platform that connects LLM clients to forensic tools through MCP (Model Context Protocol) servers. It enforces human-in-the-loop controls, maintains chain-of-custody audit trails, and enriches tool output with forensic knowledge.
 
-## What ValiHuntIR Does
+## What Valhuntir Does
 
 - Executes forensic tools (Zimmerman suite, Volatility, Sleuth Kit, Hayabusa, and more) through catalog-gated MCP servers
 - Records findings, timeline events, and investigation reasoning with full audit trails

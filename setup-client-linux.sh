@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# setup-client-linux.sh — ValiHuntIR LLM Client Setup for Linux
+# setup-client-linux.sh — Valhuntir LLM Client Setup for Linux
 #
-# Configures an LLM client to connect to ValiHuntIR. Two modes:
+# Configures an LLM client to connect to Valhuntir. Two modes:
 #   Local (on SIFT): delegates to vhir setup client
 #   Remote:          pure bash — curl join, config generation, asset deployment
 #
@@ -14,7 +14,7 @@
 #   ./setup-client-linux.sh                                   # Auto-detect mode
 #   ./setup-client-linux.sh --client=claude-code -y           # Local, non-interactive
 #   ./setup-client-linux.sh --sift=https://IP:4508 --code=XX  # Remote mode
-#   ./setup-client-linux.sh --uninstall                       # Remove ValiHuntIR workspace
+#   ./setup-client-linux.sh --uninstall                       # Remove Valhuntir workspace
 #   ./setup-client-linux.sh -h                                # Help
 #
 set -euo pipefail
@@ -49,7 +49,7 @@ for arg in "$@"; do
             echo "  --sift=URL         Gateway URL (forces remote mode)"
             echo "  --code=CODE        Join code (remote mode)"
             echo "  --ca-cert=PATH     CA certificate for TLS verification"
-            echo "  --uninstall        Remove ValiHuntIR workspace and forensic controls"
+            echo "  --uninstall        Remove Valhuntir workspace and forensic controls"
             echo "  -y, --yes          Accept all defaults (non-interactive)"
             echo "  -h, --help         Show this help"
             exit 0
@@ -127,7 +127,7 @@ prompt_yn_strict() {
 
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${BOLD}  ValiHuntIR — LLM Client Setup (Linux)${NC}"
+echo -e "${BOLD}  Valhuntir — LLM Client Setup (Linux)${NC}"
 echo -e "${BOLD}  Artificial Intelligence Incident Response${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
@@ -138,14 +138,14 @@ echo ""
 
 if $UNINSTALL; then
     DEPLOY_DIR="$HOME/vhir"
-    header "ValiHuntIR Forensic Controls — Uninstall"
+    header "Valhuntir Forensic Controls — Uninstall"
 
     if [[ ! -d "$DEPLOY_DIR" ]]; then
-        info "No ValiHuntIR workspace found at $DEPLOY_DIR."
+        info "No Valhuntir workspace found at $DEPLOY_DIR."
         exit 0
     fi
 
-    echo "  ValiHuntIR workspace: $DEPLOY_DIR"
+    echo "  Valhuntir workspace: $DEPLOY_DIR"
     if [[ -d "$DEPLOY_DIR/cases" ]]; then
         echo ""
         echo -e "  ${YELLOW}WARNING: $DEPLOY_DIR/cases/ contains case data.${NC}"
@@ -153,7 +153,7 @@ if $UNINSTALL; then
     fi
     echo ""
 
-    if prompt_yn_strict "  Remove entire ValiHuntIR workspace ($DEPLOY_DIR)?"; then
+    if prompt_yn_strict "  Remove entire Valhuntir workspace ($DEPLOY_DIR)?"; then
         rm -rf "$DEPLOY_DIR"
         rm -f "$HOME/.vhir/config.yaml"
         ok "Removed $DEPLOY_DIR"
@@ -168,18 +168,18 @@ if $UNINSTALL; then
         ok "Config files removed. $DEPLOY_DIR/cases/ preserved."
     fi
 
-    # Clean shell profile (ValiHuntIR_EXAMINER + marker)
+    # Clean shell profile (Valhuntir_EXAMINER + marker)
     SHELL_RC=""
     if [[ -f "$HOME/.bashrc" ]]; then SHELL_RC="$HOME/.bashrc";
     elif [[ -f "$HOME/.zshrc" ]]; then SHELL_RC="$HOME/.zshrc"; fi
 
-    if [[ -n "$SHELL_RC" ]] && grep -q "ValiHuntIR" "$SHELL_RC" 2>/dev/null; then
-        sed -i '/# ValiHuntIR Platform/d' "$SHELL_RC"
-        sed -i '/ValiHuntIR_EXAMINER/d' "$SHELL_RC"
+    if [[ -n "$SHELL_RC" ]] && grep -q "Valhuntir" "$SHELL_RC" 2>/dev/null; then
+        sed -i '/# Valhuntir Platform/d' "$SHELL_RC"
+        sed -i '/Valhuntir_EXAMINER/d' "$SHELL_RC"
         sed -i '/# vhir-path/d' "$SHELL_RC"
         sed -i '\|\.vhir/venv/bin|d' "$SHELL_RC"
         sed -i '/register-python-argcomplete vhir/d' "$SHELL_RC"
-        ok "Removed ValiHuntIR lines from $SHELL_RC"
+        ok "Removed Valhuntir lines from $SHELL_RC"
     fi
 
     # Remove empty ~/.vhir/ directory
@@ -222,12 +222,12 @@ fi
 if $LOCAL_MODE; then
     info "SIFT platform detected (gateway.yaml found). Using local mode."
 
-    ValiHuntIR_CMD="$HOME/.vhir/venv/bin/vhir"
-    if [[ ! -x "$ValiHuntIR_CMD" ]]; then
+    Valhuntir_CMD="$HOME/.vhir/venv/bin/vhir"
+    if [[ ! -x "$Valhuntir_CMD" ]]; then
         # Try PATH
-        ValiHuntIR_CMD=$(command -v vhir 2>/dev/null || true)
+        Valhuntir_CMD=$(command -v vhir 2>/dev/null || true)
     fi
-    if [[ -z "$ValiHuntIR_CMD" ]]; then
+    if [[ -z "$Valhuntir_CMD" ]]; then
         err "vhir CLI not found. Run setup-sift.sh first."
         exit 1
     fi
@@ -236,7 +236,7 @@ if $LOCAL_MODE; then
     [[ -n "$CLIENT" ]] && ARGS+=(--client="$CLIENT")
     $AUTO_YES && ARGS+=(-y)
 
-    exec "$ValiHuntIR_CMD" setup client "${ARGS[@]}"
+    exec "$Valhuntir_CMD" setup client "${ARGS[@]}"
     # exec replaces process — nothing below runs in local mode
 fi
 
@@ -345,13 +345,13 @@ info "Token: ${GATEWAY_TOKEN:0:12}..."
 
 # Store token securely
 mkdir -p "$HOME/.vhir" && chmod 700 "$HOME/.vhir"
-ValiHuntIR_CONFIG="$HOME/.vhir/config.yaml"
-(umask 077 && cat > "$ValiHuntIR_CONFIG" <<CONF
+Valhuntir_CONFIG="$HOME/.vhir/config.yaml"
+(umask 077 && cat > "$Valhuntir_CONFIG" <<CONF
 gateway_url: "$GATEWAY_URL"
 gateway_token: "$GATEWAY_TOKEN"
 CONF
 )
-ok "Credentials saved to $ValiHuntIR_CONFIG"
+ok "Credentials saved to $Valhuntir_CONFIG"
 
 # ---- Phase 3: Examiner Identity ----
 
@@ -366,21 +366,21 @@ EXAMINER_NAME=$(echo "$EXAMINER_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-
 [[ -z "$EXAMINER_NAME" ]] && EXAMINER_NAME="examiner"
 ok "Examiner: $EXAMINER_NAME"
 
-echo "examiner: $EXAMINER_NAME" >> "$ValiHuntIR_CONFIG"
+echo "examiner: $EXAMINER_NAME" >> "$Valhuntir_CONFIG"
 
-# Write ValiHuntIR_EXAMINER to shell profile
+# Write Valhuntir_EXAMINER to shell profile
 SHELL_RC=""
 if [[ -f "$HOME/.bashrc" ]]; then SHELL_RC="$HOME/.bashrc";
 elif [[ -f "$HOME/.zshrc" ]]; then SHELL_RC="$HOME/.zshrc"; fi
 
 if [[ -n "$SHELL_RC" ]]; then
-    if grep -q "ValiHuntIR_EXAMINER" "$SHELL_RC" 2>/dev/null; then
-        sed -i "s/^export ValiHuntIR_EXAMINER=.*/export ValiHuntIR_EXAMINER=\"$EXAMINER_NAME\"/" "$SHELL_RC"
+    if grep -q "Valhuntir_EXAMINER" "$SHELL_RC" 2>/dev/null; then
+        sed -i "s/^export Valhuntir_EXAMINER=.*/export Valhuntir_EXAMINER=\"$EXAMINER_NAME\"/" "$SHELL_RC"
     else
-        echo "export ValiHuntIR_EXAMINER=\"$EXAMINER_NAME\"" >> "$SHELL_RC"
+        echo "export Valhuntir_EXAMINER=\"$EXAMINER_NAME\"" >> "$SHELL_RC"
     fi
 fi
-export ValiHuntIR_EXAMINER="$EXAMINER_NAME"
+export Valhuntir_EXAMINER="$EXAMINER_NAME"
 
 # ---- Phase 4: LLM Client Selection ----
 
@@ -403,7 +403,7 @@ ok "Client: $CLIENT"
 
 # ---- Phase 5: Workspace + MCP Config Generation ----
 
-header "ValiHuntIR Workspace"
+header "Valhuntir Workspace"
 
 DEPLOY_DIR="$HOME/vhir"
 mkdir -p "$DEPLOY_DIR/cases"
@@ -770,7 +770,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     echo "  audited MCP tools."
 
     echo ""
-    echo -e "${BOLD}ValiHuntIR workspace created at ~/vhir/${NC}"
+    echo -e "${BOLD}Valhuntir workspace created at ~/vhir/${NC}"
     echo ""
     echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} Always launch Claude Code from ~/vhir/ or a subdirectory."
     echo "Forensic controls (audit logging, guardrails, MCP tools) only apply"
@@ -785,5 +785,5 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 fi
 
 echo ""
-echo -e "${BOLD}Documentation:${NC} https://appliedir.github.io/valihuntir/"
+echo -e "${BOLD}Documentation:${NC} https://appliedir.github.io/valhuntir/"
 echo ""

@@ -1,4 +1,4 @@
-"""ValiHuntIR CLI entry point.
+"""Valhuntir CLI entry point.
 
 Human-only actions that the LLM orchestrator cannot bypass:
 - approve/reject findings and timeline events (/dev/tty + password)
@@ -45,7 +45,7 @@ from vhir_cli.identity import get_examiner_identity, warn_if_unconfigured
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vhir",
-        description="ValiHuntIR — forensic investigation CLI",
+        description="Valhuntir — forensic investigation CLI",
     )
     parser.add_argument(
         "--version", action="version", version=f"%(prog)s {__version__}"
@@ -284,7 +284,7 @@ def build_parser() -> argparse.ArgumentParser:
     setup_sub.add_parser("test", help="Test connectivity to all detected MCP servers")
 
     p_client = setup_sub.add_parser(
-        "client", help="Configure LLM client for ValiHuntIR endpoints"
+        "client", help="Configure LLM client for Valhuntir endpoints"
     )
     p_client.add_argument(
         "--client",
@@ -332,7 +332,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_client.add_argument(
         "--uninstall",
         action="store_true",
-        help="Remove ValiHuntIR forensic controls",
+        help="Remove Valhuntir forensic controls",
     )
 
     p_join_code = setup_sub.add_parser(
@@ -356,7 +356,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_merge.add_argument("--file", required=True, help="Input file path")
 
     # config
-    p_config = sub.add_parser("config", help="Configure ValiHuntIR settings")
+    p_config = sub.add_parser("config", help="Configure Valhuntir settings")
     p_config.add_argument("--examiner", help="Set examiner identity")
     p_config.add_argument(
         "--analyst", dest="examiner", help="(deprecated, use --examiner)"
@@ -592,7 +592,7 @@ def _case_status_data(case_dir) -> dict:
     case_dir = Path(case_dir)
     meta_file = case_dir / "CASE.yaml"
     if not meta_file.exists():
-        raise ValueError(f"Not a ValiHuntIR case directory: {case_dir}")
+        raise ValueError(f"Not a Valhuntir case directory: {case_dir}")
 
     with open(meta_file) as f:
         meta = yaml.safe_load(f) or {}

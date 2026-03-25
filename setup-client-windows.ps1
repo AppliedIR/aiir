@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    ValiHuntIR LLM Client Setup for Windows
+    Valhuntir LLM Client Setup for Windows
 
 .DESCRIPTION
     Joins the SIFT gateway and creates a functional $HOME\vhir\ workspace
@@ -14,7 +14,7 @@
     Join code (required). Generated on SIFT with: vhir setup join-code
 
 .PARAMETER Uninstall
-    Remove ValiHuntIR workspace and forensic controls.
+    Remove Valhuntir workspace and forensic controls.
 
 .PARAMETER Help
     Show help and exit.
@@ -64,7 +64,7 @@ function Prompt-YN-Strict {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor White
-Write-Host "  ValiHuntIR - LLM Client Setup (Windows)" -ForegroundColor White
+Write-Host "  Valhuntir - LLM Client Setup (Windows)" -ForegroundColor White
 Write-Host "  Artificial Intelligence Incident Response" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor White
 Write-Host ""
@@ -75,7 +75,7 @@ if ($Help) {
     Write-Host "Parameters:"
     Write-Host "  -Sift URL     Gateway URL (required)"
     Write-Host "  -Code CODE    Join code (required)"
-    Write-Host "  -Uninstall    Remove ValiHuntIR workspace"
+    Write-Host "  -Uninstall    Remove Valhuntir workspace"
     Write-Host "  -Help         Show this help"
     exit 0
 }
@@ -87,15 +87,15 @@ if ($Help) {
 if ($Uninstall) {
     $deployDir = Join-Path $HOME "vhir"
     Write-Host ""
-    Write-Host "ValiHuntIR Forensic Controls - Uninstall" -ForegroundColor White
+    Write-Host "Valhuntir Forensic Controls - Uninstall" -ForegroundColor White
     Write-Host ""
 
     if (-not (Test-Path $deployDir)) {
-        Write-Info "No ValiHuntIR workspace found at $deployDir."
+        Write-Info "No Valhuntir workspace found at $deployDir."
         exit 0
     }
 
-    Write-Host "  ValiHuntIR workspace: $deployDir"
+    Write-Host "  Valhuntir workspace: $deployDir"
     $casesDir = Join-Path $deployDir "cases"
     if (Test-Path $casesDir) {
         Write-Host ""
@@ -104,7 +104,7 @@ if ($Uninstall) {
     }
     Write-Host ""
 
-    if (Prompt-YN-Strict "  Remove entire ValiHuntIR workspace ($deployDir)?") {
+    if (Prompt-YN-Strict "  Remove entire Valhuntir workspace ($deployDir)?") {
         Remove-Item -Path $deployDir -Recurse -Force
         $configYaml = Join-Path $HOME ".vhir" "config.yaml"
         if (Test-Path $configYaml) { Remove-Item -Path $configYaml -Force }
@@ -236,7 +236,7 @@ Write-Ok "Credentials saved to $configFile"
 # =============================================================================
 
 Write-Host ""
-Write-Host "=== ValiHuntIR Workspace ===" -ForegroundColor White
+Write-Host "=== Valhuntir Workspace ===" -ForegroundColor White
 Write-Host ""
 
 $deployDir = Join-Path $HOME "vhir"
@@ -603,7 +603,7 @@ if ($clientType -eq "claude-code") {
     Write-Host "  with SIFT through audited MCP tools."
 
     Write-Host ""
-    Write-Host "ValiHuntIR workspace created at $deployDir\" -ForegroundColor White
+    Write-Host "Valhuntir workspace created at $deployDir\" -ForegroundColor White
     Write-Host ""
     Write-Host "IMPORTANT: Always launch Claude Code from $deployDir\ or a subdirectory." -ForegroundColor Yellow
     Write-Host "Forensic controls (audit logging, guardrails, MCP tools) only apply"
@@ -618,5 +618,5 @@ if ($clientType -eq "claude-code") {
 }
 
 Write-Host ""
-Write-Host "Documentation: https://appliedir.github.io/valihuntir/" -ForegroundColor White
+Write-Host "Documentation: https://appliedir.github.io/valhuntir/" -ForegroundColor White
 Write-Host ""

@@ -1,4 +1,4 @@
-"""Setup command for ValiHuntIR — routes to subcommands.
+"""Setup command for Valhuntir — routes to subcommands.
 
 Subcommands:
 - vhir setup client   — Configure LLM client
@@ -52,7 +52,7 @@ def _run_connectivity_test() -> None:
     import urllib.request
 
     print("=" * 60)
-    print("  ValiHuntIR Connectivity Test")
+    print("  Valhuntir Connectivity Test")
     print("=" * 60)
 
     # --- Sandbox health check ---

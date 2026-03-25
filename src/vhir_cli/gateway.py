@@ -1,4 +1,4 @@
-"""Shared helpers for talking to the local ValiHuntIR gateway.
+"""Shared helpers for talking to the local Valhuntir gateway.
 
 Reads ~/.vhir/gateway.yaml for host, port, and TLS config.
 Always uses 127.0.0.1 for local access (even if host is 0.0.0.0).

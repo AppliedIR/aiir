@@ -2,11 +2,11 @@
 
 ## Design Philosophy
 
-ValiHuntIR runs on isolated forensic workstations behind firewalls. The primary security boundary is network isolation and VM/container isolation, not in-band command filtering. The controls described here are defense-in-depth measures within that boundary.
+Valhuntir runs on isolated forensic workstations behind firewalls. The primary security boundary is network isolation and VM/container isolation, not in-band command filtering. The controls described here are defense-in-depth measures within that boundary.
 
 ## Network Assumptions
 
-All ValiHuntIR components are assumed to run on a private forensic network:
+All Valhuntir components are assumed to run on a private forensic network:
 
 - Not exposed to incoming connections from the Internet
 - Not exposed to untrusted systems
@@ -198,9 +198,9 @@ Defenses:
 
 ## Evidence Handling
 
-Never place original evidence on any ValiHuntIR system. Only use working copies for which verified originals or backups exist.
+Never place original evidence on any Valhuntir system. Only use working copies for which verified originals or backups exist.
 
-Any data loaded into the system runs the risk of being exposed to the underlying AI provider. Only place data on these systems that you are willing to send to your AI provider. Treat all ValiHuntIR systems as analysis environments, not evidence storage.
+Any data loaded into the system runs the risk of being exposed to the underlying AI provider. Only place data on these systems that you are willing to send to your AI provider. Treat all Valhuntir systems as analysis environments, not evidence storage.
 
 ### Evidence Integrity Measures
 

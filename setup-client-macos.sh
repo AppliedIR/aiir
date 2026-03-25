@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# setup-client-macos.sh — ValiHuntIR LLM Client Setup for macOS
+# setup-client-macos.sh — Valhuntir LLM Client Setup for macOS
 #
 # Joins the SIFT gateway and creates a functional ~/vhir/ workspace
 # with MCP config, forensic controls, and discipline docs.
@@ -31,7 +31,7 @@ for arg in "$@"; do
             echo "Options:"
             echo "  --sift=URL     Gateway URL (required)"
             echo "  --code=CODE    Join code (required)"
-            echo "  --uninstall    Remove ValiHuntIR workspace"
+            echo "  --uninstall    Remove Valhuntir workspace"
             echo "  -h, --help     Show this help"
             exit 0
             ;;
@@ -96,7 +96,7 @@ prompt() {
 
 echo ""
 echo -e "${BOLD}============================================================${NC}"
-echo -e "${BOLD}  ValiHuntIR — LLM Client Setup (macOS)${NC}"
+echo -e "${BOLD}  Valhuntir — LLM Client Setup (macOS)${NC}"
 echo -e "${BOLD}  Artificial Intelligence Incident Response${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
@@ -107,14 +107,14 @@ echo ""
 
 if $UNINSTALL; then
     DEPLOY_DIR="$HOME/vhir"
-    header "ValiHuntIR Forensic Controls — Uninstall"
+    header "Valhuntir Forensic Controls — Uninstall"
 
     if [[ ! -d "$DEPLOY_DIR" ]]; then
-        info "No ValiHuntIR workspace found at $DEPLOY_DIR."
+        info "No Valhuntir workspace found at $DEPLOY_DIR."
         exit 0
     fi
 
-    echo "  ValiHuntIR workspace: $DEPLOY_DIR"
+    echo "  Valhuntir workspace: $DEPLOY_DIR"
     if [[ -d "$DEPLOY_DIR/cases" ]]; then
         echo ""
         echo -e "  ${YELLOW}WARNING: $DEPLOY_DIR/cases/ contains case data.${NC}"
@@ -122,7 +122,7 @@ if $UNINSTALL; then
     fi
     echo ""
 
-    if prompt_yn_strict "  Remove entire ValiHuntIR workspace ($DEPLOY_DIR)?"; then
+    if prompt_yn_strict "  Remove entire Valhuntir workspace ($DEPLOY_DIR)?"; then
         rm -rf "$DEPLOY_DIR"
         rm -f "$HOME/.vhir/config.yaml"
         ok "Removed $DEPLOY_DIR"
@@ -137,18 +137,18 @@ if $UNINSTALL; then
         ok "Config files removed. $DEPLOY_DIR/cases/ preserved."
     fi
 
-    # Clean shell profile (ValiHuntIR_EXAMINER + marker)
+    # Clean shell profile (Valhuntir_EXAMINER + marker)
     SHELL_RC=""
     if [[ -f "$HOME/.bashrc" ]]; then SHELL_RC="$HOME/.bashrc";
     elif [[ -f "$HOME/.zshrc" ]]; then SHELL_RC="$HOME/.zshrc"; fi
 
-    if [[ -n "$SHELL_RC" ]] && grep -q "ValiHuntIR" "$SHELL_RC" 2>/dev/null; then
-        sed -i '' '/# ValiHuntIR Platform/d' "$SHELL_RC"
-        sed -i '' '/ValiHuntIR_EXAMINER/d' "$SHELL_RC"
+    if [[ -n "$SHELL_RC" ]] && grep -q "Valhuntir" "$SHELL_RC" 2>/dev/null; then
+        sed -i '' '/# Valhuntir Platform/d' "$SHELL_RC"
+        sed -i '' '/Valhuntir_EXAMINER/d' "$SHELL_RC"
         sed -i '' '/# vhir-path/d' "$SHELL_RC"
         sed -i '' '\|\.vhir/venv/bin|d' "$SHELL_RC"
         sed -i '' '/register-python-argcomplete vhir/d' "$SHELL_RC"
-        ok "Removed ValiHuntIR lines from $SHELL_RC"
+        ok "Removed Valhuntir lines from $SHELL_RC"
     fi
 
     # Remove empty ~/.vhir/ directory
@@ -255,7 +255,7 @@ CONF
 # Workspace Setup
 # =============================================================================
 
-header "ValiHuntIR Workspace"
+header "Valhuntir Workspace"
 
 DEPLOY_DIR="$HOME/vhir"
 mkdir -p "$DEPLOY_DIR/cases"
@@ -680,7 +680,7 @@ if [[ "$CLIENT" == "claude-code" ]]; then
     echo "  with SIFT through audited MCP tools."
 
     echo ""
-    echo -e "${BOLD}ValiHuntIR workspace created at ~/vhir/${NC}"
+    echo -e "${BOLD}Valhuntir workspace created at ~/vhir/${NC}"
     echo ""
     echo -e "${YELLOW}${BOLD}IMPORTANT:${NC} Always launch Claude Code from ~/vhir/ or a subdirectory."
     echo "Forensic controls (audit logging, guardrails, MCP tools) only apply"
@@ -695,5 +695,5 @@ if [[ "$CLIENT" == "claude-code" ]]; then
 fi
 
 echo ""
-echo -e "${BOLD}Documentation:${NC} https://appliedir.github.io/valihuntir/"
+echo -e "${BOLD}Documentation:${NC} https://appliedir.github.io/valhuntir/"
 echo ""

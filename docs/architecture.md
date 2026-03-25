@@ -2,7 +2,7 @@
 
 ## System Overview
 
-ValiHuntIR uses MCP (Model Context Protocol) to connect LLM clients to forensic tools. The architecture separates concerns into three layers:
+Valhuntir uses MCP (Model Context Protocol) to connect LLM clients to forensic tools. The architecture separates concerns into three layers:
 
 1. **Gateway layer** — HTTP entry point, authentication, request routing
 2. **MCP backends** — Specialized servers for different forensic functions
@@ -240,6 +240,6 @@ Every forensic tool response is wrapped in a structured envelope with forensic-k
 |------|---------|
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | SIFT monorepo: 11 packages, installer, platform docs |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows tool execution MCP + installer |
-| [ValiHuntIR](https://github.com/AppliedIR/valihuntir) | CLI + architecture reference |
+| [Valhuntir](https://github.com/AppliedIR/valhuntir) | CLI + architecture reference |
 
 Public repos under the AppliedIR GitHub org.

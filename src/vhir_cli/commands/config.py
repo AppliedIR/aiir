@@ -11,7 +11,7 @@ from vhir_cli.approval_auth import reset_password, setup_password
 
 
 def cmd_config(args, identity: dict) -> None:
-    """Configure ValiHuntIR settings."""
+    """Configure Valhuntir settings."""
     config_path = Path.home() / ".vhir" / "config.yaml"
 
     if getattr(args, "setup_password", False):

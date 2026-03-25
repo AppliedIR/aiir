@@ -527,7 +527,7 @@ def _setup_firewall(wintools_ip: str) -> None:
         )
         return
 
-    for port, label in [("4508", "ValiHuntIR gateway"), ("445", "ValiHuntIR SMB")]:
+    for port, label in [("4508", "Valhuntir gateway"), ("445", "Valhuntir SMB")]:
         try:
             subprocess.run(
                 [
@@ -1225,7 +1225,7 @@ def _apply_static_ip(ip: str, network_yaml: Path) -> str | None:
         print(f"Warning: existing netplan configs for {iface}:")
         for c in conflicting:
             print(f"  {c}")
-        answer = input("Override with ValiHuntIR static config? [y/N] ").strip().lower()
+        answer = input("Override with Valhuntir static config? [y/N] ").strip().lower()
         if answer not in ("y", "yes"):
             print("Skipped static IP configuration.", file=sys.stderr)
             return None

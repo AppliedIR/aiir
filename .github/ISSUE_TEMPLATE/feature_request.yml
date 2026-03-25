@@ -23,7 +23,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of ValiHuntIR would this affect?
+      description: Which part of Valhuntir would this affect?
       options:
         - vhir CLI
         - MCP backends

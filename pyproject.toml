@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "vhir-cli"
 version = "0.5.3"
-description = "ValiHuntIR CLI: human-in-the-loop approval, evidence management, forensic command execution"
+description = "Valhuntir CLI: human-in-the-loop approval, evidence management, forensic command execution"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
@@ -31,8 +31,8 @@ dependencies = [
 vhir = "vhir_cli.main:main"
 
 [project.urls]
-Homepage = "https://github.com/AppliedIR/valihuntir"
-Repository = "https://github.com/AppliedIR/valihuntir"
+Homepage = "https://github.com/AppliedIR/valhuntir"
+Repository = "https://github.com/AppliedIR/valhuntir"
 
 [project.optional-dependencies]
 dev = [

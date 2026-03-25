@@ -1,4 +1,4 @@
-"""Update ValiHuntIR installation on a SIFT workstation.
+"""Update Valhuntir installation on a SIFT workstation.
 
 Pulls latest code, reinstalls packages, redeploys forensic controls,
 and restarts the gateway. Runs on SIFT workstations only.
@@ -53,7 +53,7 @@ _BWRAP_PROFILE_PATH = Path("/etc/apparmor.d/bwrap")
 
 _BWRAP_PROFILE_CONTENT = """\
 # AppArmor profile for bubblewrap — grants user namespace access.
-# Installed by ValiHuntIR for Claude Code kernel sandbox.
+# Installed by Valhuntir for Claude Code kernel sandbox.
 # Safe to remove: sudo rm /etc/apparmor.d/bwrap && sudo systemctl reload apparmor
 abi <abi/4.0>,
 include <tunables/global>
@@ -204,7 +204,7 @@ def _ensure_password_dir() -> None:
 
 
 def cmd_update(args, identity: dict) -> None:
-    """Pull latest code and redeploy ValiHuntIR installation."""
+    """Pull latest code and redeploy Valhuntir installation."""
     check_only = getattr(args, "check", False)
     no_restart = getattr(args, "no_restart", False)
 

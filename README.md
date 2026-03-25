@@ -1,23 +1,23 @@
-![ValiHuntIR](docs/images/vhir-logo.png)
+![Valhuntir](docs/images/vhir-logo.png)
 
-# ValiHuntIR
-[![CI](https://github.com/AppliedIR/valihuntir/actions/workflows/ci.yml/badge.svg)](https://github.com/AppliedIR/valihuntir/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/docs-appliedir.github.io-blue)](https://appliedir.github.io/valihuntir/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/AppliedIR/valihuntir/blob/main/LICENSE)
+# Valhuntir
+[![CI](https://github.com/AppliedIR/valhuntir/actions/workflows/ci.yml/badge.svg)](https://github.com/AppliedIR/valhuntir/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-appliedir.github.io-blue)](https://appliedir.github.io/valhuntir/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/AppliedIR/valhuntir/blob/main/LICENSE)
 
-ValiHuntIR forensic investigation platform with varying levels of human-in-the-loop review and control based on your deployment needs. CLI and architecture reference.
+Valhuntir forensic investigation platform with varying levels of human-in-the-loop review and control based on your deployment needs. CLI and architecture reference.
 
-**[Platform Documentation](https://appliedir.github.io/valihuntir/)** ·
-[CLI Reference](https://appliedir.github.io/valihuntir/cli-reference/)
+**[Platform Documentation](https://appliedir.github.io/valhuntir/)** ·
+[CLI Reference](https://appliedir.github.io/valhuntir/cli-reference/)
 
 > **Public Beta** — This project is undergoing active feature development.
 > Backward compatibility with future releases is not guaranteed. Consider
 > this a public beta for feature testing and evaluation rather than a
 > production-ready tool for real case data.
 
-## ValiHuntIR Lite — Get Started in Minutes
+## Valhuntir Lite — Get Started in Minutes
 
-In its simplest form, ValiHuntIR Lite provides Claude Code with forensic knowledge and instructions on how to enforce forensic rigor, present findings for human review, and audit actions taken. MCP servers enhance accuracy by providing authoritative information — a forensic knowledge RAG and a Windows triage database — plus optional OpenCTI threat intelligence and REMnux malware analysis.
+In its simplest form, Valhuntir Lite provides Claude Code with forensic knowledge and instructions on how to enforce forensic rigor, present findings for human review, and audit actions taken. MCP servers enhance accuracy by providing authoritative information — a forensic knowledge RAG and a Windows triage database — plus optional OpenCTI threat intelligence and REMnux malware analysis.
 
 **Quick** — Forensic discipline, MCP packages, and config. No databases (<70 MB):
 
@@ -47,7 +47,7 @@ claude
 /welcome
 ```
 
-To update an existing ValiHuntIR Lite installation, re-run the installer from an updated clone (first step changes into wherever you installed the sift-mcp repo on initial installation):
+To update an existing Valhuntir Lite installation, re-run the installer from an updated clone (first step changes into wherever you installed the sift-mcp repo on initial installation):
 
 ```
 cd sift-mcp
@@ -58,7 +58,7 @@ git pull
 The installer is idempotent — it reuses the existing venv, skips databases
 and RAG index if already present, and redeploys config files.
 
-#### ValiHuntIR Lite
+#### Valhuntir Lite
 
 ```mermaid
 graph LR
@@ -72,7 +72,7 @@ graph LR
     end
 ```
 
-#### ValiHuntIR Lite with Optional Add-ons
+#### Valhuntir Lite with Optional Add-ons
 
 ```mermaid
 graph LR
@@ -118,17 +118,17 @@ graph LR
 | Claude Code → MS Learn MCP | HTTPS | `https://learn.microsoft.com/api/mcp` — streamable-http type in .mcp.json |
 | Claude Code → Zeltser IR Writing MCP | HTTPS | `https://website-mcp.zeltser.com/mcp` — streamable-http type in .mcp.json |
 
-No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via Bash. Forensic discipline is suggested and reinforced via prompt hooks and reference documents, but Claude Code can choose to ignore them. See the [sift-mcp README](https://github.com/AppliedIR/sift-mcp#valihuntir-lite--get-started-in-minutes) for details and optional add-ons.
+No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via Bash. Forensic discipline is suggested and reinforced via prompt hooks and reference documents, but Claude Code can choose to ignore them. See the [sift-mcp README](https://github.com/AppliedIR/sift-mcp#valhuntir-lite--get-started-in-minutes) for details and optional add-ons.
 
-## Full ValiHuntIR — Structural Enforcement
+## Full Valhuntir — Structural Enforcement
 
-For use cases where more definitive human-in-the-loop approval is desired, the full ValiHuntIR suite ensures accountability and enforces human review of findings through cryptographic signing, password-gated approvals, and multiple layered controls.
+For use cases where more definitive human-in-the-loop approval is desired, the full Valhuntir suite ensures accountability and enforces human review of findings through cryptographic signing, password-gated approvals, and multiple layered controls.
 
-Full ValiHuntIR is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, LibreChat, Cherry Studio, and any MCP-only client that supports Streamable HTTP transport with Bearer token authentication. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
+Full Valhuntir is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, LibreChat, Cherry Studio, and any MCP-only client that supports Streamable HTTP transport with Bearer token authentication. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
 
 ## Platform Architecture
 
-The examiner interacts with ValiHuntIR through three interfaces: the **LLM client** (AI-assisted investigation), the **Examiner Portal** (browser-based review and approval), and the **vhir CLI** (case management, evidence handling, and verification).
+The examiner interacts with Valhuntir through three interfaces: the **LLM client** (AI-assisted investigation), the **Examiner Portal** (browser-based review and approval), and the **vhir CLI** (case management, evidence handling, and verification).
 
 ### Deployment Overview
 
@@ -385,13 +385,13 @@ Then run the installer:
 
 ## Security Considerations
 
-All ValiHuntIR components are assumed to run on a private forensic network, protected by firewalls, and not exposed to incoming connections from the Internet or potentially hostile systems. The design assumes dedicated, isolated systems are used throughout.
+All Valhuntir components are assumed to run on a private forensic network, protected by firewalls, and not exposed to incoming connections from the Internet or potentially hostile systems. The design assumes dedicated, isolated systems are used throughout.
 
 Any data loaded into the system or its component VMs, computers, or instances runs the risk of being exposed to the underlying AI. Only place data on these systems that you are willing to send to your AI provider.
 
 Outgoing Internet connections are required for report generation (Zeltser IR Writing MCP) and optionally used for threat intelligence (OpenCTI) and documentation (MS Learn MCP). No incoming connections from external systems should be allowed.
 
-ValiHuntIR is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. Clients with direct shell access (like Claude Code) can also operate outside MCP, but `vhir setup client` deploys forensic controls for Claude Code: a kernel-level sandbox restricts Bash writes, deny rules block Edit/Write to case data files, a PreToolUse hook guards against Bash redirections to protected files, a PostToolUse hook captures every Bash command to the audit trail, provenance enforcement ensures findings are traceable to evidence, and an HMAC verification ledger provides cryptographic proof that approved findings haven't been tampered with. ValiHuntIR is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
+Valhuntir is designed so that AI interactions flow through MCP tools, enabling security controls and audit trails. Clients with direct shell access (like Claude Code) can also operate outside MCP, but `vhir setup client` deploys forensic controls for Claude Code: a kernel-level sandbox restricts Bash writes, deny rules block Edit/Write to case data files, a PreToolUse hook guards against Bash redirections to protected files, a PostToolUse hook captures every Bash command to the audit trail, provenance enforcement ensures findings are traceable to evidence, and an HMAC verification ledger provides cryptographic proof that approved findings haven't been tampered with. Valhuntir is not designed to defend against a malicious AI or to constrain the AI client that you deploy.
 
 ## Commands
 
@@ -621,17 +621,17 @@ For remote orchestrator setups (Path 2), remote examiners run a platform-specifi
 
 ```
 # Linux
-curl -sSL https://raw.githubusercontent.com/AppliedIR/valihuntir/main/setup-client-linux.sh \
+curl -sSL https://raw.githubusercontent.com/AppliedIR/valhuntir/main/setup-client-linux.sh \
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 
 # macOS
-curl -sSL https://raw.githubusercontent.com/AppliedIR/valihuntir/main/setup-client-macos.sh \
+curl -sSL https://raw.githubusercontent.com/AppliedIR/valhuntir/main/setup-client-macos.sh \
   | bash -s -- --sift=https://SIFT_IP:4508 --code=XXXX-XXXX
 ```
 
 ```
 # Windows
-Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/valihuntir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
+Invoke-WebRequest -Uri https://raw.githubusercontent.com/AppliedIR/valhuntir/main/setup-client-windows.ps1 -OutFile setup-client-windows.ps1
 .\setup-client-windows.ps1 -Sift https://SIFT_IP:4508 -Code XXXX-XXXX
 ```
 
@@ -644,7 +644,7 @@ Claude Desktop's config file supports stdio transport only. The [mcp-remote](htt
 | Claude Code | Linux, macOS, Windows | `~/vhir/.mcp.json` or `~/.claude.json` (SIFT) | `CLAUDE.md`, `settings.json`, sandbox, audit hooks |
 | Claude Desktop | macOS, Windows | `claude_desktop_config.json` (see note) | Requires mcp-remote bridge. Project instructions from AGENTS.md |
 | Cherry Studio | Linux, macOS, Windows | JSON import (manual) | `baseUrl` field, `streamableHttp` type (camelCase) |
-| LibreChat | Any (browser) | `librechat.yaml` (`mcpServers` section) | ValiHuntIR generates `librechat_mcp.yaml` reference to merge |
+| LibreChat | Any (browser) | `librechat.yaml` (`mcpServers` section) | Valhuntir generates `librechat_mcp.yaml` reference to merge |
 | Other | Any | `vhir-mcp-config.json` | Manual integration |
 
 Claude Code on Windows requires Git for Windows (provides Git Bash) or WSL. Claude Desktop is not available on Linux. Claude Desktop's config file supports stdio transport only — the `vhir setup client` wizard generates mcp-remote bridge configs automatically. Config path is platform-specific: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Any MCP client that supports Streamable HTTP transport with Bearer token authentication headers will work — the gateway is not client-specific.
@@ -667,11 +667,11 @@ Every approval, rejection, and command execution is logged with examiner identit
 |------|---------|
 | [sift-mcp](https://github.com/AppliedIR/sift-mcp) | Monorepo: 11 SIFT packages (forensic-mcp, case-mcp, report-mcp, sift-mcp, sift-gateway, case-dashboard, forensic-knowledge, forensic-rag, windows-triage, opencti, sift-common) |
 | [wintools-mcp](https://github.com/AppliedIR/wintools-mcp) | Windows forensic tool execution (7 tools, 31 catalog entries) |
-| [ValiHuntIR](https://github.com/AppliedIR/valihuntir) | CLI, architecture reference |
+| [Valhuntir](https://github.com/AppliedIR/valhuntir) | CLI, architecture reference |
 
 ## Updating
 
-### Full ValiHuntIR
+### Full Valhuntir
 
 ```
 vhir update              # Pull latest code, reinstall packages, redeploy controls, restart gateway
@@ -686,7 +686,7 @@ and runs a connectivity smoke test.
 ## Upgrading from Lite to Full
 
 Both modes share the same Python venv, triage databases, and RAG index. Full
-ValiHuntIR adds the gateway (7 MCP backends behind one HTTP endpoint), 4 additional
+Valhuntir adds the gateway (7 MCP backends behind one HTTP endpoint), 4 additional
 MCP servers (forensic-mcp, case-mcp, report-mcp, sift-mcp), a web-based review
 portal (Examiner Portal), structured case management, sandbox enforcement,
 and HMAC-signed approvals.
@@ -698,7 +698,7 @@ fresh or transfer findings manually.
 
 ## Evidence Handling
 
-Never place original evidence on any ValiHuntIR system. Only use working copies for which verified originals or backups exist. ValiHuntIR workstations process evidence through AI-connected tools, and any data loaded into these systems may be transmitted to the configured AI provider. Treat all ValiHuntIR systems as analysis environments, not evidence storage.
+Never place original evidence on any Valhuntir system. Only use working copies for which verified originals or backups exist. Valhuntir workstations process evidence through AI-connected tools, and any data loaded into these systems may be transmitted to the configured AI provider. Treat all Valhuntir systems as analysis environments, not evidence storage.
 
 Evidence integrity is verified by SHA-256 hashes recorded at registration. Examiners can optionally lock evidence to read-only via `vhir evidence lock`. Proper evidence integrity depends on verified hashes, write blockers, and chain-of-custody procedures that exist outside this platform.
 

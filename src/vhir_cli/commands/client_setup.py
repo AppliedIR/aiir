@@ -1,4 +1,4 @@
-"""Generate LLM client configuration pointing at ValiHuntIR API servers.
+"""Generate LLM client configuration pointing at Valhuntir API servers.
 
 On SIFT, MCP entries use ``type: http`` in global ``~/.claude.json``.
 On remote clients, entries use ``type: streamable-http`` in project
@@ -95,7 +95,7 @@ _FORENSIC_DENY_RULES = {
 # Old forensic deny rules — removed during migration re-deploy
 _OLD_FORENSIC_DENY_RULES = {"Bash(rm -rf *)", "Bash(mkfs*)", "Bash(dd *)"}
 
-# ValiHuntIR MCP names — used for uninstall identification.
+# Valhuntir MCP names — used for uninstall identification.
 _VHIR_BACKEND_NAMES = {
     "forensic-mcp",
     "case-mcp",
@@ -118,7 +118,7 @@ _VHIR_BACKEND_NAMES = {
 
 
 def cmd_setup_client(args, identity: dict) -> None:
-    """Generate LLM client configuration for ValiHuntIR endpoints."""
+    """Generate LLM client configuration for Valhuntir endpoints."""
     if getattr(args, "uninstall", False):
         _cmd_uninstall(args)
         return
@@ -292,7 +292,7 @@ def _resolve_sift(args, auto: bool) -> str:
         status = "not detected, will use default"
 
     print("\n--- SIFT Workstation (Gateway) ---")
-    print("The ValiHuntIR gateway runs on your SIFT workstation and provides")
+    print("The Valhuntir gateway runs on your SIFT workstation and provides")
     print("forensic tools (forensic-mcp, sift-mcp, forensic-rag, etc.).")
     print()
     print(f"  Default:  {default}  ({status})")
@@ -423,8 +423,8 @@ def _resolve_examiner(args, identity: dict) -> str:
 
 
 def _wizard_client() -> str:
-    print("\n=== ValiHuntIR Client Configuration ===")
-    print("Which LLM client will connect to your ValiHuntIR endpoints?\n")
+    print("\n=== Valhuntir Client Configuration ===")
+    print("Which LLM client will connect to your Valhuntir endpoints?\n")
     print("  1. Claude Code      CLI agent (writes .mcp.json + CLAUDE.md)")
     print("  2. Claude Desktop   Desktop app (writes claude_desktop_config.json)")
     print("  3. LibreChat        Web UI (writes librechat_mcp.yaml)")
@@ -948,7 +948,7 @@ def _merge_and_write(path: Path, config: dict) -> None:
                 f"Warning: could not read existing config {path}: {e}", file=sys.stderr
             )
 
-    # Merge: existing servers are preserved, ValiHuntIR servers overwritten
+    # Merge: existing servers are preserved, Valhuntir servers overwritten
     existing_servers = existing.get("mcpServers", {})
     existing_servers.update(config.get("mcpServers", {}))
     existing["mcpServers"] = existing_servers
@@ -979,7 +979,7 @@ _BACKEND_INIT_TIMEOUTS = {
 _DEFAULT_INIT_TIMEOUT = 15000  # 15s — safe margin for others
 
 _PROMPT_PREFIX = """\
-You are an IR analyst orchestrating forensic investigations on an ValiHuntIR workstation. Evidence guides theory, never the reverse.
+You are an IR analyst orchestrating forensic investigations on a Valhuntir workstation. Evidence guides theory, never the reverse.
 
 EVIDENCE PRESENTATION: Every finding must include: (1) Source — artifact file path. (2) Extraction — tool and command. (3) Content — actual log entry or record, never a summary. (4) Observation — factual. (5) Interpretation — analytical, clearly labeled. (6) Confidence — SPECULATIVE/LOW/MEDIUM/HIGH with justification. If you cannot show the evidence, you cannot make the claim.
 
@@ -1009,13 +1009,13 @@ _LIBRECHAT_POST_INSTALL = """\
 
    Open LibreChat → Agents panel → Create Agent, then:
 
-   Name:           ValiHuntIR Investigation
+   Name:           Valhuntir Investigation
    Model:          claude-sonnet-4-6 (or your preferred Claude model)
    Instructions:   paste from docs/librechat-setup.md "Agent Instructions"
                    section (NOT the full promptPrefix — see setup guide)
    Tool Search:    ON
 
-   Add MCP Servers: select all ValiHuntIR backends
+   Add MCP Servers: select all Valhuntir backends
 
    Deferred loading: for each backend's tools, click the clock icon to
    defer ALL tools EXCEPT these 6 (used almost every turn):
@@ -1046,7 +1046,7 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
     """Write LibreChat mcpServers YAML snippet with model settings."""
     from urllib.parse import urlparse
 
-    lines = ["# ValiHuntIR MCP servers — merge into your librechat.yaml", "mcpServers:"]
+    lines = ["# Valhuntir MCP servers — merge into your librechat.yaml", "mcpServers:"]
     gateway_host = None
     for name, info in servers.items():
         # Skip non-streamable-http entries (Claude Desktop npx bridge)
@@ -1093,7 +1093,7 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
     lines.append("    maxRecursionLimit: 100  # hard cap")
     # Greeting (plain text — LibreChat does not render markdown in greetings)
     greeting_lines = [
-        "ValiHuntIR Investigation workspace ready. Connected backends and forensic",
+        "Valhuntir Investigation workspace ready. Connected backends and forensic",
         "discipline are active. Start with your investigation objective or",
         "evidence to analyze. All findings stage as DRAFT for your review.",
     ]
@@ -1103,7 +1103,7 @@ def _write_librechat_yaml(path: Path, servers: dict) -> None:
     lines.append("modelSpecs:")
     lines.append("  list:")
     lines.append("    - spec: vhir-investigation")
-    lines.append('      name: "ValiHuntIR Investigation"')
+    lines.append('      name: "Valhuntir Investigation"')
     lines.append("      preset:")
     lines.append(
         '        endpoint: "anthropic"  # change if using azureOpenAI, bedrock, etc.'
@@ -1166,10 +1166,10 @@ def _copy_agents_md(target: Path) -> None:
 
 
 def _cmd_uninstall(args) -> None:
-    """Remove ValiHuntIR forensic controls with interactive per-component approval."""
+    """Remove Valhuntir forensic controls with interactive per-component approval."""
     sift = _is_sift()
 
-    print("\nValiHuntIR Forensic Controls — Uninstall\n")
+    print("\nValhuntir Forensic Controls — Uninstall\n")
 
     if sift:
         _uninstall_sift()
@@ -1185,10 +1185,10 @@ def _uninstall_sift() -> None:
     claude_json = Path.home() / ".claude.json"
     if claude_json.is_file():
         print("  [1] MCP servers (~/.claude.json mcpServers)")
-        print("      Only ValiHuntIR backend entries are removed. Others preserved.")
+        print("      Only Valhuntir backend entries are removed. Others preserved.")
         if _prompt_yn_strict("      Remove?"):
             _remove_vhir_mcp_entries(claude_json)
-            print("      Removed ValiHuntIR MCP entries.")
+            print("      Removed Valhuntir MCP entries.")
         else:
             print("      Skipped.")
     print()
@@ -1323,7 +1323,7 @@ def _uninstall_project() -> None:
 
     has_mcp_json = mcp_json.is_file()
 
-    # Surgical .claude/ removal — only remove ValiHuntIR files, not user settings
+    # Surgical .claude/ removal — only remove Valhuntir files, not user settings
     claude_files_to_remove: list[Path] = []
     if claude_dir.is_dir():
         settings_file = claude_dir / "settings.json"
@@ -1344,21 +1344,21 @@ def _uninstall_project() -> None:
             claude_files_to_remove.append(settings_file)
 
     if not files_to_remove and not claude_files_to_remove and not has_mcp_json:
-        print("  No ValiHuntIR files found in current directory.")
+        print("  No Valhuntir files found in current directory.")
         return
 
     print("  Files to remove:")
     for p in files_to_remove:
         print(f"    {p}")
     if has_mcp_json:
-        print(f"    {mcp_json} (ValiHuntIR entries only)")
+        print(f"    {mcp_json} (Valhuntir entries only)")
     for p in claude_files_to_remove:
         print(f"    {p}")
 
     if _prompt_yn_strict("  Remove all?"):
         for p in files_to_remove:
             p.unlink()
-        # Surgical .mcp.json removal — only ValiHuntIR entries
+        # Surgical .mcp.json removal — only Valhuntir entries
         if has_mcp_json:
             _remove_vhir_mcp_entries(mcp_json)
         # Restore CLAUDE.md backup if exists
@@ -1394,7 +1394,7 @@ def _uninstall_project() -> None:
 
 
 def _remove_vhir_mcp_entries(path: Path) -> None:
-    """Remove ValiHuntIR backend entries from ~/.claude.json mcpServers."""
+    """Remove Valhuntir backend entries from ~/.claude.json mcpServers."""
     try:
         data = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
@@ -1644,7 +1644,7 @@ def _cmd_add_remnux(args) -> None:
 
 
 def _cmd_setup_client_remote(args, identity: dict) -> None:
-    """Generate client config pointing at a remote ValiHuntIR gateway.
+    """Generate client config pointing at a remote Valhuntir gateway.
 
     Discovers running backends via the service management API, then builds
     per-backend MCP endpoint entries with bearer token auth.

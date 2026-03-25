@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions & Discussion
-    url: https://github.com/AppliedIR/valihuntir/discussions
-    about: Ask questions and discuss ValiHuntIR usage here instead of filing an issue.
+    url: https://github.com/AppliedIR/valhuntir/discussions
+    about: Ask questions and discuss Valhuntir usage here instead of filing an issue.

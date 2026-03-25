@@ -6,7 +6,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of ValiHuntIR is affected?
+      description: Which part of Valhuntir is affected?
       options:
         - vhir CLI
         - sift-gateway

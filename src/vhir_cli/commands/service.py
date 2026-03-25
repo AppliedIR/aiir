@@ -1,4 +1,4 @@
-"""Service management for the ValiHuntIR gateway.
+"""Service management for the Valhuntir gateway.
 
 Talks to the gateway's REST API to list, start, stop, and restart
 backend services. Reads gateway URL and token from:
