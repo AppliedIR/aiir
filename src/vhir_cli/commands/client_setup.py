@@ -323,9 +323,9 @@ def _resolve_windows(args, auto: bool) -> tuple[str, str]:
         return "", ""
 
     # If the gateway already has wintools registered, skip — the gateway proxies it
-    from vhir_cli.paths import config_dir
+    from pathlib import Path
 
-    gw_yaml = config_dir() / "gateway.yaml"
+    gw_yaml = Path.home() / ".vhir" / "gateway.yaml"
     if gw_yaml.is_file():
         try:
             import yaml
