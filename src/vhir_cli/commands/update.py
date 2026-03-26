@@ -232,11 +232,19 @@ def cmd_update(args, identity: dict) -> None:
         print(f"Source directory not found: {source}", file=sys.stderr)
         sys.exit(1)
 
-    pip_path = Path(venv) / "bin" / "pip"
-    if not pip_path.exists():
+    venv_python = str(Path(venv) / "bin" / "python")
+    if not Path(venv_python).exists():
         print(
-            "Virtual environment corrupted — pip not found.\n"
+            "Virtual environment corrupted — python not found.\n"
             "Re-run setup-sift.sh to rebuild.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Verify uv is available (installed by setup-sift.sh)
+    if subprocess.run(["uv", "--version"], capture_output=True).returncode != 0:
+        print(
+            "uv not found. Run setup-sift.sh to install it.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -331,10 +339,9 @@ def cmd_update(args, identity: dict) -> None:
         else:
             print(f"  Pulling {name}... already up to date")
 
-    # Step 4: Reinstall packages
+    # Step 4: Reinstall packages (batched for unified dependency resolution)
     installed = manifest.get("packages", {})
-    pip = str(Path(venv) / "bin" / "pip")
-    count = 0
+    pkg_paths = []
     for pkg_name in _INSTALL_ORDER:
         if pkg_name not in installed:
             continue
@@ -350,35 +357,24 @@ def cmd_update(args, identity: dict) -> None:
                 f"  Warning: {pkg_name} source not found at {pkg_path}", file=sys.stderr
             )
             continue
-        result = subprocess.run(
-            [pip, "install", "-e", pkg_path, "--quiet"],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            print(
-                f"  Failed to install {pkg_name}: {result.stderr.strip()}",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        count += 1
-    print(f"  Reinstalling packages... {count} packages")
+        pkg_paths.append(pkg_path)
 
-    # Fix opentelemetry version conflict (pycti ~=1.35 vs chromadb)
+    cmd = ["uv", "pip", "install", "--python", venv_python, "--quiet"]
+    # Force re-resolution of opentelemetry exporter when both RAG and opencti
+    # are installed (prevents sdk/exporter version mismatch on update)
     if "rag-mcp" in installed and "opencti-mcp" in installed:
-        subprocess.run(
-            [
-                pip,
-                "install",
-                "--quiet",
-                "opentelemetry-sdk>=1.40",
-                "opentelemetry-api>=1.40",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
+        cmd.extend(["--reinstall-package", "opentelemetry-exporter-otlp-proto-grpc"])
+    for p in pkg_paths:
+        cmd.extend(["-e", p])
+
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    if result.returncode != 0:
+        print(
+            f"  Package install failed: {result.stderr.strip()}",
+            file=sys.stderr,
         )
+        sys.exit(1)
+    print(f"  Reinstalling packages... {len(pkg_paths)} packages")
 
     # Step 4.5: Ensure password storage directory exists
     _ensure_password_dir()
