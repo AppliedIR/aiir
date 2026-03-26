@@ -249,6 +249,9 @@ def cmd_update(args, identity: dict) -> None:
         )
         sys.exit(1)
 
+    # Keep uv current (handles stale installs and pre-existing user installs)
+    subprocess.run(["uv", "self", "update", "--quiet"], capture_output=True, timeout=60)
+
     repos = [("sift-mcp", source), ("vhir", vhir_dir)]
 
     # Step 2: Fetch + compare
