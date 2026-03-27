@@ -237,9 +237,9 @@ Examiners review findings and timeline events, edit fields (confidence, justific
 
 The Commit button (`Shift+C`) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser. Timeline events auto-created from findings follow the finding's approval status unless manually edited. IOCs auto-extracted from findings cascade when all source findings reach the same status. The CLI's `vhir approve` provides the same functionality from the terminal. Open the portal with `vhir portal`.
 
-![Examiner Portal — Findings](docs/images/dashboard.png)
+![Examiner Portal — Findings](docs/images/portal-findings.png)
 
-![Examiner Portal — Timeline](docs/images/timeline.png)
+![Examiner Portal — Timeline](docs/images/portal-timeline.png)
 
 ### Where Things Run
 
