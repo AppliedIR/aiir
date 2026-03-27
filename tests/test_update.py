@@ -27,9 +27,10 @@ def manifest_dir(tmp_path):
 
     venv = tmp_path / "venv"
     venv.mkdir()
-    pip = venv / "bin" / "pip"
-    pip.parent.mkdir(parents=True)
-    pip.write_text("#!/bin/sh\n")
+    venv_bin = venv / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").write_text("#!/bin/sh\n")
+    (venv_bin / "pip").write_text("#!/bin/sh\n")
 
     # Create package dirs
     for rel in _PACKAGE_PATHS.values():
