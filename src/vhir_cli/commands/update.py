@@ -386,6 +386,15 @@ def cmd_update(args, identity: dict) -> None:
     # Step 4.5: Ensure password storage directory exists
     _ensure_password_dir()
 
+    # Step 4.6: Ensure valhuntir → vhir symlink exists
+    vhir_bin = Path(venv) / "bin" / "vhir"
+    valhuntir_bin = Path(venv) / "bin" / "valhuntir"
+    if vhir_bin.exists() and not valhuntir_bin.exists():
+        try:
+            valhuntir_bin.symlink_to(vhir_bin)
+        except OSError:
+            pass  # non-fatal
+
     # Step 5: Redeploy forensic controls
     client = manifest.get("client")
     if client == "claude-code":
