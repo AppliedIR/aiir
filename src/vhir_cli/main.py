@@ -1042,15 +1042,10 @@ def _case_activate(args, identity: dict) -> None:
             from vhir_cli.commands.join import (
                 _repoint_samba_share,
                 notify_wintools_case_activated,
-                notify_wintools_case_deactivated,
             )
 
-            if (case_path / "extractions" / "wintools").is_dir():
-                _repoint_samba_share(case_path)
-                notify_wintools_case_activated(args.case_id)
-            else:
-                _repoint_samba_share(None)
-                notify_wintools_case_deactivated()
+            _repoint_samba_share(case_path)
+            notify_wintools_case_activated(args.case_id)
         except Exception as e:
             print(
                 f"Warning: wintools share update failed: {e}",
@@ -1101,7 +1096,7 @@ def _case_close(args, identity: dict) -> None:
     _aw(meta_file, yaml.dump(meta, default_flow_style=False))
 
     # Clear wintools share
-    if _wintools_configured() and (case_dir / "extractions" / "wintools").is_dir():
+    if _wintools_configured():
         try:
             from vhir_cli.commands.join import (
                 _repoint_samba_share,
@@ -1178,7 +1173,7 @@ def _case_reopen(args, identity: dict) -> None:
     print(f"Case {case_id} reopened and set as active.")
 
     # Repoint share if this case is shared
-    if _wintools_configured() and (case_dir / "extractions" / "wintools").is_dir():
+    if _wintools_configured():
         try:
             from vhir_cli.commands.join import (
                 _repoint_samba_share,
