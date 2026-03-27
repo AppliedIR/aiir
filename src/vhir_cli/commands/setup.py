@@ -203,8 +203,9 @@ def _run_connectivity_test() -> None:
     urlopen_kwargs = {"timeout": 15}
     if ssl_ctx is not None:
         urlopen_kwargs["context"] = ssl_ctx
-    retry_delays = [3, 5]  # two retries: 3s then 5s (covers ~8s startup)
-    for attempt in range(len(retry_delays) + 1):
+    # Poll every 2s for up to 16s — RAG model loading takes ~12s after restart
+    max_attempts = 8
+    for attempt in range(max_attempts):
         try:
             req = urllib.request.Request(health_url)
             start = time.time()
@@ -213,10 +214,10 @@ def _run_connectivity_test() -> None:
                 data = json.loads(resp.read())
             break
         except urllib.error.URLError:
-            if attempt < len(retry_delays):
-                delay = retry_delays[attempt]
-                print(f"  Gateway not responding, retrying in {delay}s...")
-                time.sleep(delay)
+            if attempt < max_attempts - 1:
+                if attempt == 0:
+                    print("  Gateway starting up, waiting...")
+                time.sleep(2)
             else:
                 print("  Gateway: OFFLINE — is the gateway running?")
                 print("    Start with: vhir service start")
