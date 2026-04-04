@@ -18,21 +18,24 @@ set -euo pipefail
 
 SIFT_URL=""
 JOIN_CODE=""
+EXAMINER_NAME=""
 UNINSTALL=false
 
 for arg in "$@"; do
     case "$arg" in
         --sift=*)      SIFT_URL="${arg#*=}" ;;
         --code=*)      JOIN_CODE="${arg#*=}" ;;
+        --examiner=*)  EXAMINER_NAME="${arg#*=}" ;;
         --uninstall)   UNINSTALL=true ;;
         -h|--help)
             echo "Usage: setup-client-macos.sh --sift=URL --code=CODE"
             echo ""
             echo "Options:"
-            echo "  --sift=URL     Gateway URL (required)"
-            echo "  --code=CODE    Join code (required)"
-            echo "  --uninstall    Remove Valhuntir workspace"
-            echo "  -h, --help     Show this help"
+            echo "  --sift=URL         Gateway URL (required)"
+            echo "  --code=CODE        Join code (required)"
+            echo "  --examiner=NAME    Examiner identity"
+            echo "  --uninstall        Remove Valhuntir workspace"
+            echo "  -h, --help         Show this help"
             exit 0
             ;;
         *)
@@ -250,6 +253,35 @@ gateway_url: "$GATEWAY_URL"
 gateway_token: "$GATEWAY_TOKEN"
 CONF
 )
+
+# ---- Examiner Identity ----
+
+header "Examiner Identity"
+
+if [[ -z "$EXAMINER_NAME" ]]; then
+    DEFAULT_EXAMINER=$(whoami | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | head -c 20)
+    EXAMINER_NAME=$(prompt "Examiner identity (name slug)" "$DEFAULT_EXAMINER")
+fi
+
+EXAMINER_NAME=$(echo "$EXAMINER_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g' | head -c 20)
+[[ -z "$EXAMINER_NAME" ]] && EXAMINER_NAME="examiner"
+ok "Examiner: $EXAMINER_NAME"
+
+echo "examiner: $EXAMINER_NAME" >> "$HOME/.vhir/config.yaml"
+
+# Write VHIR_EXAMINER to shell profile
+SHELL_RC=""
+if [[ -f "$HOME/.zshrc" ]]; then SHELL_RC="$HOME/.zshrc";
+elif [[ -f "$HOME/.bashrc" ]]; then SHELL_RC="$HOME/.bashrc"; fi
+
+if [[ -n "$SHELL_RC" ]]; then
+    if grep -q "VHIR_EXAMINER" "$SHELL_RC" 2>/dev/null; then
+        sed -i '' "s/^export VHIR_EXAMINER=.*/export VHIR_EXAMINER=\"$EXAMINER_NAME\"/" "$SHELL_RC"
+    else
+        echo "export VHIR_EXAMINER=\"$EXAMINER_NAME\"" >> "$SHELL_RC"
+    fi
+fi
+export VHIR_EXAMINER="$EXAMINER_NAME"
 
 # =============================================================================
 # Workspace Setup

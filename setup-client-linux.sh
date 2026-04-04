@@ -368,19 +368,21 @@ ok "Examiner: $EXAMINER_NAME"
 
 echo "examiner: $EXAMINER_NAME" >> "$Valhuntir_CONFIG"
 
-# Write Valhuntir_EXAMINER to shell profile
+# Write VHIR_EXAMINER to shell profile
 SHELL_RC=""
 if [[ -f "$HOME/.bashrc" ]]; then SHELL_RC="$HOME/.bashrc";
 elif [[ -f "$HOME/.zshrc" ]]; then SHELL_RC="$HOME/.zshrc"; fi
 
 if [[ -n "$SHELL_RC" ]]; then
-    if grep -q "Valhuntir_EXAMINER" "$SHELL_RC" 2>/dev/null; then
-        sed -i "s/^export Valhuntir_EXAMINER=.*/export Valhuntir_EXAMINER=\"$EXAMINER_NAME\"/" "$SHELL_RC"
+    # Clean up old naming if present
+    sed -i '/^export Valhuntir_EXAMINER=/d' "$SHELL_RC" 2>/dev/null || true
+    if grep -q "VHIR_EXAMINER" "$SHELL_RC" 2>/dev/null; then
+        sed -i "s/^export VHIR_EXAMINER=.*/export VHIR_EXAMINER=\"$EXAMINER_NAME\"/" "$SHELL_RC"
     else
-        echo "export Valhuntir_EXAMINER=\"$EXAMINER_NAME\"" >> "$SHELL_RC"
+        echo "export VHIR_EXAMINER=\"$EXAMINER_NAME\"" >> "$SHELL_RC"
     fi
 fi
-export Valhuntir_EXAMINER="$EXAMINER_NAME"
+export VHIR_EXAMINER="$EXAMINER_NAME"
 
 # ---- Phase 4: LLM Client Selection ----
 
