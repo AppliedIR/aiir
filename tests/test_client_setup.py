@@ -215,7 +215,7 @@ class TestCmdSetupClient:
         data = json.loads(config_path.read_text())
         assert "vhir" in data["mcpServers"]
         assert data["mcpServers"]["vhir"]["url"] == "http://127.0.0.1:4508/mcp"
-        assert data["mcpServers"]["vhir"]["type"] == "streamable-http"
+        assert data["mcpServers"]["vhir"]["type"] == "http"
         # Zeltser included by default
         assert "zeltser-ir-writing" in data["mcpServers"]
 
@@ -229,7 +229,7 @@ class TestCmdSetupClient:
         data = json.loads((tmp_path / ".mcp.json").read_text())
         assert "microsoft-learn" in data["mcpServers"]
         assert data["mcpServers"]["microsoft-learn"]["url"] == _MSLEARN_MCP["url"]
-        assert data["mcpServers"]["microsoft-learn"]["type"] == "streamable-http"
+        assert data["mcpServers"]["microsoft-learn"]["type"] == "http"
 
     def test_no_mslearn_flag(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -304,9 +304,14 @@ class TestCmdSetupClient:
         assert "vhir" in data["mcpServers"]
 
     def test_sift_writes_global_claude_json(self, tmp_path, monkeypatch):
-        """On SIFT, MCP servers go to ~/.claude.json with type=http."""
+        """On SIFT without claude CLI, MCP servers go to ~/.claude.json."""
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(Path, "home", staticmethod(lambda: tmp_path))
+        # Force JSON write path (no claude CLI)
+        monkeypatch.setattr(
+            "vhir_cli.commands.client_setup._claude_mcp_add_available",
+            lambda: False,
+        )
         # Create gateway.yaml to trigger SIFT detection
         vhir_dir = tmp_path / ".vhir"
         vhir_dir.mkdir()
