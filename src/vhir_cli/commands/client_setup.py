@@ -104,6 +104,7 @@ _VHIR_BACKEND_NAMES = {
     "forensic-rag-mcp",
     "windows-triage-mcp",
     "opencti-mcp",
+    "opensearch-mcp",
     "wintools-mcp",
     "remnux-mcp",
     "vhir",
@@ -595,9 +596,11 @@ def _generate_config(client: str, servers: dict, examiner: str) -> None:
     sift = _is_sift()
 
     if client == "claude-code":
-        # Standardize type to "http" for all Claude Code installs
+        # Standardize type to "http" for gateway entries only
+        # (not external services like mslearn/zeltser, or stdio entries)
         for entry in servers.values():
-            entry["type"] = "http"
+            if entry.get("type") == "streamable-http" and "url" in entry:
+                entry["type"] = "http"
 
         if sift:
             # SIFT: prefer claude mcp add (canonical, reliable)
