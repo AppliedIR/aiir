@@ -35,7 +35,7 @@ _INSTALL_ORDER = [
 
 # Paths relative to manifest["source"] (sift-mcp repo root).
 # vhir-cli is special — relative to parent directory.
-# opensearch-mcp is external — resolved separately in _EXTERNAL_PACKAGES.
+# opensearch-mcp is external — resolved at install time from sibling dir.
 _PACKAGE_PATHS = {
     "forensic-knowledge": "packages/forensic-knowledge",
     "sift-common": "packages/sift-common",
