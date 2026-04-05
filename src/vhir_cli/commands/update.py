@@ -462,7 +462,11 @@ def cmd_update(args, identity: dict) -> None:
             print(f"failed ({result.stderr.strip()})")
             print("  Check with: systemctl --user status vhir-gateway")
 
-    # Step 8: Smoke test
+    # Step 8: Smoke test (wait for gateway to bind port after restart)
+    if not no_restart:
+        import time as _time
+
+        _time.sleep(3)
     print("  Running connectivity test...")
     from vhir_cli.commands.setup import _run_connectivity_test
 
