@@ -155,6 +155,13 @@ def register_evidence_data(
     if not evidence_path.exists():
         raise FileNotFoundError(f"File not found: {path}")
 
+    if evidence_path.is_dir():
+        raise ValueError(
+            f"'{path}' is a directory. evidence_register works on individual "
+            "files. Register key files individually, or use a container "
+            "file (VHDX, E01, 7z) for directory-based evidence."
+        )
+
     # Validate path is within case directory
     resolved = evidence_path.resolve()
     case_resolved = case_dir.resolve()

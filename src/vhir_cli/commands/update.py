@@ -250,7 +250,7 @@ def _check_opensearch_version(source: Path) -> None:
         print("  Upgrading requires recreating the container. Indexed search data")
         print("  will be cleared and must be reingested. Case records (findings,")
         print("  timeline, evidence) are NOT affected.")
-        setup_script = os_path.parent / "setup-opensearch.sh"
+        setup_script = os_path.parent.parent / "scripts" / "setup-opensearch.sh"
         try:
             answer = input("\n  Upgrade OpenSearch now? [y/N] ").strip().lower()
         except EOFError:
