@@ -36,7 +36,7 @@ Every parser produces deterministic content-based document IDs (re-ingest = zero
 1. **Create a case** — set case name, examiner identity, case directory
 2. **Register evidence** — hash files, establish chain of custody
 3. **Ingest and index** — parse evidence into OpenSearch for structured querying (or analyze files directly without OpenSearch)
-4. **Scope the investigation** — review what's indexed, identify hosts and artifact types, check for Sigma detection hits
+4. **Scope the investigation** — review what's indexed, identify hosts and artifact types, check for Hayabusa detection alerts
 5. **Enrich programmatically** — validate files/services against known-good baselines, check IOCs against threat intelligence (zero LLM tokens with opensearch-mcp)
 6. **Search and analyze** — query across millions of records, aggregate patterns, build timelines
 7. **Record findings** — LLM stages findings and timeline events as DRAFT with full evidence provenance
