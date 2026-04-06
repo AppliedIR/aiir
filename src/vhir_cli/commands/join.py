@@ -906,15 +906,15 @@ def _push_smb_credentials(password: str, smb_user: str = "vhir-smb") -> None:
         },
     )
     try:
-        kwargs: dict = {"timeout": 10}
+        kwargs: dict = {"timeout": 5}
         if update_url.startswith("https"):
             kwargs["context"] = _wintools_ssl_context()
         with urllib.request.urlopen(req, **kwargs):
             print("  SMB credentials pushed to wintools-mcp")
-    except (ConnectionError, OSError):
-        print("  WARNING: Could not reach wintools-mcp to push SMB credentials")
-    except Exception as e:
-        print(f"  WARNING: Failed to push SMB credentials: {e}", file=sys.stderr)
+    except Exception:
+        # Best-effort: wintools may not be running yet (normal during first setup).
+        # The Windows installer derives the same password from the join code.
+        pass
 
 
 def notify_wintools_case_activated(case_id: str) -> bool:
