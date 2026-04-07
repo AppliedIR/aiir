@@ -65,7 +65,7 @@ function Prompt-YN-Strict {
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor White
 Write-Host "  Valhuntir - LLM Client Setup (Windows)" -ForegroundColor White
-Write-Host "  Artificial Intelligence Incident Response" -ForegroundColor White
+Write-Host "  AI-Assisted Forensic Investigation" -ForegroundColor White
 Write-Host "============================================================" -ForegroundColor White
 Write-Host ""
 

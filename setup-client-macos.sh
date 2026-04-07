@@ -100,7 +100,7 @@ prompt() {
 echo ""
 echo -e "${BOLD}============================================================${NC}"
 echo -e "${BOLD}  Valhuntir — LLM Client Setup (macOS)${NC}"
-echo -e "${BOLD}  Artificial Intelligence Incident Response${NC}"
+echo -e "${BOLD}  AI-Assisted Forensic Investigation${NC}"
 echo -e "${BOLD}============================================================${NC}"
 echo ""
 
