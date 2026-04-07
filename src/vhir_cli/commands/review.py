@@ -37,7 +37,10 @@ def cmd_review(args, identity: dict) -> None:
     """Review case information."""
     case_dir = get_case_dir(getattr(args, "case", None))
 
-    if getattr(args, "todos", False):
+    if getattr(args, "verify", False):
+        mine_only = getattr(args, "mine", False)
+        _show_findings_verify(case_dir, identity=identity, mine_only=mine_only)
+    elif getattr(args, "todos", False):
         _show_todos(case_dir, open_only=getattr(args, "open", False))
     elif getattr(args, "iocs", False):
         _show_iocs(case_dir)
@@ -57,11 +60,7 @@ def cmd_review(args, identity: dict) -> None:
         _show_evidence(case_dir)
     elif getattr(args, "findings", False):
         detail = getattr(args, "detail", False)
-        verify = getattr(args, "verify", False)
-        if verify:
-            mine_only = getattr(args, "mine", False)
-            _show_findings_verify(case_dir, identity=identity, mine_only=mine_only)
-        elif detail:
+        if detail:
             _show_findings_detail(case_dir)
         else:
             _show_findings_table(case_dir)

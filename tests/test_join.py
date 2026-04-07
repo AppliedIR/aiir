@@ -79,7 +79,6 @@ class TestWintoolsJoinNoGatewayToken:
 
         with (
             patch.dict(sys.modules, {"requests": mock_requests}),
-            patch("vhir_cli.commands.join._detect_wintools", return_value=False),
             patch("vhir_cli.commands.join._find_ca_cert", return_value=None),
             patch("vhir_cli.commands.join._write_config", write_config_mock),
         ):
@@ -120,7 +119,6 @@ class TestUrlNormalization:
             import vhir_cli.commands.join as join_mod
 
             importlib.reload(join_mod)
-            join_mod._detect_wintools = lambda: False
             join_mod._find_ca_cert = lambda: None
             join_mod._write_config = lambda *a, **kw: None
             join_mod.cmd_join(args, {"examiner": "tester"})

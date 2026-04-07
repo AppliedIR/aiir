@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import os
 import socket
@@ -29,7 +30,7 @@ def cmd_join(args, identity: dict) -> None:
     # Detect if this is a wintools machine
     wintools_url = None
     wintools_token = None
-    if getattr(args, "wintools", False) or _detect_wintools():
+    if getattr(args, "wintools", False):
         wintools_url, wintools_token = _get_wintools_credentials()
 
     # TLS verification: use CA cert if available, otherwise skip (self-signed)
@@ -344,16 +345,6 @@ def _get_local_gateway_token() -> str | None:
     return None
 
 
-def _detect_wintools() -> bool:
-    """Detect if wintools-mcp is installed on this machine.
-
-    Always returns False — use --wintools flag explicitly.
-    Auto-detection removed because the wintools installer writes config to
-    $InstallDir/config.yaml, not ~/.vhir/wintools.yaml.
-    """
-    return False
-
-
 def _get_wintools_credentials() -> tuple[str | None, str | None]:
     """Get wintools URL and token if available."""
     wintools_config = Path.home() / ".vhir" / "wintools.yaml"
@@ -646,7 +637,7 @@ def _setup_samba_share(join_code: str) -> str:
     # Add current user to sift group
     try:
         subprocess.run(
-            ["sudo", "usermod", "-aG", "sift", os.environ.get("USER") or os.getlogin()],
+            ["sudo", "usermod", "-aG", "sift", getpass.getuser()],
             check=True,
             capture_output=True,
             timeout=10,
@@ -692,7 +683,7 @@ def _setup_samba_share(join_code: str) -> str:
     # Write Samba config — force user ensures SMB file operations run as the
     # local installer user, eliminating the need to re-login for sift group
     # membership.  Authentication still uses vhir-smb (valid users).
-    username = os.environ.get("USER") or os.getlogin()
+    username = getpass.getuser()
     smb_conf = f"""[cases]
     path = {placeholder}
     valid users = vhir-smb
@@ -765,7 +756,7 @@ def _setup_samba_share(join_code: str) -> str:
         raise RuntimeError(f"Failed to restart smbd: {e}") from e
 
     # Create sudoers.d entry for passwordless repoint
-    username = os.environ.get("USER") or os.getlogin()
+    username = getpass.getuser()
     sudoers_content = (
         f"{username} ALL=(root) NOPASSWD: /usr/bin/tee {smb_conf_path}\n"
         f"{username} ALL=(root) NOPASSWD: /usr/bin/smbcontrol smbd reload-config\n"
@@ -802,9 +793,10 @@ def _setup_samba_share(join_code: str) -> str:
         "active_share_target": placeholder,
         "configured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
-    (vhir_dir / "samba.yaml").write_text(
-        yaml.dump(samba_data, default_flow_style=False)
-    )
+    samba_path = vhir_dir / "samba.yaml"
+    fd = os.open(str(samba_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        yaml.dump(samba_data, f, default_flow_style=False)
 
     print(f"Samba share configured: //{_get_sift_ip() or 'SIFT_IP'}/cases (per-case)")
     return wintools_ip
@@ -1044,7 +1036,7 @@ def _repoint_samba_share(case_dir: Path | None) -> None:
     placeholder.mkdir(parents=True, exist_ok=True)
 
     conf_path = "/etc/samba/smb.conf.d/vhir-cases.conf"
-    username = doc.get("force_user") or os.environ.get("USER") or os.getlogin()
+    username = doc.get("force_user") or getpass.getuser()
     smb_conf = f"""[cases]
     path = {target}
     valid users = vhir-smb
@@ -1346,7 +1338,9 @@ def _apply_static_ip(ip: str, network_yaml: Path) -> str | None:
         "interface": iface,
         "configured_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
-    network_yaml.write_text(yaml.dump(network_data, default_flow_style=False))
+    fd = os.open(str(network_yaml), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        yaml.dump(network_data, f, default_flow_style=False)
 
     # Verify gateway health
     from vhir_cli.gateway import get_local_gateway_url, get_local_ssl_context

@@ -63,6 +63,8 @@ _FORENSIC_DENY_RULES = {
     "Write(**/audit/*.jsonl)",
     "Edit(**/evidence.json)",
     "Write(**/evidence.json)",
+    "Edit(**/iocs.json)",
+    "Write(**/iocs.json)",
     "Read(/var/lib/vhir/**)",
     "Edit(/var/lib/vhir/**)",
     "Write(/var/lib/vhir/**)",

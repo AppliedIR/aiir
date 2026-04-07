@@ -63,7 +63,10 @@ def read_ledger(case_id: str) -> list[dict]:
     entries = []
     for line in path.read_text().splitlines():
         if line.strip():
-            entries.append(json.loads(line))
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
     return entries
 
 
