@@ -39,7 +39,7 @@ These are structural facts. If any other document contradicts these, the invaria
 3. **wintools-mcp runs on a Windows machine.** The gateway proxies requests to wintools-mcp over HTTPS — the LLM client does not connect directly (except in Lite mode).
 4. **Clients connect to two endpoints at most:** the gateway (SIFT tools) and remnux-mcp (malware analysis, if configured). The gateway proxies wintools-mcp and OpenCTI.
 5. **The case directory is local per examiner.** Multi-examiner collaboration uses export/merge, not shared filesystem.
-6. **Human approval is structural.** The AI cannot approve its own work. Only the vhir CLI or Examiner Portal (both requiring password-based authentication) can move findings to APPROVED.
+6. **Human approval is structural.** The AI cannot approve its own work. Only the Examiner Portal (preferred) or vhir CLI — both requiring password-based authentication — can move findings to APPROVED.
 7. **AGENTS.md is the source of truth for forensic rules.** Per-client config files (CLAUDE.md) are copies, not sources.
 8. **forensic-knowledge is a shared data package.** It has no runtime state. Used by forensic-mcp, sift-mcp, and wintools-mcp.
 
@@ -257,9 +257,10 @@ opensearch-mcp adds context-sensitive reminders based on what the LLM is queryin
 When the LLM records a finding via `record_finding()`, forensic-mcp validates it against methodology standards:
 
 - Checks for required fields and sufficient evidence
-- Validates provenance tier (MCP > HOOK > SHELL > NONE, with NONE rejected)
-- Returns grounding suggestions for additional evidence checks
-- Enforces audit_id requirements on artifacts
+- Enforces audit_id on each artifact and verifies it exists in the audit trail
+- Rejects artifacts whose source files are not in the evidence registry
+- Classifies provenance tier (MCP > HOOK > SHELL > NONE, with NONE rejected)
+- Scores grounding based on whether reference sources (RAG, triage, threat intel) were consulted
 
 This is structural enforcement, not prompt-based — the tool itself enforces quality standards.
 
@@ -309,6 +310,22 @@ Nine layers of defense-in-depth protect the integrity of forensic findings. See 
 | L9 | Kernel sandbox (bubblewrap namespaces) | Kernel |
 
 The HMAC ledger (L2) is the cryptographic guarantee. The other layers are advisory defense-in-depth. Only Claude Code gets L3-L4 and L9. The structural controls (L1, L6, L8) and cryptographic controls (L2, L7) apply to all clients.
+
+## Grounding Score
+
+Grounding measures whether the investigation consulted authoritative reference sources before making a claim. It's separate from provenance (which tracks where the evidence came from) — grounding tracks whether you checked your work against external knowledge.
+
+When a finding is staged, forensic-mcp checks the audit trail for usage of three reference backends:
+
+| Level | Criteria | Meaning |
+|-------|----------|---------|
+| **STRONG** | 2+ reference sources consulted | Claim is cross-referenced against authoritative knowledge |
+| **PARTIAL** | 1 source consulted, or finding traces to registered evidence | Some external validation performed |
+| **WEAK** | No reference sources consulted, no evidence chain | Claim lacks external validation |
+
+Reference sources: forensic-rag (Sigma rules, MITRE ATT&CK, forensic artifacts), windows-triage (known-good baseline), opencti (threat intelligence).
+
+Grounding is advisory — it does not block a finding. It's returned in the `record_finding()` response so the analyst and examiner can assess how well-supported a claim is. A WEAK finding may be perfectly valid, but the examiner knows the investigator didn't cross-reference it.
 
 ## Case Directory Structure
 

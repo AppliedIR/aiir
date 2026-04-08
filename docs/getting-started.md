@@ -2,10 +2,10 @@
 
 ## Prerequisites
 
-- SIFT Workstation (Ubuntu-based) or any Ubuntu 22.04+ system
+- SIFT Workstation (Ubuntu-based). WSL2 on Windows is also supported.
 - Python 3.10+
 - sudo access (required for HMAC verification ledger at `/var/lib/vhir/verification/`)
-- An LLM client with MCP support (Claude Code, Claude Desktop, LibreChat, etc.)
+- A **locally installed** MCP-compatible LLM client that supports Streamable HTTP transport with Bearer token authentication (Claude Code, Claude Desktop, Cherry Studio, self-hosted LibreChat, etc.). The client must run on your machine or local network — cloud-hosted LLM services (claude.ai, etc.) cannot reach internal gateway addresses. OAuth is not supported.
 
 ## Installation
 
@@ -57,7 +57,16 @@ This creates a case directory under `~/.vhir/cases/` with a unique case ID (e.g.
 
 ### 2. Connect Your LLM Client
 
-If you ran `vhir setup client` during installation, your LLM client is already configured. Start your client — it will connect to the gateway at `http://127.0.0.1:4508/mcp`.
+If you ran `vhir setup client` during installation, your LLM client is already configured.
+
+**Claude Code:** Launch from the case directory so forensic controls and the sandbox apply:
+
+```bash
+cd ~/.vhir/cases/INC-2026-0225
+claude
+```
+
+**Other MCP clients** (Claude Desktop, LibreChat, Cherry Studio): Just start your client — it connects to the gateway at `http://127.0.0.1:4508/mcp` and the active case is resolved automatically from `~/.vhir/active_case`.
 
 ### 3. Start Investigating
 
@@ -69,11 +78,11 @@ Ask your LLM client to analyze evidence:
 "Run hayabusa against the evtx logs and show critical alerts"
 ```
 
-The LLM will use MCP tools to execute forensic tools, record findings, and build a timeline.
+The LLM executes forensic tools via MCP and presents evidence as it finds it. Guide each phase — tell the LLM what to examine, review findings at each stage, and direct next steps. The human acts as the investigation manager. Too much LLM autonomy leads to cascading errors and wasted tokens. The LLM should check in at every major decision point.
 
 ### 4. Review and Approve
 
-Findings stage as DRAFT. Open the Examiner Portal to review:
+Findings made by the LLM are staged as DRAFT. Open the Examiner Portal to review:
 
 ```bash
 vhir portal
@@ -124,7 +133,7 @@ cases/INC-2026-0225/
 ├── timeline.json          # Incident timeline
 ├── todos.json             # Investigation TODOs
 ├── evidence.json          # Evidence registry
-├── evidence/              # Evidence files (read-only after registration)
+├── evidence/              # Evidence files (lock with vhir evidence lock)
 ├── extractions/           # Tool output and extracted artifacts
 ├── reports/               # Generated reports
 ├── approvals.jsonl        # Approval audit trail
@@ -133,7 +142,7 @@ cases/INC-2026-0225/
 
 ### Human-in-the-Loop
 
-The AI cannot approve its own work. All findings and timeline events stage as DRAFT. Only the vhir CLI (which requires a human at a terminal) can move them to APPROVED or REJECTED. This is enforced structurally — there is no MCP tool for approval.
+The AI cannot approve its own work. All findings and timeline events stage as DRAFT. Only a human examiner can move them to APPROVED or REJECTED. The Examiner Portal is the preferred review interface — approve, reject, and commit decisions directly in the browser with challenge-response authentication. The vhir CLI (`vhir approve`) provides the same capability from the terminal. There is no MCP tool for approval.
 
 ### Evidence IDs
 
@@ -141,7 +150,7 @@ Every tool execution generates a unique evidence ID: `{backend}-{examiner}-{YYYY
 
 ### Provenance Tiers
 
-Findings are classified by how their evidence was gathered:
+Findings are classified by where the audit trail recorded their tool executions:
 
 | Tier | Source | Meaning |
 |------|--------|---------|

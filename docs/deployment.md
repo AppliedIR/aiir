@@ -82,11 +82,21 @@ vhir setup client --sift=http://127.0.0.1:4508 --windows=WIN_IP:4624
 
 ### SMB Configuration
 
-wintools-mcp accesses the case directory on SIFT via SMB for audit trail writes. Set `VHIR_SHARE_ROOT` to the SMB mount point:
+wintools-mcp accesses the case directory on SIFT via an authenticated SMB share. This gives the Windows workstation read access to evidence files, write access to the extractions directory (parsed output), and write access to the audit directory. The Valhuntir installer configures this automatically during `vhir join --wintools`.
+
+On the Windows workstation, set `VHIR_SHARE_ROOT` to the SMB mount point:
 
 ```powershell
 $env:VHIR_SHARE_ROOT = "E:\cases\SRL2\"
 ```
+
+**Network requirements:**
+- SIFT gateway → wintools-mcp: HTTPS on port 4624 (Bearer token auth)
+- Windows → SIFT: SMB on port 445 (authenticated share)
+- Both connections must be on the isolated forensic network
+- No connections from outside the forensic environment
+
+The SMB share should use authenticated connections with credentials restricted to Valhuntir components. See the [wintools-mcp SETUP.md](https://github.com/AppliedIR/wintools-mcp/blob/main/SETUP.md) for share creation, user credentials, and firewall rules.
 
 ## Remote Access (TLS + Auth)
 

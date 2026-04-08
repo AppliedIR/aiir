@@ -10,7 +10,7 @@ Valhuntir turns a single analyst into the manager of an agentic AI incident resp
 
 ## Investigation Workflow
 
-The recommended workflow uses OpenSearch for evidence indexing. Without OpenSearch, the same tools are available through direct file-based analysis — OpenSearch adds scale and structured querying, not capability.
+The recommended workflow uses OpenSearch for evidence indexing. Without OpenSearch, the same tools are available through direct file-based analysis — OpenSearch adds scale and structured querying at decreased token cost and greater speed, not capability.
 
 ```
 1. Create a case             → case_init() or vhir case init
@@ -40,14 +40,11 @@ vhir case init "Suspicious Activity Investigation"
 vhir case init "Ransomware Response" --description "Finance server, Feb 2026"
 ```
 
-Or via the LLM (through case-mcp):
-
-```
-"Create a new case for the phishing investigation"
-→ case_init(name="Phishing Investigation")
-```
+Or ask the LLM to create a case — it uses the `case_init` tool on case-mcp.
 
 Both paths create a case directory under `~/.vhir/cases/` with a unique ID (e.g., `INC-2026-0225`) and activate it for the session.
+
+**Claude Code users:** Launch Claude Code from the case directory so forensic controls and the sandbox apply. Other MCP clients connect to the gateway over HTTP and don't need to be launched from any specific directory — the active case is resolved from `~/.vhir/active_case`.
 
 ### Managing Multiple Cases
 
@@ -59,7 +56,7 @@ vhir case close INC-2026-0225 --summary "Investigation complete"
 vhir case reopen INC-2026-0225    # Reopen if needed
 ```
 
-The LLM can also list and activate cases through `case_list()` and `case_activate()`.
+The LLM can also list, activate, and check case status through case-mcp. The CLI is not required for basic case management.
 
 ### Case Directory Structure
 
@@ -90,22 +87,24 @@ cases/INC-2026-0225/
 
 ### Evidence Registration
 
-Register evidence files to establish chain of custody:
+Register evidence files before analysis to establish chain of custody. Registration computes a SHA-256 hash and records it in `evidence.json`. Evidence must be registered before findings can reference it.
 
 ```bash
 vhir evidence register /path/to/disk.E01 --description "Workstation image"
 vhir evidence register /path/to/memory.raw --description "Memory dump from DC01"
 ```
 
-Or via MCP: `evidence_register(path="/path/to/disk.E01", description="Workstation image")`
+Or ask the LLM to register evidence for you — it uses the `evidence_register` tool on case-mcp.
 
-Registration computes a SHA-256 hash and records it in `evidence.json`. Verify integrity at any time:
+Verify integrity and manage access at any time:
 
 ```bash
 vhir evidence verify              # Re-hash all registered evidence
 vhir evidence lock                # Set evidence directory to read-only
 vhir evidence unlock              # Restore write access for re-extraction
 ```
+
+The LLM can register and verify evidence through case-mcp. Evidence lock/unlock requires the CLI (terminal confirmation).
 
 ### Case Backup
 
@@ -117,7 +116,7 @@ vhir backup /path/to/destination --all               # Include evidence + extrac
 vhir backup --verify /path/to/backup/INC-2026-0225/  # Verify backup integrity
 ```
 
-The LLM can also create case-data-only backups at investigation checkpoints via `backup_case()`.
+The LLM can also create case-data-only backups at investigation checkpoints — it uses the `backup_case` tool on case-mcp.
 
 ## Evidence Indexing with OpenSearch
 
@@ -145,15 +144,7 @@ opensearch-ingest delimited /path/to/zeek/logs/ --hostname SENSOR01 --case incid
 opensearch-ingest accesslog /path/to/apache/access.log --hostname WEB01 --case incident-001
 ```
 
-Or via MCP:
-
-```
-idx_ingest(case_dir="/path/to/evidence", hostname="SERVER01")
-idx_ingest_memory(memory_path="/path/to/memory.raw", hostname="DC01")
-idx_ingest_json(path="/path/to/eve.json", hostname="FW01")
-idx_ingest_delimited(path="/path/to/zeek/", hostname="SENSOR01")
-idx_ingest_accesslog(path="/path/to/access.log", hostname="WEB01")
-```
+Or ask the LLM to ingest evidence — it uses the ingest tools on opensearch-mcp. Just tell it what evidence to ingest and from which host.
 
 ### 15 Parsers
 
@@ -179,43 +170,20 @@ Every parser produces deterministic content-based document IDs (re-ingest = zero
 
 ### Hayabusa Auto-Detection
 
-After EVTX ingest, opensearch-mcp checks if Hayabusa is installed and automatically runs it against the event logs. Hayabusa applies 3,700+ Sigma-based detection rules and indexes the alerts into `case-*-hayabusa-*` indices. Query alerts with:
-
-```
-idx_list_detections(case_id="incident-001")
-idx_search(query="level:critical OR level:high", index="case-incident-001-hayabusa-*")
-```
+After EVTX ingest, opensearch-mcp checks if Hayabusa is installed and automatically runs it against the event logs. Hayabusa applies 3,700+ Sigma-based detection rules and indexes the alerts into `case-*-hayabusa-*` indices. Ask the LLM to list detections or search for critical/high alerts.
 
 ### Querying Indexed Evidence
 
-Start with a case overview, then query:
+The LLM queries indexed evidence through opensearch-mcp's 8 query tools. Start by asking for a case overview, then direct the LLM to search, aggregate, or build timelines:
 
-```
-# Understand what's available
-idx_case_summary(case_id="incident-001")
-# Returns: hosts, artifact types, doc counts, fields per type, enrichment status
+- **"Give me a case summary"** — the LLM calls `idx_case_summary` to show hosts, artifact types, document counts, and enrichment status
+- **"Show me all 4688 events where cmd.exe was spawned from an unusual parent"** — structured search across event logs
+- **"What are the top 20 processes flagged as suspicious?"** — aggregation by field with triage verdict filter
+- **"Show me a timeline of all malicious threat intel hits by hour"** — date histogram for temporal analysis
+- **"What unique source IPs appear in the event logs?"** — field value enumeration
+- **"How many logon events are there?"** — fast document counts
 
-# Full-text + structured queries
-idx_search(query="event.code:4688 AND process.parent.name:cmd.exe",
-           index="case-incident-001-evtx-*")
-
-# Aggregations
-idx_aggregate(field="process.name", query="triage.verdict:SUSPICIOUS")
-
-# Temporal analysis
-idx_timeline(query="threat_intel.verdict:MALICIOUS", interval="1h")
-
-# Unique values
-idx_field_values(field="source.ip", index="case-incident-001-evtx-*")
-
-# Document counts
-idx_count(query="event.code:4624", index="case-incident-001-evtx-*")
-
-# Single document lookup
-idx_get_event(doc_id="...", index="case-incident-001-evtx-server01")
-```
-
-All indices follow the naming convention: `case-{case_id}-{artifact_type}-{hostname}`. Wildcard queries across a case: `index="case-incident-001-*"`.
+All indices follow the naming convention: `case-{case_id}-{artifact_type}-{hostname}`. The LLM can query across an entire case or target specific artifact types and hosts. See the [MCP Reference](mcp-reference.md#opensearch-mcp-17-tools) for the full list of query tools and parameters.
 
 ### Programmatic Enrichment
 
@@ -225,20 +193,8 @@ Two post-ingest enrichment pipelines add context without consuming LLM tokens:
 
 **Threat intelligence** (`idx_enrich_intel`): Extracts unique external IPs, hashes, and domains from indexed data, looks them up in OpenCTI, and stamps matching documents with `threat_intel.verdict` and confidence. 200 unique IOCs checked in ~10 seconds vs. 100K inline lookups that would take 83 minutes.
 
-Both enrichments are programmatic — zero LLM tokens consumed. After enrichment, query for results:
+Both enrichments are programmatic — zero LLM tokens consumed. After enrichment, ask the LLM to search for suspicious or malicious verdicts, or aggregate by triage verdict to see the distribution.
 
-```
-idx_search(query="triage.verdict:SUSPICIOUS")
-idx_search(query="threat_intel.verdict:MALICIOUS")
-idx_aggregate(field="triage.verdict", query="*")
-```
-
-### Monitoring Ingest Operations
-
-```
-idx_ingest_status(case_id="incident-001")
-idx_status()   # Index inventory: names, doc counts, sizes
-```
 
 ## Deep Analysis with Forensic Tools
 
@@ -249,12 +205,19 @@ sift-mcp provides `run_command()` for executing any forensic tool installed on t
 Examples of what you can ask the LLM:
 
 ```
-"Parse the Amcache hive at /cases/evidence/Amcache.hve"
-"Run Prefetch analysis on all .pf files in /cases/evidence/prefetch/"
+"Ingest all evidence from /cases/evidence/ into OpenSearch and give me a summary of the artifacts ingested"
+"Show me all 4688 events where cmd.exe spawned from an unusual parent process"
+"Aggregate the top 20 source IPs across all hosts and check them against threat intel"
+"Run triage enrichment and show me anything flagged as suspicious"
+"Parse the Amcache hive from workstation3"
+"See if this registry value exists on any of the other hosts in OpenSearch"
 "What tools should I use to investigate lateral movement artifacts?"
-"Analyze this memory dump with Volatility — list processes and network connections"
 "Run hayabusa against the evtx logs and show critical/high alerts"
 "Extract the $MFT and build a filesystem timeline"
+"Analyze this memory dump with Volatility — list processes and network connections"
+"Check if svchost.exe with parent wsmprovhost.exe is normal"
+"Look up this hash in threat intel"
+"Upload this binary to REMnux and analyze it"
 ```
 
 ### Windows Tools (via wintools-mcp)
@@ -266,23 +229,15 @@ Additional capabilities:
 - `list_kape_targets` — list KAPE targets/modules for evidence parsing
 - `get_share_info` — get SMB share paths for evidence access
 
+**Evidence access:** Valhuntir configures an authenticated SMB share from the Windows workstation to the case directory on SIFT. This allows wintools-mcp to read evidence files, write parsed output to the extractions directory, and record audit trail entries — all without manually copying files between systems. The gateway proxies tool calls to wintools-mcp over HTTPS with Bearer token authentication. See the [Deployment Guide](deployment.md) for SMB setup and firewall configuration, or the [wintools-mcp README](https://github.com/AppliedIR/wintools-mcp) for detailed configuration.
+
 ### Tool Discovery
 
-Both sift-mcp and wintools-mcp provide tools to discover what's available:
+Both sift-mcp and wintools-mcp provide discovery tools. Ask the LLM:
 
-```
-# What forensic tools are installed?
-list_available_tools()              # sift-mcp
-list_windows_tools()                # wintools-mcp
-
-# What should I use for this artifact type?
-suggest_tools(artifact_type="lateral_movement")
-suggest_windows_tools(artifact_type="registry")
-
-# How do I use this specific tool?
-get_tool_help(tool_name="AmcacheParser")
-get_windows_tool_help(tool_name="hayabusa")
-```
+- **"What forensic tools are installed?"** — lists available tools on SIFT or Windows
+- **"What tools should I use for lateral movement artifacts?"** — suggests relevant tools with corroboration guidance
+- **"How do I use AmcacheParser?"** — returns usage info, flags, caveats, and interpretation guidance
 
 ## Cross-Reference and Validation
 
@@ -316,34 +271,13 @@ Semantic search across 22,000+ records from 23 authoritative sources:
 | `hayabusa` | Hayabusa Built-in Detection Rules |
 | `forensic_clarifications` | Authoritative Forensic Artifact Clarifications |
 
-Query with optional filters:
-
-```
-search_knowledge(query="credential dumping detection",
-                 source_ids=["sigma", "mitre_attack"])
-search_knowledge(query="lateral movement", platform="windows")
-search_knowledge(query="T1003.001")  # MITRE technique ID
-list_knowledge_sources()              # See all available sources
-```
-
-Relevance scores: 0.85+ excellent, 0.75-0.84 good, 0.65-0.74 fair, <0.65 likely not relevant.
+Ask the LLM to search for detection rules, MITRE techniques, forensic artifacts, or any security topic. It can filter by source (e.g., Sigma rules only) and platform (Windows/Linux). Results are ranked by relevance — the LLM uses this to ground its analysis in authoritative references rather than training data.
 
 ### Windows Baseline Validation (windows-triage-mcp)
 
 Offline validation against 2.6 million known Windows file and process baseline records. No network calls required.
 
-```
-check_file(path="C:\\Windows\\System32\\svchost.exe")
-check_process_tree(process_name="svchost.exe", parent_name="services.exe")
-check_service(service_name="BITS", os_version="W11_22H2")
-check_scheduled_task(task_path="\\Microsoft\\Windows\\UpdateOrchestrator\\Schedule Scan",
-                     os_version="W10_21H2")
-check_lolbin(filename="certutil.exe")
-check_hash(hash="d41d8cd98f00b204e9800998ecf8427e")
-check_hijackable_dll(dll_name="version.dll")
-check_pipe(pipe_name="\\MSSE-1234-server")
-analyze_filename(filename="scvhost.exe")
-```
+Ask the LLM to check files, processes, services, scheduled tasks, registry entries, hashes, DLLs, named pipes, or filenames against the baseline. For example: "Is svchost.exe with parent cmd.exe normal?" or "Check if this hash is a known vulnerable driver."
 
 Verdicts:
 - **EXPECTED** — in the Windows baseline
@@ -353,28 +287,11 @@ Verdicts:
 
 ### Threat Intelligence (opencti-mcp)
 
-Live threat intelligence from your configured OpenCTI instance. Read-only queries:
-
-```
-lookup_ioc(ioc="203.0.113.1")                    # IP, hash, domain, or URL
-search_threat_intel(query="APT29")                 # Broad cross-entity search
-search_entity(type="malware", query="Cobalt Strike")  # Type-specific search
-get_recent_indicators(days=7)                      # Recent IOCs
-get_relationships(entity_id="...")                 # Who uses it, what it targets
-search_reports(query="APT29 campaign")             # Threat reports
-```
+Live threat intelligence from your configured OpenCTI instance. Ask the LLM to look up IOCs, search for threat actors or malware families, check recent indicators, map entity relationships, or search threat reports. For example: "Look up this IP in threat intel" or "What malware is associated with APT29?"
 
 ### Malware Analysis (remnux-mcp)
 
-When connected to a REMnux VM, escalate suspicious files for automated analysis:
-
-```
-upload_from_host(file_path="/path/to/suspect.exe")
-analyze_file(file_path="samples/suspect.exe", depth="standard")
-extract_iocs(file_path="samples/suspect.exe")
-```
-
-Depth tiers: `quick` (initial triage), `standard` (default), `deep` (known-malicious or evasive).
+When connected to a REMnux VM, ask the LLM to upload and analyze suspicious files. For example: "Upload this binary to REMnux and analyze it" or "Extract IOCs from the suspect executable." Analysis depth tiers: `quick` (initial triage), `standard` (default), `deep` (known-malicious or evasive).
 
 ## Recording Findings
 
@@ -420,7 +337,11 @@ The intended flow:
 
 ### Evidence Artifacts
 
-Every finding should include artifacts showing the actual evidence:
+Findings should include an `artifacts` list showing the actual evidence. Each artifact contains the source file, the tool command that processed it, and the raw output — not a summary. The `audit_id` from the tool response ties the artifact to a specific entry in the audit trail, and the `source` file must be registered in the evidence registry.
+
+Findings without artifacts — such as analytical conclusions or exclusions — can use `supporting_commands` instead.
+
+Example:
 
 ```json
 {
@@ -436,20 +357,24 @@ Every finding should include artifacts showing the actual evidence:
 }
 ```
 
-Each artifact must include an `audit_id` from the MCP tool response that produced the data. Artifacts without `audit_id` are rejected.
-
 ### Provenance Enforcement
 
-Every finding must be traceable to evidence:
+When a finding is recorded, `record_finding()` classifies its provenance by scanning the audit trail for each `audit_id` referenced by the finding:
 
-| Tier | Source | Trust Level |
-|------|--------|-------------|
-| **MCP** | MCP audit log | System-witnessed (highest) |
-| **HOOK** | Claude Code hook log | Framework-witnessed |
-| **SHELL** | `supporting_commands` parameter | Self-reported |
-| **NONE** | No audit record | **Rejected** by hard gate |
+| Tier | Where the audit_id was found | Trust Level |
+|------|------------------------------|-------------|
+| **MCP** | MCP backend audit log | System-witnessed (highest) |
+| **HOOK** | Claude Code hook log (`claude-code.jsonl`) | Framework-witnessed |
+| **SHELL** | Not in audit trail — provided via `supporting_commands` | Self-reported |
+| **NONE** | Not found anywhere | **Rejected** by hard gate |
 
-Findings with NONE provenance and no supporting commands are automatically rejected by `record_finding()`.
+The finding is stamped with its provenance tier. Findings with NONE provenance and no supporting commands are automatically rejected.
+
+The **Evidence Provenance Chain** — visible in the Examiner Portal on each finding — traces the full path from finding back to registered evidence: which evidence file was input, which tool processed it, and what output was extracted. This lets the examiner verify any claim back to its source.
+
+### Grounding Score
+
+When a finding is staged, forensic-mcp checks whether the investigation consulted authoritative reference sources (forensic-rag, windows-triage, opencti). Findings are scored STRONG (2+ sources), PARTIAL (1 source or evidence chain to registered files), or WEAK (none). The score is advisory — it nudges the LLM to cross-reference but does not block the finding.
 
 ### IOC Auto-Extraction
 
@@ -461,16 +386,7 @@ Timeline events represent key moments in the incident narrative — timestamps t
 
 ### Recording Timeline Events
 
-```
-record_timeline_event(event={
-    "timestamp": "2026-01-24T15:00:41Z",
-    "description": "cmd.exe spawned from Excel.exe on SERVER01",
-    "source": "Security.evtx Event ID 4688",
-    "event_type": "execution",
-    "artifact_ref": "evtx:Security:4688:12345",
-    "related_findings": ["F-steve-001"]
-})
-```
+The LLM records timeline events through forensic-mcp when it discovers significant timestamps during analysis. Each event includes the timestamp, description, source artifact, event type, and links to related findings.
 
 Event types: `process`, `network`, `file`, `registry`, `auth`, `persistence`, `lateral`, `execution`, `other`.
 
@@ -483,11 +399,11 @@ vhir review --timeline --type lateral             # By event type
 vhir review --timeline --start 2026-01-20T00:00 --end 2026-01-22T23:59
 ```
 
-Via MCP: `get_timeline(status="APPROVED", event_type="lateral", start_date="2026-01-20")`
+The LLM can also filter the timeline using the `get_timeline` tool on forensic-mcp, with the same status, event type, and date range filters.
 
 ## Review and Approval
 
-All findings and timeline events stage as DRAFT. Only a human examiner can approve or reject them — the AI cannot bypass the approval mechanism.
+All findings and timeline events stage as DRAFT. Only a human examiner can approve or reject them — the AI cannot bypass the approval mechanism. The Examiner Portal is the preferred review interface. The vhir CLI provides the same capability from the terminal.
 
 ### Examiner Portal
 
@@ -514,7 +430,7 @@ Examiners can edit finding fields inline (confidence, justification, observation
 
 Keyboard shortcuts: `1`-`8` switch tabs, `j`/`k` navigate items, `a` approve, `r` reject, `e` edit, `Shift+C` commit.
 
-The Commit button (`Shift+C`) uses challenge-response authentication: the browser derives a PBKDF2 key from the examiner's password and proves knowledge via HMAC — the password never leaves the browser.
+The Commit button (`Shift+C`) requires the examiner's password — the password never leaves the browser.
 
 ### CLI Approval
 
@@ -547,6 +463,8 @@ vhir review --evidence                   # Evidence integrity
 vhir review --iocs                       # IOCs from findings
 vhir review --audit                      # Audit trail
 ```
+
+The LLM can retrieve findings, timeline events, TODOs, case status, and audit data through forensic-mcp and case-mcp. The Examiner Portal also displays all of this in the browser. The CLI is one option, not a requirement.
 
 ### Integrity Verification
 
@@ -600,13 +518,7 @@ vhir report --findings F-steve-001,F-steve-002
 
 ### Setting Case Metadata
 
-Report metadata is stored in CASE.yaml and appears in generated reports:
-
-```
-set_case_metadata(field="incident_type", value="ransomware")
-set_case_metadata(field="severity", value="critical")
-set_case_metadata(field="scope", value="Finance department, 30 hosts")
-```
+Report metadata is stored in CASE.yaml and appears in generated reports. Ask the LLM to set metadata — it uses the `set_case_metadata` tool on report-mcp. For example: "Set the incident type to ransomware and severity to critical."
 
 ## Investigation TODOs
 
@@ -619,7 +531,7 @@ vhir review --todos --open
 vhir todo complete TODO-steve-001
 ```
 
-The LLM can also manage TODOs through forensic-mcp's `add_todo()`, `list_todos()`, `update_todo()`, and `complete_todo()` tools.
+The LLM can also manage TODOs through forensic-mcp. The CLI is not required.
 
 ## Collaboration (Multi-Examiner)
 
@@ -639,6 +551,8 @@ vhir merge --file findings-bob.json
 ```
 
 Merge uses last-write-wins by `modified_at` timestamp. APPROVED findings are protected from overwrite. IDs include the examiner name (e.g., `F-alice-001`, `F-bob-003`) so they never collide across examiners.
+
+The LLM can export and import bundles through case-mcp. The CLI is not required.
 
 ## Audit Trail
 

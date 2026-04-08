@@ -63,7 +63,7 @@ Nine layers of defense-in-depth protect the integrity of forensic findings. The 
 
 ### L1 — Structural Approval Gate
 
-All findings and timeline events stage as DRAFT. Only a human examiner can move them to APPROVED or REJECTED — via the vhir CLI (password entry at `/dev/tty`) or the Examiner Portal (challenge-response authentication in the browser). There is no MCP tool for approval. The AI cannot bypass either mechanism: the CLI reads the password from `/dev/tty` (not stdin), and the portal requires computing HMAC(PBKDF2(password), nonce) which the AI cannot do without the password.
+All findings and timeline events stage as DRAFT. Only a human examiner can move them to APPROVED or REJECTED. There is no MCP tool for approval. The password is the real gate — both the Examiner Portal (challenge-response: browser computes HMAC(PBKDF2(password), nonce), password never leaves the browser) and the vhir CLI require the examiner's password to approve findings. Without the password, no approval can occur regardless of the client or access method.
 
 ### L2 — HMAC Verification Ledger
 

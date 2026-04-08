@@ -20,7 +20,7 @@ Valhuntir turns a single incident response analyst into the manager of an agenti
 
 Valhuntir ensures accountability and enforces human review of findings through cryptographic signing, password-gated approvals, and multiple layered controls.
 
-Valhuntir is **LLM client agnostic** — connect any MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, LibreChat, Cherry Studio, and any MCP-only client that supports Streamable HTTP transport with Bearer token authentication. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
+Valhuntir is **LLM client agnostic** — connect any locally installed MCP-compatible client through the gateway. Supported clients include Claude Code, Claude Desktop, Cherry Studio, self-hosted LibreChat, and any client that supports Streamable HTTP transport with Bearer token authentication. The client must run on your machine or local network — cloud-hosted services cannot reach internal gateway addresses. Forensic discipline is provided structurally at the gateway and MCP layer, not through client-specific prompt engineering, so the same rigor applies regardless of which AI model or client drives the investigation.
 
 > Looking for a simpler setup without the gateway or OpenSearch? See [Valhuntir Lite](#valhuntir-lite).
 
@@ -44,7 +44,7 @@ Every parser produces deterministic content-based document IDs (re-ingest = zero
 8. **Human review** — examiner approves or rejects each finding via the Examiner Portal or CLI (HMAC-signed)
 9. **Generate report** — produce IR report from approved findings with MITRE mappings and IOC aggregation
 
-Without OpenSearch, steps 3-6 are replaced by direct tool execution and manual analysis. Findings, timeline, approval workflow, and reporting are identical either way.
+Without OpenSearch, steps 3-6 are replaced by the LLM doing direct tool execution and analysis. Still very effective, but slower and with much higher token cost. Findings, timeline, approval workflow, and reporting are identical either way.
 
 ### Required Resources
 
@@ -311,7 +311,7 @@ Requires Python 3.10+ and sudo access. The installer handles everything: MCP ser
 curl -fsSL https://raw.githubusercontent.com/AppliedIR/sift-mcp/main/quickstart.sh -o /tmp/vhir-quickstart.sh && bash /tmp/vhir-quickstart.sh
 ```
 
-**Recommended** — Adds the RAG knowledge base (22,000+ records from 23 security sources) and Windows triage databases (2.6M baseline records), downloaded as pre-built snapshots. Requires ~14 GB disk space:
+**Recommended** — Adds the RAG knowledge base (22,000+ records from 23 authoritative sources) and Windows triage databases (2.6M baseline records), downloaded as pre-built snapshots. Requires ~14 GB disk space:
 
 - ~7 GB — ML dependencies (PyTorch, CUDA) required by the RAG embedding model
 - ~6 GB — Windows triage baseline databases (2.6M rows, decompressed)
@@ -365,11 +365,11 @@ Valhuntir is designed so that AI interactions flow through MCP tools, enabling s
 
 Most `vhir` CLI operations have MCP equivalents via case-mcp, forensic-mcp, and report-mcp. When working with an MCP-connected client, you can ask the AI to handle case management, evidence registration, report generation, and more — the AI operates through audited MCP tools rather than direct CLI invocation.
 
-The commands below that require human interaction at the terminal (`/dev/tty`) **cannot** be delegated to the AI. These are intentional human-in-the-loop checkpoints — they use password entry, interactive review, or terminal confirmation to ensure the human examiner retains control over approval, rejection, and security-sensitive operations.
+The commands below require the examiner's password and are intentional human-in-the-loop checkpoints. The password is the security gate — without it, no findings can be approved or rejected regardless of the client or access method.
 
-### Human-Only Commands (require terminal)
+### Human-Only Commands (require password)
 
-These commands read from `/dev/tty` directly and cannot be run by an AI client, even via Bash. This is by design — they are the human-in-the-loop controls that ensure the examiner reviews and approves all findings.
+These commands require password entry that the AI cannot supply. This is by design — the examiner must authenticate to approve, reject, or commit findings.
 
 #### approve
 
@@ -384,7 +384,7 @@ vhir approve --timeline-only                             # Skip findings
 vhir approve --review                                    # Apply pending portal edits
 ```
 
-Requires password entry via `/dev/tty`. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the Examiner Portal (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file. Alternatively, use the portal's Commit button (Shift+C) which performs the same operation via challenge-response authentication — the password never leaves the browser.
+Requires the examiner's password. Approved findings are HMAC-signed with a PBKDF2-derived key. The `--review` flag applies edits made in the Examiner Portal (stored in `pending-reviews.json`), recomputes content hashes and HMAC signatures, then removes the pending file. Alternatively, use the portal's Commit button (Shift+C) which performs the same operation via challenge-response authentication — the password never leaves the browser.
 
 #### reject
 
@@ -394,7 +394,7 @@ vhir reject F-alice-003 T-alice-002 --reason "Contradicted by memory analysis"
 vhir reject --review                                     # Interactive walk-through of DRAFT items
 ```
 
-Requires password confirmation via `/dev/tty`.
+Requires the examiner's password.
 
 #### exec
 
@@ -402,7 +402,7 @@ Requires password confirmation via `/dev/tty`.
 vhir exec --purpose "Extract MFT from image" -- fls -r -m / image.E01
 ```
 
-Requires `/dev/tty` confirmation. Logged to `audit/cli-exec.jsonl`. Use this for manual tool execution with audit trail when not operating through MCP.
+Requires terminal confirmation. Logged to `audit/cli-exec.jsonl`. Use this for manual tool execution with audit trail when not operating through MCP.
 
 #### evidence unlock
 
@@ -411,7 +411,7 @@ vhir unlock-evidence                       # Directory chmod 755, files remain 4
 vhir evidence unlock
 ```
 
-Requires `/dev/tty` confirmation. Unlocking evidence allows writes to the evidence directory.
+Requires terminal confirmation. Unlocking evidence allows writes to the evidence directory.
 
 #### Password management
 
@@ -420,16 +420,16 @@ vhir config --setup-password               # Set approval password (PBKDF2-hashe
 vhir config --reset-password               # Reset password (requires current, re-signs ledger)
 ```
 
-Password entry uses masked input via `/dev/tty` with termios. No echo, no stdin — the AI cannot read or supply the password.
+Password entry uses masked input. The AI cannot supply the password.
 
 #### HMAC verification
 
 ```
-vhir review --findings --verify            # Cross-check content hashes + HMAC verification
-vhir review --findings --verify --mine    # HMAC verification for current examiner only
+vhir review --verify                       # Cross-check content hashes + HMAC verification
+vhir review --verify --mine                # HMAC verification for current examiner only
 ```
 
-Verification requires the examiner's password to derive the HMAC key and confirm integrity.
+Requires the examiner's password to derive the HMAC key and confirm integrity. `--verify` also works with `--findings` (`vhir review --findings --verify`).
 
 ### All Commands
 
@@ -496,15 +496,15 @@ vhir todo update TODO-alice-002 --note "Waiting on third party" --priority low
 #### evidence
 
 ```
-vhir register-evidence /path/to/image.E01 --description "Disk image from workstation"
-vhir lock-evidence                         # All files chmod 444, directory chmod 555
-
 vhir evidence register /path/to/image.E01 --description "Disk image"
 vhir evidence list
 vhir evidence verify
 vhir evidence log [--path <filter>]
-vhir evidence lock
+vhir evidence lock                         # All files chmod 444, directory chmod 555
+vhir evidence unlock
 ```
+
+Legacy aliases (`vhir register-evidence`, `vhir lock-evidence`, `vhir unlock-evidence`) still work.
 
 #### export / merge
 
@@ -619,7 +619,7 @@ Claude Desktop's config file supports stdio transport only. The [mcp-remote](htt
 | LibreChat | Any (browser) | `librechat.yaml` (`mcpServers` section) | Valhuntir generates `librechat_mcp.yaml` reference to merge |
 | Other | Any | `vhir-mcp-config.json` | Manual integration |
 
-Claude Code on Windows requires Git for Windows (provides Git Bash) or WSL. Claude Desktop is not available on Linux. Claude Desktop's config file supports stdio transport only — the `vhir setup client` wizard generates mcp-remote bridge configs automatically. Config path is platform-specific: `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Any MCP client that supports Streamable HTTP transport with Bearer token authentication headers will work — the gateway is not client-specific.
+Claude Code on Windows requires Git for Windows (provides Git Bash) or WSL. Claude Desktop is not available on Linux and requires the [mcp-remote](https://www.npmjs.com/package/mcp-remote) bridge (stdio-only config). Config paths: `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS), `%APPDATA%\Claude\claude_desktop_config.json` (Windows). Any MCP client that supports Streamable HTTP transport with Bearer token authentication will work — the gateway is not client-specific.
 
 ## Examiner Identity
 
@@ -668,7 +668,7 @@ cd sift-mcp
 ./quickstart-lite.sh --quick
 ```
 
-**Recommended** — Adds the RAG knowledge base (22,000+ records from 23 security sources) and Windows triage databases (2.6M baseline records). Requires ~14 GB disk space:
+**Recommended** — Adds the RAG knowledge base (22,000+ records from 23 authoritative sources) and Windows triage databases (2.6M baseline records). Requires ~14 GB disk space:
 
 - ~7 GB — ML dependencies (PyTorch, CUDA) required by the RAG embedding model
 - ~6 GB — Windows triage baseline databases (2.6M rows, decompressed)
@@ -759,7 +759,7 @@ graph LR
 | Claude Code → MS Learn MCP | HTTPS | `https://learn.microsoft.com/api/mcp` — streamable-http type in .mcp.json |
 | Claude Code → Zeltser IR Writing MCP | HTTPS | `https://website-mcp.zeltser.com/mcp` — streamable-http type in .mcp.json |
 
-No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via Bash. Forensic discipline is suggested and reinforced via prompt hooks and reference documents, but Claude Code can choose to ignore them. See the [sift-mcp README](https://github.com/AppliedIR/sift-mcp#valhuntir-lite) for details and optional add-ons.
+No gateway, no sandbox, no deny rules. Claude runs forensic tools directly via Bash. Forensic discipline is suggested and reinforced via prompt hooks and reference documents, but Claude Code can choose to ignore them. See the [sift-mcp README](https://github.com/AppliedIR/sift-mcp#valhuntir-lite) for optional add-on install flags (`--opencti`, `--remnux`, `--mslearn`, `--zeltser`).
 
 ## Upgrading from Lite to Valhuntir
 
